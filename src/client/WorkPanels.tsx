@@ -629,7 +629,9 @@ export function PageFrame({ html, sid, invite, file }: { html: string; sid: stri
     return doctype + meta + linked.slice(doctype.length);
   }, [html, sid, token, file.path]);
   if (token === null) return <div className="work-page-frame work-page-wait" aria-busy="true" />;
-  return <iframe className="work-page-frame" srcDoc={doc} sandbox="allow-scripts" referrerPolicy="no-referrer" title={name(file.path)} />;
+  // Drawn by Friday's frame page (page-csp.ts), handed the page in its name: it carries the same rules as a header, where a srcdoc
+  // frame would take the app's own and run none of the page's scripts. A new page is a new frame.
+  return <iframe key={doc} className="work-page-frame" name={doc} src="/api/frame" sandbox="allow-scripts" referrerPolicy="no-referrer" title={name(file.path)} />;
 }
 
 /**

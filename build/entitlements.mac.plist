@@ -6,14 +6,17 @@
   The JIT and unsigned-memory pairs are Electron's own: V8 compiles as it runs. Library validation is off so the terminal's
   module and your coding tools, signed by other people, can load and run. The microphone is for voice input, the network for
   Friday's own server on 127.0.0.1 and the previews of what you build.
+
+  Not allow-dyld-environment-variables: nothing here sets a DYLD_ variable, and with it any process on the computer could
+  start Friday with a library of its own loaded inside it, under Friday's name and its microphone and screen permissions
+  (security audit 2026-11-27, desktop M5). Library validation stays off: the editor's own Node loads extensions' native
+  modules, which are signed by other people.
 -->
 <plist version="1.0">
   <dict>
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-    <true/>
-    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
     <true/>
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>

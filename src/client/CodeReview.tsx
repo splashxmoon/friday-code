@@ -21,11 +21,16 @@ import { ReviewTour } from "./ReviewTour.js";
 import { loadRecents, type Identity, type RecentSession } from "./storage.js";
 import { PrProof } from "./PrProof.js";
 import { ConfirmDialog, SkeletonRows, agoWords, isTyping, relTime, type Confirmation } from "./ui.js";
-import { CheckIcon, ChevronDownIcon, EllipsisIcon, ExternalLinkIcon, FolderIcon, GitBranchIcon, GitPullRequestIcon, RefreshCwIcon, SearchIcon, ShieldIcon, TriangleAlertIcon, UserIcon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, EllipsisIcon, ExternalLinkIcon, FolderIcon, GitBranchIcon, GitMergeIcon, GitPullRequestIcon, RefreshCwIcon, SearchIcon, ShieldIcon, TriangleAlertIcon, UserIcon, XIcon } from "lucide-react";
 import { TabRing, useNow } from "./presence.js";
 import { askCard } from "./card-ask.js";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import "./code-review.css";
+// The kit's own pieces (components/affect): this page loads on its own, so they stay out of the first screen.
+import { Badge as Chip } from "@/components/affect/badge";
+import { Button as KitButton } from "@/components/affect/button";
+import { EmptyState as KitEmpty } from "@/components/affect/empty-state";
+import { Kbd } from "@/components/affect/kbd";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -33,8 +38,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/dass";
-import { EmptyState as DassEmpty } from "@/components/dass/EmptyState";
-import { Count, Dot, Tip, type DotState } from "@/components/dass/page-bits";
+import { Dot, Tip, type DotState } from "@/components/dass/page-bits";
 
 /**
  * Code Review: your pull requests, as an inbox.
@@ -313,21 +317,21 @@ export function CodeReview({
             actions={
               !window.fridayDesktop?.link && (
                 <>
-                  <Button variant="ghost" onClick={() => openOutside(RELEASES)}>
+                  <KitButton variant="ghost" onClick={() => openOutside(RELEASES)}>
                     Get the desktop app
-                  </Button>
-                  <Button onClick={connectThisComputer}>Connect this computer</Button>
+                  </KitButton>
+                  <KitButton onClick={connectThisComputer}>Connect this computer</KitButton>
                 </>
               )
             }
           />
         ) : error && !prs ? (
-          <EmptyState tone="bad" title="Couldn't read your pull requests" body={error} actions={<Button onClick={refresh}>Try again</Button>} />
+          <EmptyState tone="bad" title="Couldn't read your pull requests" body={said(error)} actions={<KitButton variant="secondary" onClick={refresh}>Try again</KitButton>} />
         ) : prs && !prs.available ? (
           gh.status && !gh.status.connected ? (
             <NoGitHub identity={identity} recents={recents} gh={gh} onOpen={onOpen} onConnected={() => (void gh.read(), refresh())} />
           ) : (
-            <EmptyState tone="bad" title="GitHub isn't answering" body={prs.reason || "Your pull requests couldn't be read just now."} actions={<Button onClick={refresh}>Try again</Button>} />
+            <EmptyState tone="bad" title="GitHub isn't answering" body={prs.reason || "Your pull requests couldn't be read just now."} actions={<KitButton variant="secondary" onClick={refresh}>Try again</KitButton>} />
           )
         ) : !prs ? (
           <SkeletonRows rows={4} />
@@ -338,18 +342,18 @@ export function CodeReview({
           {(
           // A filter with nothing in it is said once, across the page: no list column standing empty beside it with a search box
           // for nothing (Arun, 2026-11-19: "fix the design of the code review pages").
-          <div className={cn("rv-split gap-5!", blank ? "min-[721px]:grid-cols-1!" : "min-[721px]:grid-cols-[clamp(320px,30%,460px)_minmax(0,1fr)]!")}>
+          <div className={cn("rv-split", blank ? "min-[721px]:grid-cols-1!" : "min-[721px]:grid-cols-[clamp(320px,30%,460px)_minmax(0,1fr)]!")}>
             {!blank && (
             <aside className="rv-queue" aria-label="Pull requests">
-              <div className="page-top-in flex items-center gap-2 border-b border-[var(--border)] p-2">
+              <div className="page-top-in rv-tools">
                 <div className="relative min-w-0 flex-1">
-                  <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
+                  <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-[var(--text-muted)]" />
                   <Input
                     ref={search}
                     value={query}
                     placeholder="Search"
                     aria-label="Search pull requests"
-                    className="h-8 rounded-[9px] border-[var(--border-strong)] bg-[var(--card)] pr-8 pl-8 text-[13px] shadow-none placeholder:text-[var(--text-muted)] focus-visible:border-[var(--border-focus)] focus-visible:ring-0 md:text-[13px]"
+                    className="rv-search"
                     onChange={(e) => setQuery(e.target.value)}
                   />
                   <span className="absolute top-1/2 right-1.5 -translate-y-1/2">
@@ -358,18 +362,16 @@ export function CodeReview({
                         <XIcon />
                       </Button>
                     ) : (
-                      <kbd aria-hidden>/</kbd>
+                      <Kbd size="md" aria-hidden>/</Kbd>
                     )}
                   </span>
                 </div>
                 {tabRepos.length > 1 && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" aria-label="Which repo" className="h-8 max-w-[150px] border-[var(--border)] bg-[var(--bg)] px-2.5 text-[13px] shadow-none">
-                        <FolderIcon />
-                        <span className="truncate">{repo ? repo.split("/")[1] : "All repos"}</span>
-                        <ChevronDownIcon className="opacity-60" />
-                      </Button>
+                      <KitButton variant="secondary" size="lg" aria-label="Which repo" className="max-w-[150px]" icon={<FolderIcon />} iconRight={<ChevronDownIcon />}>
+                        {repo ? repo.split("/")[1] : "All repos"}
+                      </KitButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuRadioGroup value={repo} onValueChange={setRepo}>
@@ -399,7 +401,7 @@ export function CodeReview({
                 {filter === "team" && team === null ? (
                   <SkeletonRows rows={3} />
                 ) : shown.length ? (
-                  <div className="flex flex-col gap-1">
+                  <div className="rv-rows">
                     {shown.map(({ pr, kind }) => (
                       <QueueItem key={pr.url} pr={pr} kind={kind} on={current?.pr.url === pr.url} working={ctx.sessionFor.get(pr.url)} pilot={kind === "merged" ? undefined : pilots?.prs.get(pr.url)} risk={kind === "merged" ? undefined : risks.get(pr.url)} when={whenOf({ pr, kind })} showKind={filter === "all"} onPick={() => setSel(pr.url)} />
                     ))}
@@ -414,27 +416,26 @@ export function CodeReview({
               {/* The same height and padding as the search bar beside it, so the two rows share one centre line (Arun, 2026-11-18:
                   "tese need to be lined up properly"). */}
               {ready && <div className="page-top mb-4 flex min-h-12 shrink-0 items-center justify-end gap-2 py-2 max-[720px]:hidden">{controls}</div>}
-              {blank && error && !teamFailed && <Stale error={error} busy={busy} onRetry={refresh} className="mx-auto w-full max-w-[440px] rounded-lg border" />}
+              {blank && error && !teamFailed && <Stale error={error} busy={busy} onRetry={refresh} className="rv-box mx-auto w-full max-w-[440px]" />}
               {current ? (
                 <Pane key={current.pr.url} pr={current.pr} kind={current.kind} ctx={ctx} cmd={cmd} risk={risks.get(current.pr.url)} />
               ) : filter === "team" && team === null ? null /* Still reading: "nobody has one open" said beside the loading rows wasn't true yet. */ : teamFailed ? (
-                <DassEmpty className="mt-16" tone="bad" icon={<GitPullRequestIcon />} title="Couldn't read your team's pull requests" action={<Button variant="outline" size="sm" disabled={busy} onClick={refresh}>Try again</Button>}>
-                  {said(teamError)}
-                </DassEmpty>
+                <KitEmpty bare className="rv-empty mt-16" data-tone="bad" icon={<GitPullRequestIcon />} title="Couldn't read your team's pull requests" text={said(teamError)} action={<KitButton variant="secondary" size="sm" disabled={busy} onClick={refresh}>Try again</KitButton>} />
               ) : (
-                <DassEmpty
-                  className="mt-16"
+                <KitEmpty
+                  bare
+                  className="rv-empty mt-16"
                   icon={<GitPullRequestIcon />}
                   title={empty}
                   action={
                     // The one next step from an empty tab: your own pull requests when nobody waits on you, a session when you have none.
                     query || repo ? (
-                      <Button variant="outline" size="sm" onClick={() => (setQuery(""), setRepo(""))}>
+                      <KitButton variant="secondary" size="sm" onClick={() => (setQuery(""), setRepo(""))}>
                         Clear filters
-                      </Button>
+                      </KitButton>
                     ) : filter !== "all" && all.length > 0 ? (
-                      <Button
-                        variant="outline"
+                      <KitButton
+                        variant="secondary"
                         size="sm"
                         onClick={() => {
                           setFilter("all");
@@ -442,18 +443,18 @@ export function CodeReview({
                           requestAnimationFrame(() => document.querySelector<HTMLElement>('.review-page .rv-filter[aria-checked="true"]')?.focus());
                         }}
                       >
-                        See all · {all.length}
-                      </Button>
+                        {`See all · ${all.length}`}
+                      </KitButton>
                     ) : filter === "mine" || filter === "all" ? (
-                      <Button size="sm" onClick={() => onWork("")}>
+                      <KitButton size="sm" onClick={() => onWork("")}>
                         Start a session
-                      </Button>
+                      </KitButton>
                     ) : undefined
                   }
                 />
               )}
               {/* Nobody waiting yet: whether your agents read each one first is the one thing to set here. */}
-              {blank && filter === "review" && !teamFailed && <AutoReview tools={tools} className="mx-auto mt-6 w-full max-w-[440px] rounded-lg border border-[var(--border)]" />}
+              {blank && filter === "review" && !teamFailed && <AutoReview tools={tools} className="rv-box mx-auto mt-6 w-full max-w-[440px]" />}
             </section>
           </div>
         )}
@@ -493,10 +494,10 @@ const said = (error: string) => (/GitHub answered 5\d\d/.test(error) ? "GitHub d
  */
 function Stale({ error, busy, onRetry, className }: { error: string; busy?: boolean; onRetry: () => void; className?: string }) {
   return (
-    <p role="status" title={error} className={cn("m-0 flex items-center gap-2 border-[var(--border)] px-3 py-2 text-[12px] leading-snug text-[var(--text-muted)]", className ?? "border-b")}>
+    <p role="status" title={error} className={cn("rv-stale", className ?? "border-b border-[var(--border)]")}>
       <TriangleAlertIcon className="size-3.5 shrink-0 text-[var(--amber)]" aria-hidden />
       <span className="min-w-0 flex-1">{said(error)}</span>
-      <Button variant="ghost" size="xs" className="h-6 shrink-0 text-[12px] text-[var(--ink-2)]" disabled={busy} onClick={onRetry}>
+      <Button variant="ghost" size="xs" className="rv-act shrink-0" disabled={busy} onClick={onRetry}>
         Try again
       </Button>
     </p>
@@ -609,10 +610,10 @@ function NoGitHub({ identity, recents, gh, onOpen, onConnected }: { identity: Id
       <section aria-label="Ready to ship" className="flex flex-col gap-3">
         <header className="flex items-baseline justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="m-0 text-[14px] leading-[22px] font-semibold text-[var(--ink)]">
+            <h2 className="m-0 text-[15px] leading-6 font-medium text-[var(--ink)]">
               Ready to ship {ready.length > 0 && <span className="ml-1 font-normal text-[var(--text-muted)] tabular-nums">{ready.length}</span>}
             </h2>
-            <p className="m-0 text-[13px] leading-[18px] text-[var(--text-muted)]">Branches your agents finished. Push one and open its pull request: GitHub is connected on the way.</p>
+            <p className="m-0 text-[13px] leading-5 text-[var(--text-muted)]">Branches your agents finished. Push one and open its pull request: GitHub is connected on the way.</p>
           </div>
         </header>
         {said && (
@@ -621,41 +622,40 @@ function NoGitHub({ identity, recents, gh, onOpen, onConnected }: { identity: Id
           </p>
         )}
         {failed && cards === null ? (
-          <DassEmpty
-            small
-            tone="bad"
+          <KitEmpty
+            className="rv-empty"
+            data-tone="bad"
             icon={<TriangleAlertIcon />}
             title="Couldn't read the agents' branches"
+            text={<span role="alert">{failed}</span>}
             action={
-              <Button variant="outline" size="sm" disabled={trying} onClick={() => (setTrying(true), void read().finally(() => setTrying(false)))}>
+              <KitButton variant="secondary" size="sm" disabled={trying} onClick={() => (setTrying(true), void read().finally(() => setTrying(false)))}>
                 {trying ? "Trying…" : "Try again"}
-              </Button>
+              </KitButton>
             }
-          >
-            <span role="alert">{failed}</span>
-          </DassEmpty>
+          />
         ) : cards === null ? (
           <div role="status" aria-label="Reading the agents' branches">
             <SkeletonRows rows={3} />
           </div>
         ) : (
-          <ul className="m-0 flex list-none flex-col gap-2 p-0" aria-label="Branches ready">
+          <ul className="rv-box rv-ready" aria-label="Branches ready">
             {ready.map((c) => {
               const size = branchSize(c);
               return (
-                <li key={c.id} className="rv-ready-row flex min-w-0 items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 max-[560px]:flex-wrap" data-ready={c.id}>
-                  <span className="grid size-7 shrink-0 place-items-center rounded-full border border-[var(--border)] bg-[var(--bg)]" aria-hidden>
+                <li key={c.id} className="rv-ready-row flex min-w-0 items-center gap-3 max-[560px]:flex-wrap" data-ready={c.id}>
+                  <span className="rv-tile" aria-hidden>
                     {c.tool ? <EngineMark tool={c.tool} size={14} /> : <GitBranchIcon className="size-3.5 text-[var(--text-muted)]" />}
                   </span>
-                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="truncate text-[13.5px] leading-5 font-medium text-[var(--ink)]" title={c.task || c.title}>
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-[13px] leading-5 font-medium text-[var(--ink)]" title={c.task || c.title}>
                       {c.task || c.title}
                     </span>
                     {/* Its session (when the task isn't already its name), its branch, its size and when it finished, a dot between each. */}
                     <span className="rv-ready-meta flex min-w-0 flex-wrap items-center gap-x-1.5 text-[12px] leading-4 text-[var(--text-muted)]">
                       {c.task && c.title !== c.task && <span className="max-w-[220px] truncate">{c.title}</span>}
                       {c.branch && (
-                        <span className="inline-flex max-w-[200px] items-center gap-1 truncate font-mono text-[11.5px]">
+                        <span className="inline-flex max-w-[200px] items-center gap-1 truncate font-mono text-[12px]">
                           <GitBranchIcon className="size-3 shrink-0" />
                           <span className="truncate">{c.branch}</span>
                         </span>
@@ -678,12 +678,12 @@ function NoGitHub({ identity, recents, gh, onOpen, onConnected }: { identity: Id
                     </span>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5 max-[560px]:w-full max-[560px]:justify-end">
-                    <Button variant="ghost" size="sm" onClick={() => onOpen?.(c.sid, inviteOf(c.sid))}>
+                    <KitButton variant="ghost" onClick={() => onOpen?.(c.sid, inviteOf(c.sid))}>
                       Open
-                    </Button>
-                    <Button size="sm" onClick={() => press(c)}>
-                      <GitPullRequestIcon /> Push & open PR
-                    </Button>
+                    </KitButton>
+                    <KitButton icon={<GitPullRequestIcon />} onClick={() => press(c)}>
+                      Push & open PR
+                    </KitButton>
                   </div>
                 </li>
               );
@@ -708,9 +708,7 @@ function NoGitHub({ identity, recents, gh, onOpen, onConnected }: { identity: Id
 
 function EmptyState({ title, body, actions, tone }: { title: string; body: string; actions?: ReactNode; tone?: "bad" }) {
   return (
-    <DassEmpty className="mt-6" tone={tone} icon={<GitPullRequestIcon />} title={title} action={actions || undefined}>
-      {body}
-    </DassEmpty>
+    <KitEmpty bare className="rv-empty mt-6" data-tone={tone} icon={<GitPullRequestIcon />} title={title} text={body} action={actions || undefined} />
   );
 }
 
@@ -767,7 +765,7 @@ const TONE_TEXT: Record<DotState, string> = {
 /** Lines added and taken away: the one place green and red mean what they always mean in a diff. */
 function Diff({ add, del, className }: { add: number; del: number; className?: string }) {
   return (
-    <span className={cn("inline-flex shrink-0 gap-1.5 font-mono text-[12px] tabular-nums", className)}>
+    <span className={cn("rv-diff2", className)}>
       <span className="text-[var(--green)]">+{add}</span>
       <span className="text-[var(--red)]">−{del}</span>
     </span>
@@ -797,28 +795,28 @@ function QueueItem({ pr, kind, on, working, pilot, risk, when, showKind, onPick 
       aria-current={on || undefined}
       onClick={onPick}
       title={risk && !risk.quick && risk.reasons.length ? `Worth a careful look: ${risk.reasons.join(", ")}` : undefined}
-      className="flex w-full min-w-0 flex-col gap-2 rounded-[10px] px-3 py-2.5 text-left transition-colors duration-[var(--dass-fast)] hover:bg-[var(--hover)] aria-[current=true]:bg-[var(--hover)] aria-[current=true]:shadow-[inset_0_0_0_1px_var(--border)]"
+      className="rv-row"
     >
-      <span className="flex min-w-0 items-start gap-2">
-        <span className="line-clamp-2 min-w-0 flex-1 text-[13.5px] leading-[1.4] font-medium text-[var(--ink)]">{pr.title}</span>
+      <span className="rv-row-top">
+        <span className="rv-row-t" title={pr.title}>{pr.title}</span>
         {when ? (
-          <time className="mt-px shrink-0 text-[11.5px] text-[var(--text-muted)] tabular-nums" dateTime={new Date(when).toISOString()} title={new Date(when).toLocaleString()}>
+          <time className="rv-row-age" dateTime={new Date(when).toISOString()} title={new Date(when).toLocaleString()}>
             {relTime(when)}
           </time>
         ) : null}
       </span>
-      <span className="flex min-w-0 items-center gap-2 text-[12px] text-[var(--text-muted)]">
+      <span className="rv-row-meta">
         {others && pr.avatar && <img className="size-3.5 shrink-0 rounded-full" src={pr.avatar} alt="" />}
         {/* Where it lives keeps its words; a long status gives way first (2026-11-07 release walk: "edge…" beside "Checks,
             conflicts, comments"). */}
-        {showKind && <span className="rv-kind shrink-0" data-kind={filterOf(kind)}>{KIND_WORD[kind]}</span>}
+        {showKind && <Chip tone={kind === "review" ? "warning" : kind === "merged" ? "purple" : "neutral"}>{KIND_WORD[kind]}</Chip>}
         <span className="max-w-[55%] min-w-0 shrink-0 truncate">
           {pr.repo.split("/")[1]} #{pr.number}
           {others && pr.author ? ` · ${pr.author}` : ""}
           {pr.base && !/^(main|master|trunk|develop)$/.test(pr.base) ? ` · stacked on ${pr.base}` : ""}
         </span>
         <Diff add={pr.additions} del={pr.deletions} />
-        <span className={cn("ml-auto inline-flex min-w-0 items-center gap-1.5 font-medium", TONE_TEXT[dot])} title={`${ap ? `${ap.text}: ${pilot?.log.at(-1)?.text ?? ""}` : word} · ${sizeOf(pr)} change: ${pr.additions + pr.deletions} lines`}>
+        <span className={cn("rv-row-st", TONE_TEXT[dot])} title={`${ap ? `${ap.text}: ${pilot?.log.at(-1)?.text ?? ""}` : word} · ${sizeOf(pr)} change: ${pr.additions + pr.deletions} lines`}>
           <Dot state={dot} className="shrink-0" />
           <span className="truncate">{word}</span>
         </span>
@@ -830,19 +828,9 @@ function QueueItem({ pr, kind, on, working, pilot, risk, when, showKind, onPick 
 /** Pressed or not, monochrome: picking which of your coding tools does something. */
 function ToolChip({ tool, on, onClick }: { tool: EngineTool; on: boolean; onClick: () => void }) {
   return (
-    <Button
-      variant="outline"
-      size="xs"
-      aria-pressed={on}
-      onClick={onClick}
-      className={cn(
-        "h-7 rounded-[8px] border-[var(--border)] bg-transparent px-2.5 text-[12px] font-medium text-[var(--text-muted)] shadow-none hover:bg-[var(--hover)] hover:text-[var(--ink)] dark:bg-transparent",
-        on && "border-[var(--border-strong)] bg-[var(--hover)] text-[var(--ink)] dark:bg-[var(--hover)]",
-      )}
-    >
-      <EngineMark tool={tool} size={12} /> {ENGINE_NAMES[tool]}
-      {on && <CheckIcon className="size-3" />}
-    </Button>
+    <KitButton variant={on ? "secondary" : "ghost"} size="sm" aria-pressed={on} onClick={onClick} icon={<EngineMark tool={tool} size={12} />} iconRight={on ? <CheckIcon /> : undefined}>
+      {ENGINE_NAMES[tool]}
+    </KitButton>
   );
 }
 
@@ -861,14 +849,14 @@ function AutoReview({ tools, className }: { tools: EngineTool[]; /** Its frame: 
   };
   const who = picked.map((t) => ENGINE_NAMES[t]).join(" and ");
   return (
-    <div className={cn("flex flex-col gap-2.5 p-3", className ?? "border-t border-[var(--border)]")}>
+    <div className={cn("rv-auto2", className ?? "border-t border-[var(--border)]")}>
       <div className="flex items-center gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--ink)]">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="flex items-center gap-1.5 text-[13px] leading-5 font-medium text-[var(--ink)]">
             {auto.on && <Dot state="working" />}
             Auto-review
           </span>
-          <span className="text-[12px] leading-snug text-[var(--text-muted)]">{auto.on ? `${who} ${picked.length > 1 ? "read" : "reads"} each new request first.` : "Your agents read each new request before you do."}</span>
+          <span className="text-[12px] leading-4 text-[var(--text-muted)]">{auto.on ? `${who} ${picked.length > 1 ? "read" : "reads"} each new request first.` : "Your agents read each new request before you do."}</span>
         </div>
         <Switch checked={auto.on} aria-label="Auto-review new review requests" onCheckedChange={(on) => setAuto({ on, tools: picked.length ? picked : usable.slice(0, 1) })} />
       </div>
@@ -888,14 +876,12 @@ function Load({ prs }: { prs: PullRequest[] }) {
   const load = loadOf(prs);
   if (!load.length) return null;
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--border)] px-3 py-2" aria-label="Review requests per person">
-      <span className="mr-1 text-[12px] font-medium text-[var(--text-muted)]">Review load</span>
+    <div className="rv-load2" aria-label="Review requests per person">
+      <span className="rv-label">Review load</span>
       {load.slice(0, 6).map((l) => (
-        <Badge key={l.login} variant="outline" className="h-6 gap-1.5 rounded-[6px] border-[var(--border)] pr-1 pl-1 text-[12px] font-medium text-[var(--ink-2)]" title={`${l.login}: asked to review ${l.count}`}>
-          {l.avatar ? <img className="size-4 rounded-full" src={l.avatar} alt="" /> : <UserIcon />}
-          {l.login}
-          <Count n={l.count} className="h-4 min-w-4 px-1 text-[11px]" />
-        </Badge>
+        <Chip key={l.login} className="rv-person" icon={l.avatar ? <img className="size-3 rounded-full" src={l.avatar} alt="" /> : <UserIcon />} title={`${l.login}: asked to review ${l.count}`}>
+          {l.login} <b>{l.count}</b>
+        </Chip>
       ))}
     </div>
   );
@@ -917,8 +903,8 @@ function Section({ title, meta, children, className }: { title: ReactNode; meta?
   return (
     <section className={cn("flex flex-col gap-3", className)}>
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <h3 className="m-0 text-[13px] font-semibold text-[var(--ink)]">{title}</h3>
-        {meta && <span className="text-[12px] text-[var(--text-muted)]">{meta}</span>}
+        <h3 className="rv-h3">{title}</h3>
+        {meta && <span className="rv-h3-meta">{meta}</span>}
       </div>
       {children}
     </section>
@@ -1005,9 +991,9 @@ function Pane({ pr, kind, ctx, cmd, risk }: { pr: PullRequest; kind: Kind; ctx: 
   // What happens next, said once, and the buttons that do it: quietest first, the one that moves it forward last.
   const next = nextStep(pr, kind);
   const quietBtn = (key: string, label: string, onClick: () => void, opts: { disabled?: boolean; title?: string } = {}) => (
-    <Button key={key} variant="ghost" size="sm" className="h-8 text-[13px] text-[var(--ink-2)]" disabled={opts.disabled} title={opts.title} onClick={onClick}>
+    <KitButton variant="ghost" key={key} disabled={opts.disabled} title={opts.title} onClick={onClick}>
       {label}
-    </Button>
+    </KitButton>
   );
   const buttons: ReactNode[] = [];
   if (kind === "review" && !asking)
@@ -1015,16 +1001,17 @@ function Pane({ pr, kind, ctx, cmd, risk }: { pr: PullRequest; kind: Kind; ctx: 
       quietBtn("s", "Review in a session", () => ctx.onWork(briefs.review(pr))),
       quietBtn("c", "Request changes", () => setAsking(true)),
       <Tip key="a" label="Approve on GitHub" keys="A">
-        <Button size="sm" className="h-8 text-[13px]" disabled={!!busy} onClick={approve}>
+        <KitButton className="rv-key" disabled={!!busy} icon={<CheckIcon />} onClick={approve}>
           {busy === "approve" ? "Approving…" : "Approve"}
-        </Button>
+          <Kbd aria-hidden>A</Kbd>
+        </KitButton>
       </Tip>,
     );
   if (kind === "ready")
     buttons.push(
       <DropdownMenu key="m">
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label="More ways to merge" className="text-[var(--ink-2)]">
+          <Button variant="ghost" size="icon-sm" aria-label="More ways to merge" className="rv-icon">
             <ChevronDownIcon />
           </Button>
         </DropdownMenuTrigger>
@@ -1034,9 +1021,10 @@ function Pane({ pr, kind, ctx, cmd, risk }: { pr: PullRequest; kind: Kind; ctx: 
         </DropdownMenuContent>
       </DropdownMenu>,
       <Tip key="s" label="Squash and merge" keys="M">
-        <Button size="sm" className="h-8 text-[13px]" disabled={!!busy} onClick={() => merge("squash")}>
+        <KitButton className="rv-key" disabled={!!busy} icon={<GitMergeIcon />} onClick={() => merge("squash")}>
           {busy === "merge" ? "Merging…" : "Squash and merge"}
-        </Button>
+          <Kbd aria-hidden>M</Kbd>
+        </KitButton>
       </Tip>,
     );
   // Each fix is on its own line in the card below (MergeRows), beside what it fixes; the card's one button sees it all through.
@@ -1045,17 +1033,17 @@ function Pane({ pr, kind, ctx, cmd, risk }: { pr: PullRequest; kind: Kind; ctx: 
     if (!session?.shepherd && !pilotLive)
       buttons.push(
         <Tip key="t" label="A session fixes what's blocking it, then Friday keeps handing new red checks and review comments to the agent until it merges">
-          <Button size="sm" className="h-8 text-[13px]" onClick={() => ctx.onWork(briefs.through(pr), { shepherd: true })}>
+          <KitButton onClick={() => ctx.onWork(briefs.through(pr), { shepherd: true })}>
             See it through
-          </Button>
+          </KitButton>
         </Tip>,
       );
   }
   if (kind === "draft")
     buttons.push(
-      <Button key="d" size="sm" className="h-8 text-[13px]" disabled={!!busy} onClick={() => quiet(act("ready"))}>
+      <KitButton key="d" disabled={!!busy} onClick={() => quiet(act("ready"))}>
         {busy === "ready" ? "Marking…" : "Mark ready for review"}
-      </Button>,
+      </KitButton>,
     );
   if (kind === "team") buttons.push(quietBtn("s", "Review in a session", () => ctx.onWork(briefs.review(pr))));
 
@@ -1065,36 +1053,36 @@ function Pane({ pr, kind, ctx, cmd, risk }: { pr: PullRequest; kind: Kind; ctx: 
   const nextDot: DotState = kind === "review" ? "needs" : kind === "merged" ? "done" : next.tone === "bad" ? "bad" : next.tone === "ok" ? "done" : stepsOf(pr).checks === "wait" || (stepsOf(pr).merge === "wait" && pr.mergeState !== "behind") ? "working" : "idle";
 
   return (
-    <div className="flex flex-col gap-8 px-2 pt-2 pb-12">
-      <header className="flex flex-col gap-3">
+    <div className="rv-detail">
+      <header className="rv-detail-head">
         <div className="flex items-start gap-3">
-          <h2 className="m-0 min-w-0 flex-1 text-[20px] leading-[28px] font-semibold tracking-[-0.015em] text-pretty text-[var(--ink)]" title={pr.title}>
+          <h2 className="rv-title" title={pr.title}>
             {pr.title}
           </h2>
           {/* The way out, then the action, as the Issues tab's pane has them: the button the eye ends on is the one to press. */}
-          <div className="flex shrink-0 items-center gap-1 pt-0.5">
+          <div className="flex shrink-0 items-center gap-1.5">
             <Tip label="Open on GitHub" keys="G">
-              <Button variant="ghost" size="icon-sm" aria-label="Open on GitHub" className="text-[var(--text-muted)] hover:text-[var(--ink)]" onClick={() => openOutside(pr.url)}>
+              <Button variant="ghost" size="icon-sm" aria-label="Open on GitHub" className="rv-icon" onClick={() => openOutside(pr.url)}>
                 <ExternalLinkIcon />
               </Button>
             </Tip>
             {others && !merged && isLocal() && (
               <Tip label="Their branch checked out on the side, its diff and comments in the IDE, and an agent's first pass">
-                <Button variant="outline" size="sm" className="h-8 border-[var(--border)] bg-[var(--bg)] text-[13px] shadow-none" disabled={inIde} onClick={() => void reviewHere()}>
+                <KitButton variant="secondary" disabled={inIde} onClick={() => void reviewHere()}>
                   {inIde ? "Opening…" : "Review in the IDE"}
-                </Button>
+                </KitButton>
               </Tip>
             )}
             {!merged && (
-              <Button variant="outline" size="sm" className="h-8 border-[var(--border)] bg-[var(--bg)] text-[13px] shadow-none" onClick={() => ctx.onWork(`${pr.url} `)}>
+              <KitButton variant="secondary" onClick={() => ctx.onWork(`${pr.url} `)}>
                 Open in a session
-              </Button>
+              </KitButton>
             )}
           </div>
         </div>
         {/* One quiet line of what it is (design A): where, who, which branch, its size, and what makes it worth a careful look.
             The size and the paths it touches were a row of chips, one of them the failing checks the card says already. */}
-        <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-[var(--text-muted)]">
+        <p className="rv-facts">
           {[
             <span key="n">
               {pr.repo} #{pr.number}
@@ -1133,10 +1121,8 @@ function Pane({ pr, kind, ctx, cmd, risk }: { pr: PullRequest; kind: Kind; ctx: 
             <Button
               variant="outline"
               size="xs"
-              className={cn(
-                "h-6 gap-1.5 rounded-md border-[var(--border)] bg-transparent px-2 text-[12px] font-medium text-[var(--ink-2)] shadow-none dark:bg-transparent",
-                session.shepherd && "border-transparent bg-[color-mix(in_srgb,var(--dass-live)_14%,transparent)] text-[var(--dass-live)] hover:text-[var(--dass-live)] dark:bg-[color-mix(in_srgb,var(--dass-live)_14%,transparent)]",
-              )}
+              className="rv-sess"
+              data-live={session.shepherd ? "" : undefined}
               onClick={() => ctx.onOpen?.(session.sid)}
               title={`Open “${session.title}”`}
             >
@@ -1154,34 +1140,31 @@ function Pane({ pr, kind, ctx, cmd, risk }: { pr: PullRequest; kind: Kind; ctx: 
           three boxes, then the failing check again, each saying the same failure. */}
       <section
         aria-label={next.title}
-        className={cn(
-          "tray flex flex-col rounded-xl border border-[var(--border)] bg-[var(--card)]",
-          nextDot === "needs" && "border-[color-mix(in_srgb,var(--dass-needs)_40%,var(--border))]",
-          nextDot === "bad" && "border-[color-mix(in_srgb,var(--red)_35%,var(--border))]",
-        )}
+        className="rv-box rv-next2"
+        data-tone={nextDot}
       >
-        <div className="flex flex-col gap-1 p-4">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="rv-next-head">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
             <Dot state={nextDot} />
-            <b className="min-w-0 flex-1 text-[14px] font-semibold text-[var(--ink)]">{next.title}</b>
+            <b className="rv-next-t">{next.title}</b>
             {!asking && buttons.length > 0 && <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5">{buttons}</div>}
           </div>
-          {next.body && <span className="pl-[21px] text-[13px] leading-relaxed text-[var(--text-muted)]">{next.body}</span>}
+          {next.body && <span className="rv-next-b">{next.body}</span>}
         </div>
         {asking && (
-          <div className="flex flex-col gap-2 px-4 pb-4 pl-[37px]">
-            <Textarea className="min-h-20 border-[var(--border)] bg-[var(--bg)] text-[13px] md:text-[13px]" rows={3} autoFocus value={changes} placeholder="What should change before this merges" onChange={(e) => setChanges(e.target.value)} />
+          <div className="rv-ask2">
+            <Textarea className="rv-textarea" rows={3} autoFocus value={changes} placeholder="What should change before this merges" onChange={(e) => setChanges(e.target.value)} />
             <div className="flex justify-end gap-1.5">
               {quietBtn("cancel", "Cancel", () => setAsking(false))}
-              <Button size="sm" className="h-8 text-[13px]" disabled={!changes.trim() || !!busy} onClick={() => quiet(act("request_changes", { body: changes }).then(() => setAsking(false)))}>
+              <KitButton disabled={!changes.trim() || !!busy} onClick={() => quiet(act("request_changes", { body: changes }).then(() => setAsking(false)))}>
                 Request changes
-              </Button>
+              </KitButton>
             </div>
           </div>
         )}
         {!merged && <MergeRows pr={pr} mine={!others} ctx={ctx} act={act} busy={busy} />}
         {note && (
-          <p className={cn("m-0 border-t border-[var(--border)] px-4 py-2.5 text-[13px]", note.bad ? "text-[var(--red)]" : "text-[var(--text-muted)]")} role={note.bad ? "alert" : "status"}>
+          <p className={cn("rv-note2", note.bad ? "text-[var(--red)]" : "text-[var(--text-muted)]")} role={note.bad ? "alert" : "status"}>
             {note.text}
           </p>
         )}
@@ -1194,9 +1177,9 @@ function Pane({ pr, kind, ctx, cmd, risk }: { pr: PullRequest; kind: Kind; ctx: 
         <section className="flex flex-col gap-3">
           {/* The change itself is the page's body; your agents' review is a small control over it, its findings under it. */}
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <h3 className="m-0 text-[13px] font-semibold text-[var(--ink)]">Files changed</h3>
+            <h3 className="rv-h3">Files changed</h3>
             {files.length > 0 && (
-              <span className="text-[12px] text-[var(--text-muted)]">
+              <span className="rv-h3-meta">
                 {pr.changedFiles ?? files.length}
                 {" · "}
                 <button type="button" className="link-btn" onClick={() => setTour(true)}>
@@ -1210,18 +1193,18 @@ function Pane({ pr, kind, ctx, cmd, risk }: { pr: PullRequest; kind: Kind; ctx: 
           {tour && <ReviewTour identity={ctx.identity} pr={pr} files={files} onClose={() => setTour(false)} />}
           {/* The tour walks the files in its own place; the list is back when it ends. */}
           {files.length > 0 && !tour && (
-          <ul className="tray m-0 flex list-none flex-col divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] p-0">
+          <ul className="rv-box rv-files2">
             {files.slice(0, 20).map((f) => (
-              <li key={f.path} className="flex min-w-0 items-center gap-2.5 px-3 py-2 text-[13px]" title={f.path}>
+              <li key={f.path} className="rv-file" title={f.path}>
                 <FileIcon path={f.path} size={14} />
-                <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--ink)]">
+                <span className="rv-file-p">
                   {f.path.includes("/") && <span className="text-[var(--text-muted)]">{f.path.slice(0, f.path.lastIndexOf("/") + 1)}</span>}
                   {f.path.slice(f.path.lastIndexOf("/") + 1)}
                 </span>
                 {risky.has(f.path) && (
-                  <Badge variant="outline" className="h-5 gap-1 rounded-md border-[var(--border)] px-1.5 text-[12px] font-medium text-[var(--ink-2)]">
-                    <ShieldIcon /> Worth a look
-                  </Badge>
+                  <Chip tone="warning" icon={<ShieldIcon />}>
+                    Worth a look
+                  </Chip>
                 )}
                 <Diff add={f.additions} del={f.deletions} />
               </li>
@@ -1304,7 +1287,7 @@ function MergeRows({ pr, mine, ctx, act, busy }: { pr: PullRequest; mine: boolea
   const unresolved = pr.unresolved ?? 0;
   const quiet = (p: Promise<unknown>) => void p.catch(() => {});
   const link = (key: string, label: string, onClick: () => void, disabled = false) => (
-    <Button key={key} variant="link" size="sm" disabled={disabled} className="h-auto p-0 text-[13px] font-medium text-[var(--ink-2)] hover:text-[var(--ink)]" onClick={onClick}>
+    <Button key={key} variant="ghost" size="xs" disabled={disabled} className="rv-act" onClick={onClick}>
       {label}
     </Button>
   );
@@ -1345,15 +1328,15 @@ function MergeRows({ pr, mine, ctx, act, busy }: { pr: PullRequest; mine: boolea
     },
   ];
   return (
-    <ul className="m-0 flex list-none flex-col border-t border-[var(--border)] p-0" aria-label="Before it can merge">
+    <ul className="rv-steps2" aria-label="Before it can merge">
       {rows.map((r) => (
-        <li key={r.key} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--border)] px-4 py-2.5 text-[13px] last:border-b-0">
+        <li key={r.key} className="rv-step2" data-mark={r.mark}>
           <StepMark mark={r.mark} live={r.key === "checks" || (r.key === "merge" && !behind && s.merge === "wait")} />
           <span className="min-w-0 flex-1 basis-48">
             <span className="font-medium text-[var(--ink)]">{r.name}</span>
             <span className="text-[var(--text-muted)]"> · {r.detail}</span>
           </span>
-          {r.actions.length > 0 && <span className="ml-auto flex shrink-0 items-center gap-3">{r.actions}</span>}
+          {r.actions.length > 0 && <span className="ml-auto flex shrink-0 items-center gap-1">{r.actions}</span>}
         </li>
       ))}
     </ul>
@@ -1377,16 +1360,14 @@ function ReviewControl({ pr, ctx }: { pr: PullRequest; ctx: Ctx }) {
   const label = picked.length > 1 ? `${picked.length} agents` : picked.length ? ENGINE_NAMES[picked[0]!] : "Pick an agent";
   return (
     <div className="ml-auto flex items-center gap-1">
-      <span className="mr-0.5 text-[12px] text-[var(--text-muted)]" title="Your own coding tools read the change against the repo's rules and say what would break or isn't safe. Pick more than one to see where they agree.">
+      <span className="mr-1 text-[12px] leading-4 text-[var(--text-muted)]" title="Your own coding tools read the change against the repo's rules and say what would break or isn't safe. Pick more than one to see where they agree.">
         Agent review
       </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-[12px] font-medium text-[var(--ink-2)]" aria-label={`Agent review by ${picked.map((t) => ENGINE_NAMES[t]).join(" and ") || "nobody yet"}. Choose which`}>
-            {picked.length === 1 && <EngineMark tool={picked[0]!} size={12} />}
+          <KitButton variant="ghost" size="sm" icon={picked.length === 1 ? <EngineMark tool={picked[0]!} size={12} /> : undefined} iconRight={<ChevronDownIcon />} aria-label={`Agent review by ${picked.map((t) => ENGINE_NAMES[t]).join(" and ") || "nobody yet"}. Choose which`}>
             {label}
-            <ChevronDownIcon className="size-3" />
-          </Button>
+          </KitButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           {tools.map((t) => (
@@ -1397,10 +1378,9 @@ function ReviewControl({ pr, ctx }: { pr: PullRequest; ctx: Ctx }) {
         </DropdownMenuContent>
       </DropdownMenu>
       <Tip label="Have your agents read it" keys="R">
-        <Button variant="outline" size="sm" className="h-7 border-[var(--border)] bg-[var(--bg)] text-[12px] shadow-none" disabled={!picked.length || !!run?.running.length} onClick={() => void runReview(ctx.identity, pr, picked)}>
-          {run?.running.length ? <Dot state="working" /> : null}
+        <KitButton variant="secondary" size="sm" icon={run?.running.length ? <Dot state="working" /> : undefined} disabled={!picked.length || !!run?.running.length} onClick={() => void runReview(ctx.identity, pr, picked)}>
           {run?.running.length ? `Reading… ${asked - run.running.length}/${asked}` : run ? "Review again" : "Run"}
-        </Button>
+        </KitButton>
       </Tip>
     </div>
   );
@@ -1462,19 +1442,12 @@ function AgentReview({ pr, ctx, mine, act }: { pr: PullRequest; ctx: Ctx; mine: 
       )}
       {merged.length > 0 && (
         <>
-          <ul className="tray m-0 flex list-none flex-col divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] p-0">
+          <ul className="rv-box rv-finds">
             {merged.map((f, i) => (
-              <li key={i} className="flex items-start gap-3 px-3 py-2.5">
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "mt-px h-5 w-[58px] shrink-0 rounded-md border-[var(--border)] px-1.5 text-[12px] font-medium text-[var(--text-muted)]",
-                    f.severity === "high" && "border-transparent bg-[color-mix(in_srgb,var(--red)_14%,transparent)] text-[var(--red)]",
-                    f.severity === "medium" && "text-[var(--ink)]",
-                  )}
-                >
+              <li key={i} className="rv-find">
+                <Chip size="md" className="rv-sev2" tone={f.severity === "high" ? "danger" : f.severity === "medium" ? "warning" : "neutral"}>
                   {SEV[f.severity]}
-                </Badge>
+                </Chip>
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-[13px] font-medium text-[var(--ink)]">
                     <span>{f.title}</span>
@@ -1499,14 +1472,14 @@ function AgentReview({ pr, ctx, mine, act }: { pr: PullRequest; ctx: Ctx; mine: 
           </ul>
           <div className="flex flex-wrap justify-end gap-1.5">
             <Tip label="A pending review on GitHub that only you can see until you submit it there">
-              <Button variant="ghost" size="sm" className="h-8 text-[13px] text-[var(--ink-2)]" onClick={post}>
+              <KitButton variant="ghost" onClick={post}>
                 Post as draft review
-              </Button>
+              </KitButton>
             </Tip>
             {mine && (
-              <Button size="sm" className="h-8 text-[13px]" onClick={() => ctx.onWork(briefs.findings(pr, merged))}>
+              <KitButton onClick={() => ctx.onWork(briefs.findings(pr, merged))}>
                 Fix these in a session
-              </Button>
+              </KitButton>
             )}
           </div>
         </>

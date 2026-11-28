@@ -42,7 +42,14 @@ export function carriedOn(state: { run: RunLike; laneRuns: Record<string, RunLik
   return [MAIN_LANE, ...state.lanes.map((l) => l.id)].some((id) => id !== lane && (runOf(id)?.status === "running" || (state.finished?.[id] ?? 0) > run.sinceSeq));
 }
 
-export const LIMIT = /usage limit|session limit|weekly limit|5-hour limit|rate limit|quota|too many requests|hit your limit|\b429\b/i;
+/**
+ * A run that ended on a limit that comes back by itself, in any coding tool's words. Besides the plan tools' own ("5-hour limit
+ * reached"), the providers' as the tools on your own key pass them on (Arun, 2026-11-27: "fix uneven across tools"): litellm's
+ * `RateLimitError` and Anthropic's `rate_limit_error` (Aider, Goose), "insufficient_quota", and Gemini's `RESOURCE_EXHAUSTED`
+ * (Qwen Code, Goose, Crush on a Google key). Running out of paid credits isn't one: nothing resets it, so the person tops up, and
+ * the run stays Stopped in Needs you (board.ts) rather than "Out of usage" waiting for a reset that never comes.
+ */
+export const LIMIT = /usage limit|session limit|weekly limit|5-hour limit|rate[ _]?limit|quota|too many requests|hit your limit|out of usage|resource[ _]exhausted|\b429\b/i;
 
 export interface LimitHit {
   /** When the allowance comes back, as a time; null when the message didn't say. */

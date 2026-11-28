@@ -47,3 +47,23 @@
 .ide-agent .composer-bar:has(.later-trig) > .mode-pill span { overflow: visible; }
 /* At 280px the tool picker is down to its bare mark: it keeps a gap from the + beside it, which it would otherwise touch. */
 .ide-agent .composer-bar:has(.later-trig) > .agent-pill, .ide-agent .composer-bar:has(.later-trig) > .menu-pill { margin-left: 5px; }
+
+/* ── Measured to the shared kit (affect-pro SPEC.md §1 and "scheduled-runs", 2026-11-27); the popover's shell is in race.css with the
+   race picker's. Section labels 10/500/16 uppercase, rows 44 with a 13/500/20 title over 12/400/16 facts, buttons 24 at radius 6,
+   the count a 16px chip at radius 4 (a count is a rounded square, never a pill), the time field 28 at radius 6 on a ring. */
+.later-trig { width: 28px; height: 28px; border-radius: 6px; }
+.later-dot { min-width: 14px; height: 14px; border-radius: 4px; font: 500 9.5px/14px var(--font); }
+.later-pop h4 { font: 500 10px/16px var(--font); letter-spacing: .5px; text-transform: uppercase; }
+.later-pop p b { font-weight: 500; }
+.later-row { min-height: 44px; box-sizing: border-box; align-items: center; padding: 6px 4px 6px 8px; border-radius: 6px; }
+.later-title { font: 500 13px/20px var(--font); }
+.later-facts { font-size: 12px; line-height: 16px; }
+.later-btn { height: 24px; padding: 0 8px; border: 0; border-radius: 6px; box-shadow: var(--ia-ring, 0 0 0 .5px var(--border-strong)); font: 500 12px/20px var(--font); }
+.later-x { width: 24px; height: 24px; }
+.later-pick input { height: 28px; border: 0; border-radius: 6px; box-shadow: var(--ia-ring, 0 0 0 .5px var(--border-strong)); font-size: 13px; }
+.later-small { font-size: 12px; line-height: 16px; }
+.later-pop { padding: 12px; border: 0; border-radius: 10px; box-shadow: 0 0 0 .5px var(--border-strong), 0 12px 28px -10px rgb(0 0 0 / .16), 0 1px 2px rgb(0 0 0 / .05); }
+html.dark .later-pop { box-shadow: 0 0 0 .5px rgb(255 255 255 / .12), 0 12px 28px -10px rgb(0 0 0 / .6); }
+.later-pop h3 { font: 500 13px/20px var(--font); }
+.later-pop p { font-size: 12px; line-height: 16px; }
+.later-opt { height: 36px; border-radius: 6px; font: 400 13px/20px var(--font); transition: background-color .09s ease-out; }

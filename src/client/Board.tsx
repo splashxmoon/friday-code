@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shortPaths } from "./shortPaths.js";
-import type { BoardCard, BoardColumn } from "../board.js";
+import type { BoardCard, BoardColumn, WeekStats } from "../board.js";
 import type { Need, NeedMark } from "../needs-rank.js";
 import { NEEDS_CHANGED, withCode } from "./Attention.js";
 import { api } from "./api.js";
@@ -16,6 +16,7 @@ import type { Identity, Project, RecentSession } from "./storage.js";
 import { ConfirmDialog, isTyping, relTime, type Confirmation } from "./ui.js";
 import { hostApi, useMachine } from "./local.js";
 import { usePrs } from "./prWatch.js";
+import { shortTokens } from "../tool-usage.js";
 import { QuickHeader, RiskChip, approveTogether, type Approvable } from "./reviewRisk.js";
 import { ChartLineIcon, CheckIcon, ChevronRightIcon, CopyIcon, GitPullRequestIcon, LayoutGridIcon, SearchIcon, XIcon } from "lucide-react";
 import { isLocal } from "./edition.js";
@@ -24,15 +25,53 @@ import { useCodeChats } from "./ide/code-chats.js";
 import { foldersOf, useIdeRoot } from "./ide/mode.js";
 import { codeWhere, folderName, openWaiting } from "./ide/waiting.js";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { CLASS_LABEL, headlineClass } from "../command-class.js";
+import "./board.css";
+import { Badge, Button, Checkbox, EmptyState, IconButton, SegmentedControl, Skeleton } from "@/components/affect";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/dass";
-import { EmptyState } from "@/components/dass/EmptyState";
-import { Count, Dot, PageTabs, Tip, type DotState } from "@/components/dass/page-bits";
+import { Count, Dot, Tip, type DotState } from "@/components/dass/page-bits";
+
+/** The week as stat cards over the foot (BoardWeek.tsx): loaded when it is shown. */
+const BoardWeek = lazy(() => import("./BoardWeek.js"));
+/** Every Captain and its threads side by side (agent-viz/places.tsx, Agent Fleet): the board's Captains view, loaded when picked. */
+const CaptainFleet = lazy(() => import("./components/agent-viz/places.js").then((m) => ({ default: m.CaptainFleet })));
+/** While you were away, once, over the board (BoardAway.tsx). */
+const BoardAway = lazy(() => import("./BoardAway.js"));
+/** The Timeline view (BoardTimeline.tsx), a chunk of its own, loaded when picked. */
+const BoardTimeline = lazy(() => import("./BoardTimeline.js"));
+
+/**
+ * The board's two views of the same agents: the lanes, and who has been doing what and since when. The board (the lanes) is
+ * where it opens (Arun, 2026-11-28: "bring back the old agent board"), first in the switch; the pick is remembered, and
+ * `?board=` names one outright. The Desk view is gone (Arun, 2026-11-28: "get rid of the desk view"): a Desk remembered from
+ * before opens as the board.
+ */
+type BoardView = "timeline" | "board";
+const VIEWS: BoardView[] = ["board", "timeline"];
+const VIEW = "mpa.board.view";
+/** Set once the old board is back: a Timeline remembered from when it was the default opens as the board, once. */
+const BACK = "mpa.board.view.back";
+function readView(): BoardView {
+  const asked = new URLSearchParams(location.search).get("board") as BoardView | null;
+  if (asked && VIEWS.includes(asked)) return asked;
+  try {
+    const kept = localStorage.getItem(VIEW) as BoardView | null;
+    // A view no longer offered (the Desk) is put back to the board, so nothing remembered points at it.
+    if (kept && !VIEWS.includes(kept)) localStorage.setItem(VIEW, "board");
+    if (!localStorage.getItem(BACK)) {
+      localStorage.setItem(BACK, "1");
+      if (kept === "timeline") localStorage.setItem(VIEW, "board");
+      return "board";
+    }
+    if (kept && VIEWS.includes(kept)) return kept;
+  } catch {
+    /* not remembered here */
+  }
+  return "board";
+}
 
 /**
  * The Agent Board: every agent working for you, in one place.
@@ -123,7 +162,7 @@ function useBoard(identity: Identity, recents: RecentSession[], extra: string[] 
 }
 
 /** The week in three numbers, from the server. */
-type Week = { sessions: number; shipped: number; runs: number };
+export type Week = { sessions: number; shipped: number; runs: number };
 
 /** Each column's state, as a dot: teal is alive, amber waits on you, the rest are quiet. */
 const DOT: Record<BoardColumn, DotState> = { needs: "needs", working: "working", review: "idle", ready: "done", idle: "idle" };
@@ -132,7 +171,7 @@ const DOT: Record<BoardColumn, DotState> = { needs: "needs", working: "working",
 const PRESENCE: Record<BoardColumn, Presence> = { needs: "needs", working: "working", review: "idle", ready: "idle", idle: "idle" };
 
 /** The card's face (a teammate) or its coding tool's mark, wearing the ring of how it stands: the one state signal on a card. */
-function Mark({ card }: { card: BoardCard }) {
+export function Mark({ card }: { card: BoardCard }) {
   let face = null as React.ReactNode;
   face = teamFace(card);
   if (face) return <span className="board-mark">{face}</span>;
@@ -158,7 +197,7 @@ function sizeOf(card: BoardCard): { files: number; add?: number; del?: number } 
 }
 
 /** The one thing a card offers besides opening it: its pull request, its failing checks, Merge, or a review to do. */
-type CardAction = { label: string; title: string; primary?: boolean; icon?: boolean; run: () => void };
+export type CardAction = { label: string; title: string; primary?: boolean; icon?: boolean; run: () => void };
 
 /** How long a run has been going, counted up in place (step-words.ts, shared with the sidebar's working rows). */
 export { runClock };
@@ -168,7 +207,7 @@ export { runClock };
  * stands, with a dot only when that means something: running, failing, ready); who and which branch, how big its change is, and
  * at most one action. `solo`: every agent here is yours and nobody else is in the room, so names lose their "Arun's".
  */
-function Card({ card, onOpen, solo, focused, onFocus, action, where }: { card: BoardCard; onOpen: (sid: string) => void; solo: boolean; focused: boolean; onFocus: () => void; action?: CardAction | null; /** One of Code's chats: marked "Code" and read-only here, opening in Code. */ where?: { folder: string } }) {
+export function Card({ card, onOpen, solo, focused, onFocus, action, where }: { card: BoardCard; onOpen: (sid: string) => void; solo: boolean; focused: boolean; onFocus: () => void; action?: CardAction | null; /** One of Code's chats: marked "Code" and read-only here, opening in Code. */ where?: { folder: string } }) {
   const agent = solo ? card.agent.replace(/^[^']+'s /, "") : card.agent;
   const el = useRef<HTMLButtonElement>(null);
   const [copied, setCopied] = useState(false);
@@ -190,6 +229,9 @@ function Card({ card, onOpen, solo, focused, onFocus, action, where }: { card: B
   const now = useNow(running ? 1_000 : 30_000);
   const when = running ? runClock(now - card.since!) : card.column === "ready" ? (relTime(card.at) === "now" ? "done just now" : `done ${relTime(card.at)} ago`) : relTime(card.at);
   const whenTitle = running ? `Working since ${new Date(card.since!).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : new Date(card.at).toLocaleString();
+  const pct = running && card.ctx && card.ctx.window > 0 ? Math.min(100, Math.round((card.ctx.used / card.ctx.window) * 100)) : null;
+  // The pull request's checks, as GitHub has them, said on the card while it is open (the failing ones have their own button).
+  const checks = !where && card.pr && card.gh?.state === "open" && card.gh.checks !== "none" && !(card.gh.checks === "failing" && action) ? card.gh.checks : null;
   const quick: CardAction[] =
     card.column === "working"
       ? [{ label: "Open", title: "Open the session", run: () => onOpen(card.sid) }]
@@ -200,7 +242,7 @@ function Card({ card, onOpen, solo, focused, onFocus, action, where }: { card: B
           ]
         : [];
   const sizeEl = size ? (
-    <span className="shrink-0 text-[12px] text-[var(--text-muted)] tabular-nums" title={`${size.files} file${size.files === 1 ? "" : "s"} changed${size.add !== undefined ? `, ${size.add} lines added and ${size.del} taken away` : ""}`}>
+    <span className="bd-card-size tabular-nums" title={`${size.files} file${size.files === 1 ? "" : "s"} changed${size.add !== undefined ? `, ${size.add} lines added and ${size.del} taken away` : ""}`}>
       {size.add !== undefined && (size.add || size.del) ? (
         <>
           <span className="text-[var(--green)]">+{size.add}</span> <span className="text-[var(--red)]">−{size.del}</span>
@@ -219,11 +261,8 @@ function Card({ card, onOpen, solo, focused, onFocus, action, where }: { card: B
     // z-10, over that press area, stays inside the card and never over the page's footer (Arun, 2026-11-18: a risk chip drawn
     // over the Board's status bar as the cards scrolled under it).
     <article
-      className={cn(
-        "board-card group/card @container relative isolate flex cursor-pointer flex-col gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 pt-2.5 pb-2.5 transition-[border-color,box-shadow] duration-[var(--dass-fast)] ease-[var(--dass-ease)] hover:border-[var(--border-strong)] hover:shadow-[0_1px_2px_rgb(0_0_0/0.04)]",
-        "has-[[data-open]:focus-visible]:border-[var(--border-focus)] has-[[data-open]:focus-visible]:shadow-[var(--dass-ring)]",
-        needsYou && "border-[color-mix(in_srgb,var(--dass-needs)_45%,var(--border))] hover:border-[color-mix(in_srgb,var(--dass-needs)_70%,var(--border))]",
-      )}
+      // The shared kit's task card (Agent Inbox): radius 10, its edge a ring rather than a border, raised a little on hover.
+      className={cn("board-card group/card @container relative isolate flex cursor-pointer flex-col", needsYou && "needs-you")}
       data-card={card.id}
       onClick={() => onOpen(card.sid)}
     >
@@ -233,7 +272,7 @@ function Card({ card, onOpen, solo, focused, onFocus, action, where }: { card: B
           ref={el}
           type="button"
           data-open
-          className="block min-w-0 flex-1 truncate text-left text-[13px] leading-[18px] font-medium text-[var(--ink)] outline-none after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:shadow-none!"
+          className="bd-card-title outline-none after:absolute after:inset-0 after:rounded-[10px] after:content-[''] focus-visible:shadow-none!"
           onFocus={onFocus}
           onClick={(e) => (e.stopPropagation(), onOpen(card.sid))}
           title={card.task && card.task !== card.title ? card.task : card.title}
@@ -242,24 +281,30 @@ function Card({ card, onOpen, solo, focused, onFocus, action, where }: { card: B
           {card.title}
         </button>
         {card.at > 0 && (
-          <span className="shrink-0 text-[12px] text-[var(--text-muted)] tabular-nums" title={whenTitle}>
+          <span className={cn("bd-card-when tabular-nums", running && "run")} title={whenTitle}>
             {when}
           </span>
         )}
       </div>
       {/* One live line: the question when it waits on you, in ink; otherwise what it is doing, or where its pull request stands. */}
-      <p className={cn("m-0 flex min-w-0 items-start gap-1.5 pl-8 text-[13px] leading-[18px]", needsYou ? "text-[var(--ink)]" : failing ? "text-[var(--red)]" : "text-[var(--ink-2)]")} title={card.detail || undefined}>
+      <p className={cn("bd-card-line", needsYou && "needs", failing && "bad")} title={card.detail || undefined}>
         {lineDot && <Dot state={lineDot} className="mt-[5px] shrink-0" />}
         {/* At work, the step shines as a reply's step does (shine.tsx). */}
         <Shine on={card.column === "working" && !!card.detail} className="line-clamp-2 min-w-0">
           {card.detail ? shortPaths(card.detail) : card.status}
         </Shine>
       </p>
-      <div className="flex min-h-6 min-w-0 items-center gap-2 pl-8 text-[12px] text-[var(--text-muted)]">
+      {/* How full its context is, while it works: the kit's Context Window as one thin bar, amber once it is nearly full. */}
+      {pct !== null && (
+        <span className={cn("bd-card-ctx", pct >= 85 && "full")} role="img" aria-label={`Context ${pct}% full`} title={`Context ${pct}% full: ${shortTokens(card.ctx!.used)} of ${shortTokens(card.ctx!.window)} tokens`}>
+          <i style={{ width: `${pct}%` }} />
+        </span>
+      )}
+      <div className="bd-card-meta">
         {where && (
-          <span className="shrink-0 rounded-[5px] border border-[var(--border)] px-1.5 text-[11px] leading-4 text-[var(--ink-2)]" title={`${codeWhere(where)}: opens in Code`} data-where="code">
+          <Badge title={`${codeWhere(where)}: opens in Code`} data-where="code">
             Code
-          </span>
+          </Badge>
         )}
         {/* On a narrow card with buttons, the name gives way: the card's mark already says which tool it is. */}
         <span className={cn("min-w-0 truncate", quick.length > 1 && "hidden @min-[22rem]:inline")} title={`${agent}${card.branch ? ` · ${card.branch}` : ""}`}>
@@ -273,6 +318,13 @@ function Card({ card, onOpen, solo, focused, onFocus, action, where }: { card: B
           )}
         </span>
         {size && !action && sizeEl}
+        {/* What has gone into the run so far (Agent Inbox's meta counts); they give way on a narrow card. */}
+        {pct !== null && <span className="bd-card-fact hidden tabular-nums @min-[20rem]:inline">{pct}% context</span>}
+        {!!card.steps && (
+          <span className="bd-card-fact hidden tabular-nums @min-[24rem]:inline" title={`${card.steps} tool call${card.steps === 1 ? "" : "s"} in this run`}>
+            {card.steps} tool{card.steps === 1 ? "" : "s"}
+          </span>
+        )}
         {/* Who is in the room right now; a ring on whoever the agent is waiting on. */}
         {!solo && card.people && card.people.length > 0 && (
           <span className="flex shrink-0 items-center -space-x-1.5" aria-label={`In the room: ${card.people.map((p) => p.name).join(", ")}`}>
@@ -288,21 +340,19 @@ function Card({ card, onOpen, solo, focused, onFocus, action, where }: { card: B
           {/* Copy the branch: on hover and focus, so it doesn't crowd every card. */}
           {card.branch && (
             <Tip label={copied ? "Copied" : "Copy branch name"}>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="text-[var(--text-muted)] opacity-0 transition-opacity duration-[var(--dass-fast)] group-hover/card:opacity-100 group-focus-within/card:opacity-100 hover:text-[var(--ink)]"
-                aria-label={`Copy branch ${card.branch}`}
+              <IconButton
+                size="sm"
+                title=""
+                className="opacity-0 transition-opacity duration-150 group-hover/card:opacity-100 group-focus-within/card:opacity-100"
+                label={`Copy branch ${card.branch}`}
+                icon={copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
                 onClick={() => void navigator.clipboard?.writeText(card.branch).then(() => (setCopied(true), setTimeout(() => setCopied(false), 1400)))}
-              >
-                {copied ? <CheckIcon /> : <CopyIcon />}
-              </Button>
+              />
             </Tip>
           )}
           {quick.map((a) => (
             <Tip key={a.label} label={a.title}>
-              <Button variant={a.primary ? "default" : "outline"} size="sm" className={cn("ml-1 h-[26px] gap-1.5 rounded-md px-2.5 text-[13px]", !a.primary && "border-[var(--border-strong)] bg-[var(--card)] text-[var(--ink)] shadow-none")} onClick={a.run}>
-                {a.label === "Commit" && <Icon name="commit" size={13} />}
+              <Button size="sm" variant={a.primary ? "primary" : "secondary"} className="ml-1" icon={a.label === "Commit" ? <Icon name="commit" size={14} /> : undefined} onClick={a.run}>
                 {a.label}
               </Button>
             </Tip>
@@ -310,15 +360,20 @@ function Card({ card, onOpen, solo, focused, onFocus, action, where }: { card: B
         </span>
       </div>
       {/* The card's one action, on its own line with how big the change is: a pull request, its failing checks, or Merge. */}
-      {(action || risk) && (
-        <div className="relative z-10 flex min-h-6 min-w-0 items-center gap-2 pl-8" onClick={stop} onKeyDown={stop}>
+      {(action || risk || checks) && (
+        <div className="bd-card-meta relative z-10" onClick={stop} onKeyDown={stop}>
           {risk && <RiskChip risk={risk} />}
+          {checks && (
+            <span className="bd-card-checks" data-checks={checks} title={`Checks ${checks} on GitHub`}>
+              <i aria-hidden /><i aria-hidden /><i aria-hidden />
+              {checks === "passing" ? "Checks pass" : checks === "failing" ? "Checks failing" : "Checks running"}
+            </span>
+          )}
           {action && sizeEl}
           {action && (
             <span className="ml-auto shrink-0">
               <Tip label={action.title}>
-                <Button variant={action.primary ? "default" : "outline"} size="xs" className={cn("h-6 px-2 text-[12px]", !action.primary && "border-[var(--border)] bg-[var(--bg)] text-[var(--ink-2)] shadow-none")} onClick={action.run}>
-                  {action.icon && <GitPullRequestIcon />}
+                <Button size="sm" variant={action.primary ? "primary" : "secondary"} icon={action.icon ? <GitPullRequestIcon /> : undefined} onClick={action.run}>
                   {action.label}
                 </Button>
               </Tip>
@@ -331,7 +386,7 @@ function Card({ card, onOpen, solo, focused, onFocus, action, where }: { card: B
 }
 
 /** What waits on you, as the Needs you page has it (needs-you.ts): read with the board, so it can be answered here. */
-function useNeedItems(identity: Identity, recents: RecentSession[]) {
+export function useNeedItems(identity: Identity, recents: RecentSession[]) {
   const [items, setItems] = useState<Need[] | null>(null);
   const sids = recents.map((r) => r.sid).join(",");
   const load = useCallback(async () => {
@@ -360,62 +415,110 @@ function useNeedItems(identity: Identity, recents: RecentSession[]) {
   return { items, load };
 }
 
-/** The answer a card puts first: the one Friday or the asker suggests, else, for a command or a change, letting it. */
-function firstChoice(n: Need): string | null {
-  if (n.suggestion && n.choices.some((c) => c.value === n.suggestion!.answer)) return n.suggestion.answer;
+/**
+ * The answer a card puts first: for a command or a change, letting it, at the end of the row as the thread's permission card has
+ * it (the redesign of 2026-11-27: Run it is the main answer whatever the command, its risk chip doing the warning); otherwise the
+ * one Friday or the asker suggests.
+ */
+export function firstChoice(n: Need): string | null {
   if (n.kind === "approval" || n.kind === "plan") return n.choices.find((c) => c.value === "yes")?.value ?? null;
+  if (n.suggestion && n.choices.some((c) => c.value === n.suggestion!.answer)) return n.suggestion.answer;
   return null;
 }
 
+/** The commands a go-ahead asks to run: each on its own line when there are several, else the one in its words' backticks. */
+const commandsOf = (n: Need): string[] => (n.detail ? n.detail.split("\n").filter(Boolean) : [...n.text.matchAll(/`([^`]+)`/g)].map((m) => m[1]!).slice(0, 1));
+
+/** The riskiest kind among a go-ahead's commands, as the thread's permission card chips it (Activity.tsx riskOf): red deletes, amber the rest a person should look at. */
+const RISK_ORDER = ["destructive", "deploy", "publish", "other", "install", "git", "build", "checks", "read"] as const;
+export function commandRisk(items: readonly string[]): { label: string; tone: "bad" | "warn" | "" } | null {
+  if (!items.length) return null;
+  const kinds = new Set(items.map((i) => headlineClass(i)));
+  const k = RISK_ORDER.find((x) => kinds.has(x));
+  if (!k) return null;
+  return { label: CLASS_LABEL[k].chip ?? CLASS_LABEL[k].label, tone: k === "destructive" ? "bad" : CLASS_LABEL[k].careful || k === "install" ? "warn" : "" };
+}
+const runKey = () => (/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘↵" : "Ctrl ↵");
+
 /**
- * One thing waiting on you, answered here (design A): who asks and from which piece of work, how long it has waited and what it
- * holds up; the question in full, a command to run as code; the suggested answer and why; its answers as buttons, the suggested
- * one first in weight; Reply for words of your own; and the session, for what can only be answered there.
+ * One thing waiting on you, answered here (design A), drawn as an approval request (the shared kit's Approval Gates card, radius
+ * 14 and raised): who asks and from which piece of work with how long it has waited, and its risk or what it holds up as a chip;
+ * the question as the card's title, a command's lines in a well, the suggested answer and why; under a hairline, the agent and
+ * branch, Reply for words of your own, and the answers, the main one last on the right. A go-ahead reads as the thread's
+ * permission card does: Don't a quiet button (Esc), Run it the main one (⌘↵), the keys shown while the card has the keyboard.
  */
-function NeedCard({ need, card, busy, error, solo, onAnswer, onOpen, where }: { need: Need; card?: BoardCard; busy: boolean; error: string; solo: boolean; onAnswer: (value: string, edited?: boolean) => void; onOpen: () => void; /** One of Code's chats: marked "Code" as its card is, opening in Code. */ where?: { folder: string } | undefined }) {
+export function NeedCard({ need, card, busy, error, solo, onAnswer, onOpen, where }: { need: Need; card?: BoardCard; busy: boolean; error: string; solo: boolean; onAnswer: (value: string, edited?: boolean, always?: boolean) => void; onOpen: () => void; /** One of Code's chats: marked "Code" as its card is, opening in Code. */ where?: { folder: string } | undefined }) {
   const [replying, setReplying] = useState(false);
   const [draft, setDraft] = useState("");
   const agent = card ? (solo ? card.agent.replace(/^[^']+'s /, "") : card.agent) : need.who;
   const first = firstChoice(need);
   const choices = need.choices.length > 4 || need.asks?.length ? [] : need.choices;
+  const goAhead = need.kind === "approval" && choices.some((c) => c.value === "no") && choices.some((c) => c.value === "yes");
   const ordered = [...choices.filter((c) => c.value !== first), ...choices.filter((c) => c.value === first)];
   const lines = need.detail?.split("\n").filter(Boolean) ?? [];
   const suggested = need.suggestion && (need.choices.find((c) => c.value === need.suggestion!.answer)?.label ?? (need.choices.length ? null : need.suggestion.answer));
   const holds = need.blocks.agents > 1 || need.blocks.tasks > 0 ? [need.blocks.agents > 1 ? `holds up ${need.blocks.agents} agents` : "", need.blocks.tasks ? `${need.blocks.tasks} task${need.blocks.tasks === 1 ? "" : "s"}` : ""].filter(Boolean).join(", ") : "";
+  const risk = need.kind === "approval" && need.command ? commandRisk(commandsOf(need)) : null;
+  // A go-ahead's rule reason without its kind, which the chip already says ("Deletes files: they can't be brought back…").
+  const reason = goAhead && need.suggestion?.by === "rule" && need.suggestion.reason ? need.suggestion.reason.replace(/^[^:]+:\s*/, "") : "";
+  const note = reason && reason[0]!.toUpperCase() + reason.slice(1);
+  const no = goAhead ? choices.find((c) => c.value === "no")! : null;
+  // Always allow, as the thread's permission card has it: a box ticked on purpose, then Run it, which puts its commands on the
+  // session's allow list first (needs-you.ts). Offered on the owner's own commands only (command-allow.ts alwaysOffer).
+  const [always, setAlways] = useState(false);
+  const offerAlways = goAhead && !!need.always?.length;
+  const allowSaid = need.always?.map((a) => (a.endsWith("*") ? `“${a.slice(0, -1).trim()} …”` : `“${a}”`)).join(", ") ?? "";
+  const yes = (value: string) => onAnswer(value, false, offerAlways && always && value === "yes");
   return (
-    <article className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--dass-needs)_40%,var(--border))] bg-[var(--card)] p-3.5" aria-label={`${need.where.title}: ${need.text}`}>
-      <div className="flex min-w-0 items-center gap-2">
+    <article
+      className="bd-need"
+      aria-label={`${need.where.title}: ${need.text}`}
+      tabIndex={goAhead ? 0 : undefined}
+      // As on the thread's card: with focus anywhere on it, Esc is Don't and ⌘↵ the main answer, as its buttons show.
+      onKeyDown={(e) => {
+        if (!goAhead || busy || replying || isTyping(e.target)) return;
+        if (e.key === "Escape") (e.preventDefault(), e.stopPropagation(), onAnswer("no"));
+        else if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && first) (e.preventDefault(), e.stopPropagation(), yes(first));
+      }}
+    >
+      <div className="bd-need-who">
         {card ? <Mark card={card} /> : <span className="board-mark"><PresenceRing state="needs" size={24} square><span className="sb-mark-disc"><Icon name="agent" size={13} /></span></PresenceRing></span>}
-        <button type="button" className="link-btn min-w-0 flex-1 truncate text-left text-[13px] font-medium text-[var(--ink)]" onClick={onOpen} title={`Open “${need.where.title}”`}>
+        {/* Who asks, then from which piece of work (Approval Gates' requester row: "Growth agent · Message · just now"). */}
+        <span className="bd-need-agent">{agent}</span>
+        <span aria-hidden>·</span>
+        <button type="button" className="bd-need-where link-btn" onClick={onOpen} title={`Open “${need.where.title}”`}>
           {need.where.title}
         </button>
+        <span className="bd-need-when" title={need.why || undefined}>
+          <span aria-hidden>· </span>waited {relTime(need.since)}
+        </span>
         {/* A Code chat's wait says so, as the Needs you page said "in Code · folder" (2026-11-23, before v0.4.1). */}
         {where && (
-          <span className="shrink-0 rounded-[5px] border border-[var(--border)] px-1.5 text-[11px] leading-4 text-[var(--ink-2)]" title={`${codeWhere(where)}: opens in Code`} data-where="code">
+          <Badge title={`${codeWhere(where)}: opens in Code`} data-where="code">
             Code
-          </span>
+          </Badge>
         )}
-        <span className="shrink-0 text-[12px] text-[var(--text-muted)] tabular-nums" title={need.why || undefined}>
-          {holds ? `${holds} · ` : ""}waited {relTime(need.since)}
-        </span>
+        {risk ? (
+          <Badge tone={risk.tone === "bad" ? "danger" : risk.tone === "warn" ? "warning" : "neutral"}>{risk.label}</Badge>
+        ) : holds ? (
+          <Badge tone="warning">{holds[0]!.toUpperCase() + holds.slice(1)}</Badge>
+        ) : null}
       </div>
-      <div className="flex min-w-0 flex-col gap-1.5 pl-8">
-        <p className="m-0 line-clamp-4 text-[14px] leading-[20px] text-[var(--ink)] [&_code]:rounded [&_code]:bg-[var(--hover)] [&_code]:px-1 [&_code]:font-mono [&_code]:text-[12.5px]">{withCode(need.text)}</p>
-        {lines.length > 0 && (
-          <pre className="m-0 max-h-24 overflow-auto rounded-md bg-[var(--hover)] px-2.5 py-1.5 font-mono text-[12px] leading-[18px] whitespace-pre-wrap text-[var(--ink)]">{lines.slice(0, 6).join("\n")}</pre>
-        )}
-        {suggested && need.suggestion && (
-          <p className="m-0 text-[12px] leading-[17px] text-[var(--text-muted)]">
-            {need.suggestion.by === "asker" ? `${agent} recommends` : "Friday suggests"} <span className="font-medium text-[var(--ink-2)]">{suggested}</span>
-            {need.suggestion.reason && need.suggestion.by !== "asker" ? `: ${need.suggestion.reason}` : ""}
-          </p>
-        )}
-        {need.noSuggestion && <p className="m-0 text-[12px] text-[var(--text-muted)]">{need.noSuggestion}</p>}
-      </div>
+      <p className="bd-need-q">{withCode(need.text)}</p>
+      {lines.length > 0 && <pre className="bd-need-pre">{lines.slice(0, 6).join("\n")}</pre>}
+      {note ? (
+        <p className="bd-need-note">{note}</p>
+      ) : suggested && need.suggestion ? (
+        <p className="bd-need-why">
+          {need.suggestion.by === "asker" ? `${agent} recommends` : "Friday suggests"} <b>{suggested}</b>
+          {need.suggestion.reason && need.suggestion.by !== "asker" ? `: ${need.suggestion.reason}` : ""}
+        </p>
+      ) : null}
+      {need.noSuggestion && <p className="bd-need-why">{need.noSuggestion}</p>}
       {replying ? (
-        <div className="flex flex-col gap-2 pl-8">
+        <div className="bd-need-reply">
           <Textarea
-            className="min-h-16 border-[var(--border)] bg-[var(--bg)] text-[13px] md:text-[13px]"
+            className="min-h-16 rounded-lg border-[var(--border)] bg-[var(--bg)] text-[13px] md:text-[13px]"
             rows={2}
             autoFocus
             value={draft}
@@ -424,52 +527,50 @@ function NeedCard({ need, card, busy, error, solo, onAnswer, onOpen, where }: { 
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && draft.trim()) onAnswer(draft.trim(), true);
-              if (e.key === "Escape") setReplying(false);
+              if (e.key === "Escape") (e.stopPropagation(), setReplying(false));
             }}
           />
-          <div className="flex justify-end gap-1.5">
-            <Button variant="ghost" size="sm" className="h-7 text-[12px]" onClick={() => setReplying(false)}>
+          <div className="bd-need-acts">
+            <Button variant="ghost" onClick={() => setReplying(false)}>
               Cancel
             </Button>
-            <Button size="sm" className="h-7 text-[12px]" disabled={!draft.trim() || busy} onClick={() => onAnswer(draft.trim(), true)}>
+            <Button disabled={!draft.trim() || busy} onClick={() => onAnswer(draft.trim(), true)}>
               {busy ? "Sending…" : "Send"}
             </Button>
           </div>
         </div>
       ) : (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 pl-8">
-          <span className="min-w-0 flex-1 basis-40 truncate text-[12px] text-[var(--text-muted)]" title={`${agent}${card?.branch ? ` · ${card.branch}` : ""}`}>
-            {agent}
-            {card?.branch && (
-              <>
-                <span aria-hidden> · </span>
-                <span className="font-mono">{card.branch}</span>
-              </>
-            )}
-          </span>
-          <span className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+        <div className="bd-need-foot">
+          {offerAlways ? (
+            <Checkbox className="bd-need-always" label="Always allow" checked={always} disabled={busy} title={`From now on run ${allowSaid} without asking`} onChange={(e) => setAlways(e.currentTarget.checked)} />
+          ) : (
+            <span className="bd-need-branch" title={card?.branch || undefined}>
+              {card?.branch && <span className="font-mono">{card.branch}</span>}
+            </span>
+          )}
+          <span className="bd-need-acts">
             {(!choices.length || need.free) && (
-              <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] text-[var(--ink-2)]" onClick={() => (choices.length ? (setDraft(""), setReplying(true)) : onOpen())}>
+              <Button variant="ghost" onClick={() => (choices.length ? (setDraft(""), setReplying(true)) : onOpen())}>
                 {choices.length ? "Reply…" : "Answer in the session"}
               </Button>
             )}
-            {ordered.map((c) => (
-              <Button
-                key={c.value}
-                variant={c.value === first ? "default" : "outline"}
-                size="sm"
-                disabled={busy}
-                className={cn("h-7 px-2.5 text-[12px]", c.value !== first && "border-[var(--border)] bg-[var(--bg)] shadow-none")}
-                onClick={() => onAnswer(c.value)}
-              >
-                {c.label}
+            {no && (
+              <Button variant="ghost" className="bd-keyed" disabled={busy} title="Don't run it" aria-keyshortcuts="Escape" iconRight={<kbd>Esc</kbd>} onClick={() => onAnswer(no.value)}>
+                {no.label}
               </Button>
-            ))}
+            )}
+            {ordered
+              .filter((c) => c !== no)
+              .map((c) => (
+                <Button key={c.value} variant={c.value === first ? "primary" : "secondary"} className={goAhead && c.value === first ? "bd-keyed" : undefined} disabled={busy} aria-keyshortcuts={goAhead && c.value === first ? "Meta+Enter Control+Enter" : undefined} iconRight={goAhead && c.value === first ? <kbd>{runKey()}</kbd> : undefined} title={goAhead && c.value === first && offerAlways && always ? "Run it, and from now on without asking" : undefined} onClick={() => yes(c.value)}>
+                  {c.label}
+                </Button>
+              ))}
           </span>
         </div>
       )}
       {error && (
-        <p className="m-0 pl-8 text-[12px] text-[var(--red)]" role="alert">
+        <p className="bd-need-err" role="alert">
           {error}
         </p>
       )}
@@ -500,21 +601,12 @@ function readFilters(): { project: string; onlyYou: boolean } {
   }
 }
 
-/** A filter chip: pressed or not, monochrome. */
+/** A filter chip: pressed or not, monochrome; a segment of the kit's buttons style, the picked one raised (board.css). */
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <Button
-      variant="outline"
-      size="xs"
-      aria-pressed={on}
-      onClick={onClick}
-      className={cn(
-        "h-7 rounded-[8px] border-[var(--border)] bg-transparent px-3 text-[12px] font-medium text-[var(--ink-2)] shadow-none hover:bg-[var(--hover)] hover:text-[var(--ink)] dark:bg-transparent",
-        on && "border-[var(--ink)] bg-[var(--ink)] text-[var(--bg)] hover:bg-[var(--ink)] hover:text-[var(--bg)] dark:bg-[var(--ink)]",
-      )}
-    >
+    <button type="button" className="bd-filter" aria-pressed={on} onClick={onClick}>
       {children}
-    </Button>
+    </button>
   );
 }
 
@@ -540,12 +632,12 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
     const t = setTimeout(() => setSaid(""), 4000);
     return () => clearTimeout(t);
   }, [said]);
-  const answer = async (n: Need, value: string, edited = false) => {
+  const answer = async (n: Need, value: string, edited = false, always = false) => {
     if (answering) return;
     setAnswering(n.id);
     setNeedError(null);
     try {
-      const r = await api<{ said: string }>(identity, "/api/needs-you/answer", { method: "POST", body: JSON.stringify({ id: n.id, answer: value, edited }) });
+      const r = await api<{ said: string }>(identity, "/api/needs-you/answer", { method: "POST", body: JSON.stringify({ id: n.id, answer: value, edited, ...(always ? { always: true } : {}) }) });
       setSaid(`${r.said}: sent to ${n.who}`);
       setGone((g) => new Set(g).add(n.id));
       dispatchEvent(new Event("friday:attention"));
@@ -586,6 +678,26 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
     if (document.activeElement === document.body) heading.current?.focus();
   }, [cards]);
   const [query, setQuery] = useState("");
+  const [fleet, setFleet] = useState(false);
+  const [view, setViewNow] = useState(readView);
+  const setView = (v: BoardView) => {
+    setViewNow(v);
+    try {
+      localStorage.setItem(VIEW, v);
+    } catch {
+      /* for this visit only */
+    }
+  };
+  // The away card's "Start with what waits": to the lanes, where it is answered, and the focus on the first of them (at once
+  // when the lanes are already up, after they are drawn when they aren't).
+  const startWaiting = () => {
+    const first = () => document.querySelector<HTMLElement>(".bd-need[tabindex], .bd-need-acts button")?.focus();
+    if (view === "board") return first();
+    setView("board");
+    setTimeout(first, 80);
+  };
+  // Where the Timeline's range switch goes: the board's top row, beside the views.
+  const [rangeSlot, setRangeSlot] = useState<HTMLSpanElement | null>(null);
   const [filters, setFilters] = useState(readFilters);
   const { project, onlyYou } = filters;
   const setFilter = (f: Partial<typeof filters>) =>
@@ -695,8 +807,8 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
   const usedProjects = projects.filter((p) => recents.some((r) => r.projectId === p.id));
 
   // Keys: the board is a grid of cards.
-  const keys = useRef({ grid, focus, onOpen });
-  keys.current = { grid, focus, onOpen };
+  const keys = useRef({ grid, focus, onOpen, own: view !== "board" });
+  keys.current = { grid, focus, onOpen, own: view !== "board" };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || document.querySelector(".overlay")) return;
@@ -704,6 +816,8 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
         if (e.key === "Escape") (e.target as HTMLElement).blur();
         return;
       }
+      // On the Timeline the keys are its own (J, K, the arrows); the search keeps its slash.
+      if (keys.current.own && e.key !== "/") return;
       const g = keys.current.grid;
       let c = g.findIndex((col) => col.some((x) => x.id === keys.current.focus));
       let r = c === -1 ? -1 : g[c]!.findIndex((x) => x.id === keys.current.focus);
@@ -753,7 +867,7 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
               value={query}
               placeholder="Search agents, tasks, branches"
               aria-label="Search the board"
-              className="h-8 rounded-[9px] border-[var(--border-strong)] bg-[var(--card)] pr-9 pl-8 text-[13px] shadow-none placeholder:text-[var(--text-muted)] focus-visible:border-[var(--border-focus)] focus-visible:ring-0 md:text-[13px]"
+              className="bd-search h-8 rounded-[8px] border-0 bg-[var(--card)] pr-9 pl-8 text-[13px] placeholder:text-[var(--text-muted)] focus-visible:ring-0 md:text-[13px]"
               onChange={(e) => setQuery(e.target.value)}
               // Escape clears the search and leaves it: left filled, the board stayed narrowed by a search no longer in view
               // (audit e2e, Arun 2026-11-04).
@@ -766,9 +880,7 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
             />
             <span className="absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center">
               {query ? (
-                <Button variant="ghost" size="icon-xs" aria-label="Clear search" onClick={() => setQuery("")}>
-                  <XIcon />
-                </Button>
+                <IconButton size="sm" label="Clear search" icon={<XIcon size={14} />} onClick={() => setQuery("")} />
               ) : (
                 <kbd aria-hidden>/</kbd>
               )}
@@ -786,55 +898,89 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
               ))}
             </div>
           )}
-          <div className="ml-auto flex items-center gap-3">
+          {/* Wraps from the right on a narrow board, so the range and the views never push the page sideways. */}
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
             {/* The board in a line: how many run, wait on you and are ready, so a glance says whether to look further. */}
             {cards !== null && found.length > 0 && (
               <span className="hidden text-[12px] text-[var(--text-muted)] tabular-nums @min-[720px]:inline">
                 {[`${running} running`, waitingOnYou ? `${waitingOnYou} need${waitingOnYou === 1 ? "s" : ""} you` : "", readyN ? `${readyN} ready` : ""].filter(Boolean).join(" · ")}
               </span>
             )}
-            <PageTabs<"all" | "you">
-              label="Show"
-              value={onlyYou ? "you" : "all"}
-              onChange={(v) => setFilter({ onlyYou: v === "you" })}
+            {/* The Timeline's range (30m, 2h, Today), put here by the Timeline itself while it is the view. */}
+            <span ref={setRangeSlot} className="contents" />
+            {!fleet && (
+              <SegmentedControl<BoardView>
+                aria-label="View"
+                variant="tray"
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: "board", label: "Board" },
+                  { value: "timeline", label: "Timeline" },
+                ]}
+              />
+            )}
+            {/* The kit's tray (Agent Inbox's Board/List switch): a count only when there is one, the one waiting on you amber (Arun,
+                2026-11-07: "make the space next to needs you dynamic"). */}
+            <SegmentedControl<"all" | "you" | "captains">
+              aria-label="Show"
+              variant="tray"
+              value={fleet ? "captains" : onlyYou ? "you" : "all"}
+              onChange={(v) => (setFleet(v === "captains"), v !== "captains" && setFilter({ onlyYou: v === "you" }))}
               options={[
-                // A count only when there is one: an empty slot kept for it left a gap after "Needs you" (Arun, 2026-11-07: "make the
-                // space next to needs you dynamic").
-                { value: "all", label: <>All{active > 0 && <Count n={active} />}</> },
-                { value: "you", label: <>Needs you{waitingOnYou > 0 && <Count n={waitingOnYou} needs />}</> },
+                { value: "all", label: "All", ...(active > 0 ? { count: active } : {}) },
+                { value: "you", label: "Needs you", ...(waitingOnYou > 0 ? { badge: <Badge count={waitingOnYou} tone="warning" /> } : {}) },
+                ...(isLocal() ? [{ value: "captains" as const, label: "Captains" }] : []),
               ]}
             />
           </div>
         </div>
 
-        {cards === null && failed ? (
+        {/* While you were away, once, over whichever view is up; starting with what waits goes to the lanes, where it is answered. */}
+        {!fleet && !!cards?.length && (
+          <Suspense fallback={null}>
+            <BoardAway cards={cards} needs={open} onStart={startWaiting} />
+          </Suspense>
+        )}
+        {fleet ? (
+          <div className="board-fleet">
+            <Suspense fallback={null}>
+              <CaptainFleet identity={identity} onOpen={onOpen} />
+            </Suspense>
+          </div>
+        ) : view === "timeline" && (cards === null ? !failed : cards.length > 0) ? (
+          // Nothing drawn while the first reading is out: the lanes' placeholders are the Board view's, not this one's.
+          cards === null ? null : <Suspense fallback={null}>
+            <BoardTimeline rangeSlot={rangeSlot} identity={identity} cards={shown.filter((c) => c.sid)} sids={[...recents.map((r) => r.sid), ...codeSids]} projectOf={projectOf} projects={projects} needs={open} onOpen={onOpen} onAnswer={(n, v) => void answer(n, v)} solo={solo} query={query} />
+          </Suspense>
+        ) : cards === null && failed ? (
           // Nothing read yet and the reading failed: say so, with the way to try again, rather than placeholders forever.
           <EmptyState
+            className="bd-empty"
             icon={<LayoutGridIcon />}
             title="Couldn't load the board"
             action={
               // aria-disabled, not disabled, so the focus stays on it while it tries.
-              <Button aria-disabled={trying || undefined} onClick={() => !trying && ((retried.current = true), void retry().then((ok) => ok || (retried.current = false)))}>
+              <Button variant="secondary" aria-disabled={trying || undefined} onClick={() => !trying && ((retried.current = true), void retry().then((ok) => ok || (retried.current = false)))}>
                 {trying ? "Trying…" : "Try again"}
               </Button>
             }
-          >
-            {/* The alert is the reason alone, so "Trying…" and "Try again" changing on the button don't read it all out again. */}
-            <span role="alert" key={fails}>
-              {failed}
-            </span>
-          </EmptyState>
+            // The alert is the reason alone, so "Trying…" and "Try again" changing on the button don't read it all out again.
+            text={
+              <span role="alert" key={fails}>
+                {failed}
+              </span>
+            }
+          />
         ) : cards !== null && cards.length === 0 ? (
-          <EmptyState icon={<LayoutGridIcon />} title="No agents yet" action={<Button onClick={onNew}>{isLocal() ? "New thread" : "New session"}</Button>}>
-            Start a session and the agents working in it show up here, sorted by what needs you.
-          </EmptyState>
+          <EmptyState className="bd-empty" icon={<LayoutGridIcon />} title="No agents yet" text="Start a session and the agents working in it show up here, sorted by what needs you." action={<Button variant="secondary" onClick={onNew}>{isLocal() ? "New thread" : "New session"}</Button>} />
         ) : (
           <>
             {/* A filter that matches nothing is said once, across the board, with the way back; not four boxes that each say it. */}
             {cards !== null && shown.length === 0 && cards.length > 0 && filtered && (
               <div className="flex items-center gap-3 border-b border-[var(--border)] px-1 pb-3 text-[13px] text-[var(--ink-2)]" role="status">
                 Nothing on the board matches{query ? ` “${query.trim()}”` : " these filters"}.
-                <Button variant="outline" size="sm" className="ml-auto h-7" onClick={() => (setQuery(""), setFilter({ project: "", onlyYou: false }))}>
+                <Button variant="secondary" className="ml-auto" onClick={() => (setQuery(""), setFilter({ project: "", onlyYou: false }))}>
                   Clear filters
                 </Button>
               </div>
@@ -845,22 +991,22 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
             {/* Needs you, across the top: answered here, and the agent carries on (design A). Not there when nothing waits. */}
             {/* Kept a moment after the last answer, so what was sent is said where it was answered. */}
             {(open.length > 0 || rest.length > 0 || onlyYou || !!said) && (
-              <section className="mt-1 flex flex-col gap-2" aria-label={`Needs you, ${open.length + rest.length}`}>
-                <div className="flex h-7 items-center gap-2 px-1">
+              <section className="bd-needs mt-1 flex flex-col gap-2" aria-label={`Needs you, ${open.length + rest.length}`}>
+                <div className="bd-needs-head">
                   <Dot state="needs" />
-                  <span className="text-[13px] font-semibold text-[var(--ink)]">Needs you</span>
-                  <Count n={open.length + rest.length} needs={open.length + rest.length > 0} />
-                  <span className="truncate text-[12px] text-[var(--text-muted)]">{said || (open.length ? "Answer here and the agent carries on" : "")}</span>
+                  <span className="bd-needs-title">Needs you</span>
+                  <Badge count={open.length + rest.length} tone={open.length + rest.length > 0 ? "warning" : "neutral"} />
+                  <span className="bd-needs-said">{said || (open.length ? "Answer here and the agent carries on" : "")}</span>
                   <span className="sr-only" role="status">
                     {said}
                   </span>
                 </div>
                 {open.length + rest.length === 0 ? (
-                  <p className="m-0 px-1 text-[13px] text-[var(--text-muted)]">Nothing is waiting on you.</p>
+                  <p className="m-0 px-1 text-[13px] leading-5 text-[var(--text-muted)]">Nothing is waiting on you.</p>
                 ) : (
-                  <div className="grid grid-cols-1 items-start gap-2 @min-[720px]:grid-cols-2 @min-[1180px]:grid-cols-3">
+                  <div className="grid grid-cols-1 items-start gap-3 @min-[720px]:grid-cols-2 @min-[1180px]:grid-cols-3">
                     {open.map((n) => (
-                      <NeedCard key={n.id} need={n} card={cardOf(n.where.sid)} solo={solo} busy={answering === n.id} error={needError?.id === n.id ? needError.text : ""} onAnswer={(v, edited) => void answer(n, v, edited)} onOpen={() => onOpen(n.where.sid ?? "")} where={codeBySid.get(n.where.sid ?? "")} />
+                      <NeedCard key={n.id} need={n} card={cardOf(n.where.sid)} solo={solo} busy={answering === n.id} error={needError?.id === n.id ? needError.text : ""} onAnswer={(v, edited, always) => void answer(n, v, edited, always)} onOpen={() => onOpen(n.where.sid ?? "")} where={codeBySid.get(n.where.sid ?? "")} />
                     ))}
                     {rest.map((c) => (
                       <Card key={c.id} card={c} onOpen={onOpen} solo={solo} focused={focus === c.id} onFocus={() => setFocus(c.id)} action={codeBySid.has(c.sid) ? null : actionOf(c)} where={codeBySid.get(c.sid)} />
@@ -875,15 +1021,14 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
                 const wide = false;
                 return (
                   // A lane: a quiet well the cards sit in, its head saying what is in it, how many, and its key.
-                  <section key={col.id} data-ping={ping?.col === i ? ping.at : undefined} className={cn("board-lane group/lane flex min-w-0 flex-col gap-1.5 rounded-xl bg-[var(--card)] p-1.5 shadow-[inset_0_0_0_1px_var(--border)]", wide && "col-span-full")} aria-label={`${col.title}, ${list.length}`}>
+                  <section key={col.id} data-ping={ping?.col === i ? ping.at : undefined} className={cn("board-lane group/lane flex min-w-0 flex-col", wide && "col-span-full")} aria-label={`${col.title}, ${list.length}`}>
+                    {/* The kit's column head (Agent Inbox): its state's dot, the name in small capitals in the middle, the count; the
+                        key that jumps to it is in its tooltip. */}
                     <Tip label={col.hint} keys={String(i + 1)}>
-                      <div className="flex h-8 items-center gap-2 px-2">
+                      <div className="bd-lane-head">
                         <Dot state={DOT[col.id]} />
-                        <span className="text-[13px] font-semibold text-[var(--ink)]">{col.title}</span>
-                        <Count n={list.length} />
-                        <kbd aria-hidden className="ml-auto opacity-0 transition-opacity duration-[var(--dass-fast)] group-hover/lane:opacity-100">
-                          {i + 1}
-                        </kbd>
+                        <span className="bd-lane-title">{col.title}</span>
+                        <Badge count={list.length} className="bd-count" />
                       </div>
                     </Tip>
                     <div className={wide ? "grid grid-cols-1 gap-1.5 @min-[480px]:grid-cols-2 @min-[720px]:grid-cols-4" : "flex flex-col gap-1.5"}>
@@ -899,8 +1044,8 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
                             <QuickHeader n={quick.length}>
                               {ok.length > 0 && (
                                 <Tip label="Approve these on GitHub together">
-                                  <Button variant="ghost" size="xs" className="h-6 text-[12px] text-[var(--ink-2)]" onClick={() => approveAll(ok)}>
-                                    <CheckIcon /> Approve {ok.length === quick.length && ok.length > 1 ? "all" : ok.length}
+                                  <Button variant="ghost" size="sm" icon={<CheckIcon />} onClick={() => approveAll(ok)}>
+                                    {`Approve ${ok.length === quick.length && ok.length > 1 ? "all" : ok.length}`}
                                   </Button>
                                 </Tip>
                               )}
@@ -914,8 +1059,8 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
                       {!list.length &&
                         (cards === null ? (
                           <>
-                            <Skeleton className="h-[84px] rounded-lg bg-[var(--hover)]" />
-                            <Skeleton className="h-[84px] rounded-lg bg-[var(--hover)]" />
+                            <Skeleton className="bd-skel" height={84} radius={10} />
+                            <Skeleton className="bd-skel" height={84} radius={10} />
                           </>
                         ) : filtered && !shown.length ? null : (
                           // An empty column is its heading and its 0 (2026-10-29 direction §9.4): no box saying so; said to a
@@ -934,7 +1079,7 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
             {!isLocal() && !onlyYou && idle.length > 0 && (
             <Collapsible open={idleOpen} onOpenChange={setIdleOpen} className="mt-2 border-t border-[var(--border)] pt-3">
               <CollapsibleTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 gap-2 px-2 text-[13px] font-semibold text-[var(--ink)] hover:bg-[var(--hover)]">
+                <Button variant="ghost">
                   <ChevronRightIcon className={cn("text-[var(--text-muted)] transition-transform duration-[var(--dass-med)] ease-[var(--dass-ease)]", idleOpen && "rotate-90")} />
                   <Dot state="idle" />
                   Idle
@@ -955,6 +1100,14 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
           </>
         )}
 
+        {/* The week as numbers that move, over the foot; the server's week carries its days beside the three numbers. */}
+        {/* The week's cards sit under the lanes; the Timeline fills the page to its foot, which keeps the week's line. */}
+        {view === "board" && !fleet && (
+          <Suspense fallback={null}>
+            <BoardWeek week={week as WeekStats | null} />
+          </Suspense>
+        )}
+
         {/* As in a session: the week and whether the board is live on the left, the keys on the right. */}
         <footer className="status-bar bd-status-bar mx-[-24px]! max-[640px]:mx-[-16px]!" aria-label="Agent Board status">
           <div className="stb-start">
@@ -972,9 +1125,19 @@ export function Board({ identity, recents, projects, onOpen: openAgents, onNew, 
               (audit REST-30). */}
           {!!cards?.length && (
             <div className="stb-end rv-status-keys" aria-hidden>
-              <span><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> Move</span>
-              <span><kbd>↵</kbd> Open</span>
-              <span><kbd>1</kbd>–<kbd>3</kbd> Column</span>
+              {fleet ? null : view === "timeline" ? (
+                <>
+                  <span><kbd>J</kbd><kbd>K</kbd> Agent</span>
+                  <span><kbd>←</kbd><kbd>→</kbd> Block</span>
+                  <span><kbd>↵</kbd> Open</span>
+                </>
+              ) : (
+                <>
+                  <span><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> Move</span>
+                  <span><kbd>↵</kbd> Open</span>
+                  <span><kbd>1</kbd>–<kbd>3</kbd> Column</span>
+                </>
+              )}
               <span><kbd>/</kbd> Search</span>
             </div>
           )}

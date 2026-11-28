@@ -105,8 +105,15 @@ for (const edition of ["hosted", "local"] as const) {
     // Down to 445 once names were minified (b830e2fb, spec 13 Wave 2): 431.9 hosted, 432.9 local, 2026-11-24, from 489.5. Raise it
     // only on purpose, saying why, as above. To 447 for Captains on the first screen (spec 14: the sidebar's folded Captains row, a
     // project card's Captain band, Home's Captains card with its states, and the window they open): 445.2 local, 2026-11-25. The
-    // window and its settings could load when opened, a follow-up if this grows again.
-    const FIRST = 447;
+    // window and its settings could load when opened, a follow-up if this grows again. (They do now: ManagerWindow is lazy.) To 448
+    // for the coding tools' mode table (types.ts TOOL_MODES, which the mode menus grey out by, 0.6 KB) and missions' calls in
+    // Managers.tsx's API (0.2 KB): 447.1 local, 2026-11-27 (Arun: "fix uneven across tools", "missions"). To 449 for the
+    // sidebar's folds that open by their own height (sidebar-fold.tsx; Arun: "iron out any laggy/buggy closing and opening of the
+    // project cards") and the project overview's route and its needs-you dot (need-sids.ts; the page itself is lazy): 448.2 local,
+    // 2026-11-27.
+    // To 450 on Nov 28 2026 for 0.4.5: own models' context events in types.ts (agent.message's window, context.compacted and
+    // context.restored) and the Captain fixes (the bar's projects, its loaded flag): 449.0 local.
+    const FIRST = 450;
     assert.ok(kb < FIRST, `The first screen downloads ${kb.toFixed(1)} KB brotli of app.js and its static imports, ${(kb - FIRST).toFixed(1)} KB over its ${FIRST} KB budget: something now loads with the app that could wait. Load it lazily (lazy-answer.tsx, React.lazy) or say why above and raise the budget. Its biggest modules as built: ${first.biggest}.`);
     // A session link waits on the session screen too: CodeMirror (~150 KB packed) loads with the first file opened, not here
     // (mirror-editor.tsx). Nov 4 2026, merged with build/e2e-hardening: 890 KB hosted (1,048 KB before; Oct 22: 710 KB).
@@ -140,7 +147,17 @@ for (const edition of ["hosted", "local"] as const) {
     // To 1047 for spec 13's polish: the same one wording and check summary, and the change card's and test proof's phone-width heads
     // (1045.6 hosted, 1046.2 local, 2026-11-24).
     // Down to 955 once names were minified (b830e2fb, spec 13 Wave 2): 937.4 hosted, 938.1 local, 2026-11-24, from 1043.5.
-    const SESSION = 955;
+    // To 956 for the session header's project overview button (its page is lazy) and the cost waterfall's buttons on a reply and
+    // the thread card (CostWaterfall.tsx is lazy): 955.2 local, 2026-11-27 (Arun: "a agent overview of thread(s) in one view for
+    // a project", and the approved cost waterfall mock).
+    // To 957 on Nov 27 2026 for the Captain's page (Arun: "make it a page ... instead of a modal"): its route and the sidebar's
+    // way in, ~0.4 KB (955.8 before); the page itself, its crew tree, changes, cost and recap load as chunks of their own.
+    // To 958 on Nov 28 2026 for the security fixes going into 0.4.5 (sec-local, sec-client): the nearby-code link's guard
+    // (NearbyLink.tsx), the live block's consent (LiveBlock.tsx, notice-text.ts) and Code's checks (Code.tsx), ~0.5 KB that has to
+    // be there before a session draws (957.4 after, 956.9 before). To 960 on Nov 28 2026 for own models' context in 0.4.5: the ring
+    // under the box for an own-model thread with Compact now, and the Compacted line's View summary / Undo in Activity.tsx (959.2
+    // local, 958.8 hosted).
+    const SESSION = 960;
     assert.ok(session.kb < SESSION, `A session link downloads ${session.kb.toFixed(1)} KB brotli before it can draw, ${(session.kb - SESSION).toFixed(1)} KB over its ${SESSION} KB budget: something now loads with the session screen that could wait for the card or panel that shows it. Its biggest modules as built: ${session.biggest}.`);
   });
 }

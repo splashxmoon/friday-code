@@ -2,24 +2,20 @@
 // beui.dev/components/agents/streaming-response
 
 import {
-  Check,
   ChevronDown,
-  Copy,
   RotateCcw,
-  Quote,
-  ThumbsDown,
-  ThumbsUp,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
+  lazy,
   type MouseEvent,
   type ReactNode,
+  Suspense,
   useCallback,
-  useEffect,
   useId,
-  useRef,
   useState,
 } from "react";
+import type { MessageActionKey } from "@/components/affect/message-actions";
 import {
   type CitationItem,
   CitationList,
@@ -28,6 +24,12 @@ import {
 import { AgentDisclosure } from "@/components/agents/agent-disclosure";
 import { EASE_OUT, SPRING_PRESS, SPRING_SWAP } from "@/lib/ease";
 import { cn } from "@/lib/utils";
+import "./streaming-response.css";
+
+// Copy and the thumbs are the kit's Message Actions (components/affect): fetched as this file loads, so the bar is in hand by the first
+// answer, and kept out of the session screen's first download (test/client-bundle.test.ts).
+const actionsKit = import("@/components/affect/message-actions");
+const MessageActions = lazy(() => actionsKit.then((m) => ({ default: m.MessageActions })));
 
 export type StreamingResponseStatus = "streaming" | "complete" | "error";
 export type StreamingResponseFeedback = "up" | "down" | null;
@@ -52,6 +54,8 @@ export interface StreamingResponseProps {
   feedback?: StreamingResponseFeedback;
   defaultFeedback?: StreamingResponseFeedback;
   onFeedbackChange?: (feedback: StreamingResponseFeedback) => void;
+  /** The reason picked in the bar's feedback row after a thumbs down. */
+  onFeedbackReason?: (reason: string) => void;
   /** Set false when a surrounding conversation log announces streamed text. */
   announce?: boolean;
   /** Hides the built-in completion actions without changing response status. */
@@ -87,7 +91,6 @@ function ResponseAction({
       type="button"
       aria-label={label}
       title={label}
-      aria-pressed={label === "Helpful" || label === "Not helpful" ? active : undefined}
       onClick={onClick}
       whileTap={reduce ? undefined : { scale: 0.9 }}
       transition={SPRING_PRESS}
@@ -116,6 +119,7 @@ export function StreamingResponse({
   feedback,
   defaultFeedback = null,
   onFeedbackChange,
+  onFeedbackReason,
   announce = true,
   showActions = true,
   noFeedback = false,
@@ -128,13 +132,9 @@ export function StreamingResponse({
 }: StreamingResponseProps) {
   const reduce = useReducedMotion() ?? false;
   const baseId = useId();
-  const [copied, setCopied] = useState(false);
-  const [internalFeedback, setInternalFeedback] =
-    useState<StreamingResponseFeedback>(defaultFeedback);
   const [internalSourcesOpen, setInternalSourcesOpen] =
     useState(defaultSourcesOpen);
-  const copyTimer = useRef<number | undefined>(undefined);
-  const currentFeedback = feedback ?? internalFeedback;
+  const currentFeedback = feedback ?? defaultFeedback;
   const currentSourcesOpen = sourcesOpen ?? internalSourcesOpen;
   const streaming = status === "streaming";
   const complete = status === "complete";
@@ -145,28 +145,7 @@ export function StreamingResponse({
   const sourcesContentId = `${baseId}-sources`;
   const resolvedSourcePrefix =
     sourceIdPrefix ?? `response-source-${baseId.replace(/:/g, "")}`;
-
-  useEffect(
-    () => () => {
-      if (copyTimer.current) window.clearTimeout(copyTimer.current);
-    },
-    [],
-  );
-
-  const handleCopy = useCallback(async () => {
-    if (onCopy) await onCopy();
-    else if (copyText) await navigator.clipboard?.writeText(copyText);
-
-    setCopied(true);
-    if (copyTimer.current) window.clearTimeout(copyTimer.current);
-    copyTimer.current = window.setTimeout(() => setCopied(false), 1600);
-  }, [copyText, onCopy]);
-
-  const setFeedback = (next: Exclude<StreamingResponseFeedback, null>) => {
-    const value = currentFeedback === next ? null : next;
-    if (feedback === undefined) setInternalFeedback(value);
-    onFeedbackChange?.(value);
-  };
+  const kitActions: MessageActionKey[] = [...(canCopy ? (["copy"] as const) : []), ...(complete && !noFeedback ? (["feedback"] as const) : [])];
 
   const setSourcesOpen = useCallback(
     (next: boolean) => {
@@ -179,6 +158,7 @@ export function StreamingResponse({
   return (
     <div
       data-state={status}
+      data-ui-message=""
       aria-busy={streaming}
       className={cn("w-full", className)}
     >
@@ -203,45 +183,34 @@ export function StreamingResponse({
             className="mt-3"
           >
             <div className={cn("flex items-center gap-0.5", actionsClassName)}>
-              {canCopy ? (
-                <ResponseAction
-                  label={copied ? "Copied" : "Copy response"}
-                  onClick={handleCopy}
-                >
-                  {copied ? (
-                    <Check className="size-3.5" />
-                  ) : (
-                    <Copy className="size-3.5" />
-                  )}
-                </ResponseAction>
-              ) : null}
+              {/* Quote beside Copy (Arun, 2026-11-04: "make clicking quote easier too"), in the bar's own 28px ghost style. */}
               {onQuote ? (
                 <ResponseAction label="Quote in your message" onClick={(e) => onQuote(e.currentTarget)}>
-                  <Quote className="size-3.5" />
+                  {/* Solid, as the kit's own glyphs beside it are. */}
+                  <svg viewBox="0 0 16 16" className="size-4" fill="currentColor" aria-hidden="true">
+                    <path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h2A1.5 1.5 0 0 1 8 4.5v2.2c0 2.6-1.3 4.6-3.6 5.8a.6.6 0 0 1-.8-.8c.9-.9 1.4-1.9 1.5-3.2H4.5A1.5 1.5 0 0 1 3 7V4.5Zm6 0A1.5 1.5 0 0 1 10.5 3h2A1.5 1.5 0 0 1 14 4.5v2.2c0 2.6-1.3 4.6-3.6 5.8a.6.6 0 0 1-.8-.8c.9-.9 1.4-1.9 1.5-3.2h-.6A1.5 1.5 0 0 1 9 7V4.5Z" />
+                  </svg>
                 </ResponseAction>
+              ) : null}
+              {/* Copy and the thumbs: the kit's bar, faded until the answer is pointed at; a thumbs down unfolds its reasons on a
+                  line of their own under the row (rsp-mac lays the bar out as part of this row). */}
+              {kitActions.length > 0 ? (
+                <Suspense fallback={<span className="rsp-mac-wait" aria-hidden="true" />}>
+                  <MessageActions
+                    text={copyText}
+                    actions={kitActions}
+                    defaultVote={currentFeedback}
+                    label="Response actions"
+                    className="rsp-mac"
+                    onCopy={() => void onCopy?.()}
+                    onFeedback={(kind, reason) => (reason ? onFeedbackReason?.(reason) : onFeedbackChange?.(kind))}
+                  />
+                </Suspense>
               ) : null}
               {onRetry ? (
                 <ResponseAction label="Retry response" onClick={onRetry}>
-                  <RotateCcw className="size-3.5" />
+                  <RotateCcw className="size-4" strokeWidth={1.5} />
                 </ResponseAction>
-              ) : null}
-              {complete && !noFeedback ? (
-                <>
-                  <ResponseAction
-                    label="Helpful"
-                    active={currentFeedback === "up"}
-                    onClick={() => setFeedback("up")}
-                  >
-                    <ThumbsUp className="size-3.5" />
-                  </ResponseAction>
-                  <ResponseAction
-                    label="Not helpful"
-                    active={currentFeedback === "down"}
-                    onClick={() => setFeedback("down")}
-                  >
-                    <ThumbsDown className="size-3.5" />
-                  </ResponseAction>
-                </>
               ) : null}
               {hasSources ? (
                 <button

@@ -1,0 +1,125 @@
+/* Agent Recap, rebuilt by hand from affectUI Pro's public preview (SPEC agent-recap) in Friday's tokens: every size, gap and curve
+   is the original's, every colour one of Friday's (the --viz-* set in agent-viz.css), so it sits right in dark, light and glass. */
+
+.arc {
+  --rc-line: color-mix(in srgb, var(--ink) 4.5%, transparent);
+  --rc-plot: color-mix(in srgb, var(--ink) 45%, transparent);
+  --rc-fill: color-mix(in srgb, var(--ink) 7%, transparent);
+  --rc-chip: color-mix(in srgb, var(--ink) 5%, transparent);
+  --rc-lane-n: color-mix(in srgb, var(--st-review) 7%, transparent);
+  --rc-well: color-mix(in srgb, var(--ink) 4.4%, var(--card));
+  --rc-dot: color-mix(in srgb, var(--ink) 62%, transparent);
+  /* Needs you: Friday's amber, brightened in light where --amber is a text colour. */
+  --rc-needs: color-mix(in srgb, var(--amber) 30%, #f59e0b);
+  --rc-failed: color-mix(in srgb, var(--red) 75%, #f04438);
+  --rc-ok: var(--green);
+  --rc-ok-bg: color-mix(in srgb, var(--green) 11%, transparent);
+  container-type: inline-size;
+  display: block;
+  box-sizing: border-box;
+  padding: 16px 16px 12px;
+  border-radius: 14px;
+  background: var(--viz-card);
+  box-shadow: var(--viz-sh);
+  color: var(--viz-t2);
+}
+html.dark .arc {
+  --rc-plot: color-mix(in srgb, var(--ink) 55%, transparent);
+  --rc-fill: color-mix(in srgb, var(--ink) 6%, transparent);
+  --rc-chip: color-mix(in srgb, var(--ink) 8%, transparent);
+  --rc-lane-n: color-mix(in srgb, var(--ink) 8%, transparent);
+  --rc-well: color-mix(in srgb, #000 24%, var(--card));
+  --rc-dot: color-mix(in srgb, var(--ink) 68%, transparent);
+  --rc-needs: var(--amber);
+  --rc-failed: var(--red);
+}
+html.glass .arc { --rc-well: color-mix(in srgb, var(--ink) 4%, transparent); }
+.arc *, .arc *::before, .arc *::after { box-sizing: border-box; }
+.arc :where(h2, h3, p, ul, li) { margin: 0; padding: 0; list-style: none; }
+
+/* ── header ── */
+.arc-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 16px; min-height: 44px; }
+.arc-title { font-size: 15px; font-weight: 500; line-height: 24px; color: var(--viz-t0); }
+.arc-since { display: flex; align-items: center; gap: 6px; margin-top: 2px !important; font-size: 12px; line-height: 18px; color: var(--viz-t3); }
+.arc-dur { height: 18px; padding: 0 6px; border-radius: 5px; background: var(--rc-chip); font-size: 11.5px; font-weight: 500; line-height: 18px; color: var(--viz-t2); }
+.arc-sum { display: flex; flex-wrap: wrap; gap: 4px 12px; padding-top: 4px !important; }
+.arc-sum li { display: flex; align-items: center; gap: 5px; font-size: 12px; line-height: 16px; color: var(--viz-t3); white-space: nowrap; }
+.arc-sum li > svg { flex: none; }
+.arc-sum b { margin-right: -1px; font-weight: 500; color: var(--viz-t1); }
+
+/* ── the night ── */
+.arc-chart { position: relative; height: 96px; margin-top: 14px; touch-action: pan-y; }
+.arc-chart > svg { display: block; overflow: visible; }
+.arc-rule { position: absolute; inset: 0; border-block: 1px solid var(--rc-line); pointer-events: none; }
+.arc-grid line { stroke: var(--rc-line); stroke-width: 1; shape-rendering: crispEdges; }
+.arc-line { fill: none; stroke: var(--rc-plot); stroke-width: 1.25; stroke-linejoin: round; }
+.arc-fade-top { stop-color: var(--rc-fill); }
+.arc-fade-bottom { stop-color: var(--rc-fill); stop-opacity: 0; }
+.arc-guide { position: absolute; top: 0; bottom: 0; width: 1px; margin-left: -.5px; background: color-mix(in srgb, var(--ink) 14%, transparent); pointer-events: none; }
+.arc-dot { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--rc-dot); box-shadow: 0 0 0 1.5px var(--viz-card); transform: translate(-2.5px, -2.5px) scale(0); transition: transform .36s var(--viz-sheet), background-color .24s ease; pointer-events: none; }
+html.glass .arc-dot { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--ink) 8%, var(--bg)); }
+.arc-dot[data-on] { transform: translate(-2.5px, -2.5px); }
+.arc-dot[data-on][data-lit] { transform: translate(-2.5px, -2.5px) scale(1.8); }
+.arc-dot[data-k="needs"] { background: var(--rc-needs); }
+.arc-dot[data-k="failed"] { background: var(--rc-failed); }
+.arc-tip { position: absolute; z-index: 2; height: 20px; padding: 0 7px; border-radius: 6px; background: var(--accent); color: var(--on-accent); font-size: 11px; font-weight: 500; line-height: 20px; white-space: nowrap; transform: translateX(-50%); pointer-events: none; box-shadow: var(--shadow-pop); animation: viz-swap .16s ease both; }
+.arc-tip[data-edge="start"] { transform: translateX(-12px); }
+.arc-tip[data-edge="end"] { transform: translateX(calc(-100% + 12px)); }
+.arc-ends { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10.5px; line-height: 14px; color: var(--viz-t4); }
+
+/* ── the board ── */
+.arc-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.arc-lane { display: flex; flex-direction: column; padding: 4px; border-radius: 14px; background: var(--rc-well); min-width: 0; }
+.arc-lane-head { display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 10px 0 9px !important; font-size: 11.5px; font-weight: 500; line-height: 16px; color: var(--viz-t3); }
+.arc-lane-name { display: flex; align-items: center; gap: 8px; }
+.arc-lane-ic { display: grid; place-items: center; width: 18px; height: 14px; }
+.arc-lane-n { display: grid; place-items: center; min-width: 20px; height: 18px; padding: 0 5px; border-radius: 6px; background: var(--rc-lane-n); font-size: 11px; font-weight: 500; line-height: 16px; color: var(--viz-t2); }
+/* Room for `limit` cards in every lane, so the three stay the same height. */
+.arc-list { display: grid; align-content: start; gap: 4px; min-height: calc(var(--rc-n, 3) * 90px + (var(--rc-n, 3) - 1) * 4px); }
+.arc-empty { display: grid; place-items: center; min-height: calc(var(--rc-n, 3) * 90px + (var(--rc-n, 3) - 1) * 4px); font-size: 12px; line-height: 16px; color: var(--viz-t4); }
+
+.arc-card { display: grid; gap: 2px; padding: 9px 10px 9px 9px !important; border-radius: 10px; background: var(--viz-card); box-shadow: var(--viz-sh); min-width: 0; opacity: 0; filter: blur(2px); transform: translateY(4px); pointer-events: none; transition: opacity .32s ease, filter .32s ease, transform .42s var(--viz-sheet), box-shadow .16s ease, background-color .16s ease; }
+.arc-card[data-in] { opacity: 1; filter: none; transform: none; pointer-events: auto; }
+.arc-card[data-lit] { background: color-mix(in srgb, var(--ink) 2%, var(--viz-card)); box-shadow: var(--viz-sh-hover); }
+.arc-top { display: flex; align-items: center; gap: 8px; height: 20px; min-width: 0; }
+.arc-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; line-height: 20px; color: var(--viz-t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arc-meta { display: flex; align-items: center; gap: 8px; height: 18px; padding-left: 26px; min-width: 0; }
+.arc-detail { flex: 0 1 auto; min-width: 0; font-size: 12px; line-height: 16px; color: var(--viz-t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arc-card[data-k="failed"] .arc-detail { color: var(--red); }
+.arc-end { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
+.arc-count { height: 16px; padding: 0 5px; border-radius: 4px; background: var(--rc-chip); font-size: 10.5px; font-weight: 500; line-height: 16px; color: var(--viz-t2); }
+.arc-end time { font-size: 11px; line-height: 20px; color: var(--viz-t4); white-space: nowrap; }
+.arc-foot { display: flex; align-items: center; gap: 4px; height: 24px; margin-top: 6px; }
+.arc-state { display: flex; flex: 1; min-width: 0; }
+.arc-tag { height: 20px; padding: 0 6px; border-radius: 5px; background: var(--rc-ok-bg); font-size: 11.5px; font-weight: 500; line-height: 20px; color: var(--rc-ok); white-space: nowrap; animation: viz-swap .3s ease both; }
+.arc-tag.off { background: var(--rc-chip); color: var(--viz-t3); }
+
+.arc-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 24px; padding: 0 8px; flex: none; border: 0; border-radius: 6px; background: transparent; font-size: 12px; font-weight: 500; line-height: 20px; color: var(--viz-t3) !important; cursor: pointer; transition: background-color .16s ease, color .16s ease, transform .16s ease, opacity .16s ease; }
+.arc-btn:hover:not(:disabled) { background: var(--viz-f6); color: var(--viz-t1) !important; }
+.arc-btn.raised { padding: 0 9px; background: var(--viz-card); box-shadow: var(--viz-sh); color: var(--viz-t1) !important; }
+.arc-btn.raised:hover:not(:disabled) { background: var(--hover); }
+.arc-btn:active:not(:disabled) { transform: scale(.97); }
+.arc-btn:disabled { opacity: .5; cursor: default; }
+/* Working: the label holds the width, a spinner sits on it, so nothing moves. */
+.arc-btn[data-busy] { cursor: progress; }
+.arc-btn[data-busy] .arc-btn-l { visibility: hidden; }
+.arc-btn[data-busy] .viz-spin { position: absolute; left: 50%; top: 50%; margin: -5.5px 0 0 -5.5px; color: currentColor; }
+
+/* Narrow: the lanes stack, each only as tall as its cards. */
+@container (max-width: 640px) {
+  .arc-board { grid-template-columns: minmax(0, 1fr); }
+  .arc-list, .arc-empty { min-height: 0; }
+  .arc-empty { padding: 14px 0 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arc-card, .arc-dot, .arc-tag, .arc-tip, .arc-btn { transition: none; animation: none; }
+}
+
+/* A lane with more than fits: opens in place to show every card, and folds back. */
+.arc-more { display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; margin-top: 4px; border: 0; border-radius: 10px; background: transparent; font: inherit; font-size: 12px; font-weight: 500; line-height: 16px; color: var(--viz-t3); cursor: pointer; transition: background-color 0.15s ease, color 0.15s ease; }
+.arc-more:hover { background: var(--rc-lane-n); color: var(--viz-t1); }
+.arc-more:focus-visible { outline: 2px solid var(--accent, currentColor); outline-offset: -2px; }
+.arc-more .fi { transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1); }
+.arc-more[aria-expanded="true"] .fi { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .arc-more, .arc-more .fi { transition: none; } }

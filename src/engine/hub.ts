@@ -10,7 +10,7 @@ import { backNote } from "../limit-handoff.js";
 import { keepGoingNote } from "../keep-going.js";
 import { runnableQueue } from "../held.js";
 import { limitHit } from "../limit-reset.js";
-import { fitModels, routeTool, stickyPick, taskTier, type ToolWindow } from "../routing.js";
+import { fitModels, routable, routeTool, stickyPick, taskTier, type ToolWindow } from "../routing.js";
 import { burn, signInOf } from "../forecast.js";
 import { taskKind } from "../strengths.js";
 import { missedLast, type Learned } from "../route-learning.js";
@@ -41,6 +41,7 @@ import {
   isEngineEffort,
   MAIN_LANE,
   mayBorrow,
+  NO_AGENT_TOOLS,
   hostOnlyYes,
   type ActorRef,
   type Attachment,
@@ -1181,22 +1182,46 @@ class LaneHost {
   private async record(body: EventBody): Promise<void> {
     // The log keeps a lean copy of a change set; the room saw it whole, live (hold).
     if (body.type === "agent.diff") body = leanDiff(body);
+    /**
+     * A yes given in advance is to a name ("npm test", "cat"). What the name runs or reaches is the machine's to say, with the ask
+     * (runner/ask-facts.ts), and decides whether the advance yes still answers (Security M2): never for a command that would read
+     * a secret through a link or a search of every file, and for one that runs the project's own scripts only while those are as
+     * its host last said yes to. Worked out before the ask is written, so its card says why it is there.
+     */
+    let advance: "advance" | "task" | "project" | null = null;
+    if (body.type === "engine.approval" && body.scope === "commands") {
+      const state = await this.store.state(this.sid);
+      advance = autoAllow(state, this.lane, body.items, this.info.hostId, {});
+      // Always in this project (Arun, 2026-11-18, as Codex and OpenBot offer it): what its host allowed for the folder, in any session.
+      const folder = this.info.copyOf ?? this.info.cwd;
+      if (!advance && folder && roleOf(state, this.info.hostId) === "owner") {
+        const entries = await this.store.redis.smembers(projectAllowKey(this.store.prefix, this.info.hostId, folder)).catch(() => [] as string[]);
+        if (entries.length && body.items.every((i) => entriesAllow(entries, i))) advance = "project";
+      }
+      if (advance && body.secretRead) {
+        advance = null;
+        if (!body.why) body = { ...body, why: `Allowed in advance, but this one would read ${body.secretRead}.`.slice(0, 300) };
+      } else if (advance && body.scripts && !(await this.store.redis.sismember(this.scriptsKey(), body.scripts).catch(() => 0))) {
+        advance = null;
+        if (!body.why) body = { ...body, why: "Allowed in advance, but what it runs in this project (its scripts, configs or Git hooks) isn't as you last said yes to. A yes covers it until they change again." };
+      }
+      if (body.scripts) (this.askScripts.set(body.id, body.scripts), [...this.askScripts.keys()].slice(0, -50).forEach((k) => this.askScripts.delete(k)));
+    }
     const r = await this.append(body);
     if (r.ok && body.type === "agent.usage" && this.info.tool) {
       const ws = (await this.store.state(this.sid).catch(() => null))?.workspaceId ?? "";
       void this.usage.record(ws, this.info.tool, body);
     }
-    if (!r.ok || body.type !== "engine.approval" || body.scope !== "commands") return;
-    const state = await this.store.state(this.sid);
-    const allowed = autoAllow(state, this.lane, body.items, this.info.hostId, {});
-    if (allowed) return void (await this.store.append(this.sid, FRIDAY, { type: "instruction", text: allowed === "task" ? "Allowed for this task: go ahead." : "Allowed in advance: go ahead.", interrupt: false, approval: { id: body.id, approve: true } }, { lane: this.lane }));
-    // Always in this project (Arun, 2026-11-18, as Codex and OpenBot offer it): what its host allowed for the folder, in any session.
-    const folder = this.info.copyOf ?? this.info.cwd;
-    if (folder && roleOf(state, this.info.hostId) === "owner") {
-      const entries = await this.store.redis.smembers(projectAllowKey(this.store.prefix, this.info.hostId, folder)).catch(() => [] as string[]);
-      if (entries.length && body.items.every((i) => entriesAllow(entries, i))) await this.store.append(this.sid, FRIDAY, { type: "instruction", text: "Allowed in this project: go ahead.", interrupt: false, approval: { id: body.id, approve: true } }, { lane: this.lane });
-    }
+    if (!r.ok || body.type !== "engine.approval" || body.scope !== "commands" || !advance) return;
+    await this.store.append(this.sid, FRIDAY, { type: "instruction", text: advance === "task" ? "Allowed for this task: go ahead." : advance === "project" ? "Allowed in this project: go ahead." : "Allowed in advance: go ahead.", interrupt: false, approval: { id: body.id, approve: true } }, { lane: this.lane });
   }
+
+  /** The fingerprints of this folder's scripts its host has said yes to running (see record), kept three months from the last yes. */
+  private scriptsKey(): string {
+    return `${this.store.prefix}allow:scripts:${this.info.hostId}:${(this.info.copyOf ?? this.info.cwd ?? "").replace(/[\\/]+$/, "")}`;
+  }
+  /** The asks of this connection that carried a fingerprint, by id: the host's own yes to one is a yes to that state of the scripts. */
+  private readonly askScripts = new Map<string, string>();
 
   // ── session → runner ─────────────────────────────────────────────
 
@@ -1224,6 +1249,11 @@ class LaneHost {
     // 2026-11-18: "the send now button is so delayed and not even functional at times"). Where it can't be, the turn stops.
     if (b.type === "run.interrupt" && this.turn && this.steers) return void this.sendNow(why).catch((e) => (console.error("[engine] send now:", e), this.stopTurn(why)));
     if (why) this.stopTurn(why);
+    // The host's own yes to a command that runs the project's scripts is a yes to them as they are now (see record).
+    if (b.type === "instruction" && b.approval?.approve && ev.actor.kind === "human" && ev.actor.id === this.info.hostId) {
+      const print = this.askScripts.get(b.approval.id);
+      if (print) void this.store.redis.multi().sadd(this.scriptsKey(), print).expire(this.scriptsKey(), 90 * 86_400).exec().catch((e) => console.error("[engine] scripts:", e));
+    }
     // An answer to something the tool is waiting on right now goes to it there and then, and is not a new turn.
     // A yes only its host may give (hostsOwn: their computer), from anyone or anything else, is no answer: the ask waits for them.
     if (b.type === "instruction" && b.approval?.approve && this.hostsOwn.has(b.approval.id) && !(ev.actor.kind === "human" && ev.actor.id === this.info.hostId)) {
@@ -1491,7 +1521,9 @@ class LaneHost {
       }
 
       const updates = unreadPosts(state, this.lane);
-      const turn = promptFor(events, pending, updates, leadBrief(state, this.lane), [backNote(state, events, this.lane), newNotes(events, this.lane), baseNote(events, this.lane)].filter(Boolean).join("\n\n"));
+      // A coding tool without Friday's MCP server (Aider, Pi) can't post a board or assign tasks, so it isn't told it leads with them.
+      const agentTools = !(this.info.tool && NO_AGENT_TOOLS.has(this.info.tool));
+      const turn = promptFor(events, pending, updates, agentTools ? leadBrief(state, this.lane) : "", [backNote(state, events, this.lane), newNotes(events, this.lane), baseNote(events, this.lane)].filter(Boolean).join("\n\n"), agentTools);
       if (updates.length) void this.append({ type: "mesh.read", upTo: updates.at(-1)!.seq }).catch((e) => console.error("[engine] read:", e));
       const { attachments } = turn;
       // One of the tool's own commands ("/compact", "/prompts:review"), sent alone: offered to the runner as typed too, since
@@ -1852,7 +1884,12 @@ class LaneHost {
     const usage = events.findLast((e) => (e.lane ?? MAIN_LANE) === this.lane && e.body.type === "agent.usage")?.body;
     // Its last call's input when the tool said it (the whole turn's adds up every call in it, which is far more).
     const contextTokens = usage?.type === "agent.usage" ? (usage.context ?? usage.input + usage.cached) : 0;
-    const current = this.autoOn ?? (events.findLast((e) => (e.lane ?? MAIN_LANE) === this.lane && e.body.type === "model.routed" && !e.body.shadow)?.body as { model?: string } | undefined)?.model ?? null;
+    // The model this lane was last routed to on THIS tool: a crew mate carried onto its backup (Claude Code out of usage, on with
+    // Codex) kept the other tool's model as the one it "is on", and its first turn there, which nobody typed, was sent out on it
+    // ("the 'haiku' model is not supported when using Codex", Arun 2026-11-27).
+    const routedHere = (e: SessionEvent) => (e.lane ?? MAIN_LANE) === this.lane && e.body.type === "model.routed" && !e.body.shadow && (e.body.tool ?? tool) === tool && routable(tool, (e.body as { model?: string }).model);
+    const onThisTool = routable(tool, this.autoOn) ? this.autoOn : null;
+    const current = onThisTool ?? (events.findLast(routedHere)?.body as { model?: string } | undefined)?.model ?? null;
     // The repo this lane is on, for what runs on it have shown; and whether the last run here missed, which sends the next one up.
     const repo = repoKeyOf({ url: this.info.repo ?? null, github: this.info.repo && /^[\w.-]+\/[\w.-]+$/.test(this.info.repo) ? this.info.repo : null }, this.info.cwd)?.key;
     const missed = missedLast(events, this.lane, text);
@@ -1861,7 +1898,7 @@ class LaneHost {
     // price (2026-10-31: usage). What a person asks is weighed as ever, and a miss still moves it up.
     if (state.options.team && !byPerson && current && !missed) {
       this.autoOn = current;
-      const was = events.findLast((e) => (e.lane ?? MAIN_LANE) === this.lane && e.body.type === "model.routed" && !e.body.shadow)?.body as { model?: string; effort?: string } | undefined;
+      const was = events.findLast(routedHere)?.body as { model?: string; effort?: string } | undefined;
       return { model: current, ...(was?.model === current && was.effort ? { effort: was.effort } : {}) };
     }
     const kind = taskKind(text);
@@ -2200,7 +2237,11 @@ function threadOn(root: SessionEvent | undefined): string {
 const BOARD_ASK = (who: string) =>
   `[Friday] ${who} asked for this as a task board. Before anything else, split it into self-contained tasks and post them all at once with the friday post_tasks tool: a one-line title each, what done looks like, the files each owns, which wait on which, and a check (the command that proves it). Don't ask first and don't start editing before the board is posted. Free agents here take ready tasks at once; work through the rest yourself, marking each done as you go.`;
 
-export function promptFor(events: SessionEvent[], seqs: number[], updates: MeshPost[] = [], lead = "", back = ""): { prompt: string; attachments: Attachment[] } {
+/**
+ * `agentTools`: false for a coding tool without Friday's MCP server (types.ts NO_AGENT_TOOLS), whose messages from other agents and
+ * board asks are said without naming tools it doesn't have.
+ */
+export function promptFor(events: SessionEvent[], seqs: number[], updates: MeshPost[] = [], lead = "", back = "", agentTools = true): { prompt: string; attachments: Attachment[] } {
   const bySeq = new Map(events.map((e) => [e.seq, e]));
   const attachments: Attachment[] = [];
   const parts: string[] = [];
@@ -2231,10 +2272,10 @@ export function promptFor(events: SessionEvent[], seqs: number[], updates: MeshP
         : b.peer
           ? `[Friday] ${peerHead(b.peer)}\n\n${b.text}`
           : b.mesh
-            ? `${meshHead(b.mesh)}\n\n${b.text}`
+            ? `${meshHead(b.mesh, agentTools)}\n\n${b.text}`
           : b.thread
             ? `${ev.actor.name}, in a side thread on ${threadOn(bySeq.get(b.thread.root))}: ${b.text}${files}\n\n(Answer here briefly, about this alone: it stays in the thread, beside the room's main work.)`
-            : `${ev.actor.name}${via}: ${b.text}${files}${b.board ? `\n\n${BOARD_ASK(ev.actor.name)}` : ""}`,
+            : `${ev.actor.name}${via}: ${b.text}${files}${b.board && agentTools ? `\n\n${BOARD_ASK(ev.actor.name)}` : ""}`,
     );
   }
   // An undo since this CLI last heard from the room. Its own memory still has
@@ -2312,7 +2353,7 @@ function cleanBody(raw: unknown): EventBody | null {
     if (!items.length || typeof b.id !== "string") return null;
     const why = s(b.why, 300);
     const guard = typeof b.guard === "string" && /^(outside|ship|delete|money|keys|computer|takeover|safety)$/.test(b.guard) ? (b.guard as "outside") : undefined;
-    return { type: "engine.approval", id: s(b.id, 40), scope: b.scope === "commands" ? "commands" : "turn", items, ...(b.live === true ? { live: true } : {}), ...(why ? { why } : {}), ...(guard ? { guard } : {}), ...(b.hostsOwn === true ? { hostsOwn: true } : {}) };
+    return { type: "engine.approval", id: s(b.id, 40), scope: b.scope === "commands" ? "commands" : "turn", items, ...(b.live === true ? { live: true } : {}), ...(why ? { why } : {}), ...(guard ? { guard } : {}), ...(b.hostsOwn === true ? { hostsOwn: true } : {}), ...(typeof b.scripts === "string" && /^[0-9a-f]{16,64}$/.test(b.scripts) ? { scripts: b.scripts } : {}), ...(typeof b.secretRead === "string" && b.secretRead ? { secretRead: s(b.secretRead, 120) } : {}) };
   }
   if (b.type === "agent.usage") {
     // A turn's tokens; anything past a few million in one turn is not a count worth keeping.
@@ -2321,7 +2362,13 @@ function cleanBody(raw: unknown): EventBody | null {
     // How full its context is, and its model's window (at most ten million tokens, any model today).
     const context = Math.min(num(b.context), 10_000_000);
     const window = Math.min(num(b.window), 10_000_000);
-    return u.input + u.cached + u.output ? { type: "agent.usage", ...u, ...(context ? { context, ...(window ? { window } : {}) } : {}) } : null;
+    // What it wrote to its cache (part of `input`), the reasoning in its output and the model that did the work, as the runner
+    // reads them (adapters.ts): the spend audit and the Cost Waterfall split by them, and they were dropped here, so every turn read
+    // as fresh input on its lane's own model (found building the waterfall, 2026-11-27).
+    const cacheWrite = Math.min(num(b.cacheWrite), u.input);
+    const reasoning = Math.min(num(b.reasoning), u.output);
+    const model = typeof b.model === "string" && /^[\w.:/@[\]-]{1,120}$/.test(b.model) ? b.model : "";
+    return u.input + u.cached + u.output ? { type: "agent.usage", ...u, ...(context ? { context, ...(window ? { window } : {}) } : {}), ...(cacheWrite ? { cacheWrite } : {}), ...(reasoning ? { reasoning } : {}), ...(model ? { model } : {}) } : null;
   }
   if (b.type === "guard.refused") {
     const item = s(b.item, MAX_ITEM);

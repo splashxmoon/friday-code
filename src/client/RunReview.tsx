@@ -18,6 +18,7 @@ import { isBig } from "../stack-big.js";
 import type { AskLane } from "./Activity.js";
 import { hasUiChange } from "../preview-check.js";
 import { IdeLink } from "./ide/IdeLink.js";
+import "./review-card.css";
 
 // Only a Code chat's changes card has it, and only after a run that changed what a page draws: out of the first load.
 const PreviewCheck = lazy(() => import("./ide/PreviewCheck.js"));

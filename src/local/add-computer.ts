@@ -28,6 +28,26 @@ export function joinCommand(link: string): { unix: string; windows: string } {
 }
 
 /**
+ * The lines of a script run over SSH that find Node.js 22 there (the login shell's PATH, nvm, fnm, volta, mise, Homebrew) and npm
+ * beside it, as $NODE and $NPM; a missing or old one ends the script with FRIDAY_ERROR (joinSshResult). A `say` function first.
+ * Shared by an extra machine's setup (joinScript) and a host's (hosts.ts).
+ */
+export const FIND_NODE = `LOGIN_PATH=$("\${SHELL:-/bin/sh}" -lc 'printf %s "$PATH"' 2>/dev/null || true)
+[ -n "$LOGIN_PATH" ] && PATH="$LOGIN_PATH:$PATH"
+export PATH
+NODE=$(command -v node || true)
+if [ -z "$NODE" ]; then
+  for f in "$HOME"/.nvm/versions/node/*/bin/node "$HOME"/.local/share/fnm/node-versions/*/installation/bin/node "$HOME"/Library/Application\\ Support/fnm/node-versions/*/installation/bin/node "$HOME"/.fnm/node-versions/*/installation/bin/node "$HOME"/.volta/bin/node "$HOME"/.local/share/mise/installs/node/*/bin/node "$HOME"/.local/share/mise/shims/node /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do [ -x "$f" ] && NODE="$f"; done
+fi
+[ -n "$NODE" ] || { say "FRIDAY_ERROR no-node"; exit 20; }
+MAJOR=$("$NODE" -p 'process.versions.node.split(".")[0]')
+[ "$MAJOR" -ge 22 ] || { say "FRIDAY_ERROR old-node $MAJOR"; exit 21; }
+NPM="$(dirname "$NODE")/npm"
+[ -x "$NPM" ] || NPM=$(command -v npm || true)
+[ -n "$NPM" ] || { say "FRIDAY_ERROR no-npm"; exit 23; }
+`;
+
+/**
  * The script `ssh <host> sh -s` runs to make the machine an extra one: Node.js 22 found (the login shell's PATH, nvm, fnm, volta,
  * mise, Homebrew), the open-source Friday installed into ~/.friday-linked (no sudo), then a service started with the link, its
  * data kept apart from any Friday already there (FRIDAY_HOME), and FRIDAY_SERVICE set so a removal ends it with 0, which neither
@@ -42,20 +62,7 @@ export function joinScript(link: string, name: string, part: "all" | "install" |
   const label = name.replace(/[^\w.-]/g, "").slice(0, 40) || "this";
   const head = `set -e
 ${part === "install" ? "" : `LINK='${link}'\n`}say() { printf '%s\\n' "$*"; }
-LOGIN_PATH=$("\${SHELL:-/bin/sh}" -lc 'printf %s "$PATH"' 2>/dev/null || true)
-[ -n "$LOGIN_PATH" ] && PATH="$LOGIN_PATH:$PATH"
-export PATH
-NODE=$(command -v node || true)
-if [ -z "$NODE" ]; then
-  for f in "$HOME"/.nvm/versions/node/*/bin/node "$HOME"/.local/share/fnm/node-versions/*/installation/bin/node "$HOME"/Library/Application\\ Support/fnm/node-versions/*/installation/bin/node "$HOME"/.fnm/node-versions/*/installation/bin/node "$HOME"/.volta/bin/node "$HOME"/.local/share/mise/installs/node/*/bin/node "$HOME"/.local/share/mise/shims/node /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do [ -x "$f" ] && NODE="$f"; done
-fi
-[ -n "$NODE" ] || { say "FRIDAY_ERROR no-node"; exit 20; }
-MAJOR=$("$NODE" -p 'process.versions.node.split(".")[0]')
-[ "$MAJOR" -ge 22 ] || { say "FRIDAY_ERROR old-node $MAJOR"; exit 21; }
-NPM="$(dirname "$NODE")/npm"
-[ -x "$NPM" ] || NPM=$(command -v npm || true)
-[ -n "$NPM" ] || { say "FRIDAY_ERROR no-npm"; exit 23; }
-DIR="$HOME/.friday-linked"
+${FIND_NODE}DIR="$HOME/.friday-linked"
 `;
   // git itself, not only a git on the PATH: macOS's /usr/bin/git is a placeholder that asks for the developer tools.
   const install = `git --version >/dev/null 2>&1 || { say "FRIDAY_ERROR no-git"; exit 24; }

@@ -12,16 +12,17 @@
 .thr-strip[data-l][data-r] { mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 
 .thr-tab {
-  position: relative; display: inline-flex; align-items: center; gap: 7px; flex: 0 1 auto; min-width: 112px; max-width: 200px; height: 28px;
-  padding: 0 10px 0 9px; border-radius: var(--r-md); color: var(--text-muted);
-  font: 500 13px/1 var(--font); letter-spacing: -0.005em; cursor: pointer; white-space: nowrap;
-  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out);
+  position: relative; display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 112px; max-width: 200px; height: 28px;
+  padding: 0 10px 0 8px; border-radius: 6px; color: color-mix(in srgb, var(--ink) 62%, transparent);
+  font: 500 13px/20px var(--font); cursor: pointer; white-space: nowrap;
+  transition: background-color .14s ease, color .14s ease, box-shadow .18s ease;
 }
-.thr-tab:hover { background: var(--hover); color: var(--ink); }
-/* The open one lifted off the strip, as the segmented controls' chip is: the card colour, a hairline and a soft shadow. */
+.thr-tab:hover { background: var(--aui-subtle, var(--hover)); color: var(--ink); }
+/* The open one lifted off the strip, as the kit's segmented control lifts its chosen item: the card on the kit's card edge
+   (SPEC §1.2 segmented control, style B; public/style.css --aui-shadow-card). */
 .thr-tab.on {
   background: var(--card); color: var(--ink); cursor: text;
-  box-shadow: 0 1px 2px rgb(0 0 0 / .14), 0 0 0 1px var(--border-strong) inset;
+  box-shadow: var(--aui-shadow-card, 0 0 0 1px var(--border)), 0 1px 2px rgb(0 0 0 / .06);
 }
 .thr-tab.new .thr-name { color: var(--ink); font-weight: 600; }
 .thr-tab:focus-visible { outline: none; box-shadow: var(--focus-ring); }
@@ -31,30 +32,31 @@
 /* Close: no room kept for it. On the open tab it sits in the row; on another, it comes over the name's end on hover, the name
    fading under it, so the tab never changes width. */
 .thr-x {
-  display: none; place-items: center; flex: none; width: 18px; height: 18px; padding: 0; border: 0; border-radius: var(--r-sm);
-  background: none; color: var(--faint); cursor: pointer;
+  display: none; place-items: center; flex: none; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 5px;
+  background: none; color: color-mix(in srgb, var(--ink) 45%, transparent); cursor: pointer; transition: background-color .14s ease, color .14s ease;
 }
-.thr-x:hover { background: var(--hover-strong); color: var(--ink); }
+.thr-x:hover { background: var(--aui-subtle, var(--hover-strong)); color: var(--ink); }
 .thr-tab.on .thr-x { display: grid; margin: 0 -5px 0 -1px; }
 .thr-tab:not(.on):hover .thr-x, .thr-tab:not(.on) .thr-x:focus-visible { display: grid; position: absolute; right: 5px; top: 50%; translate: 0 -50%; }
 .thr-tab:not(.on):hover .thr-name { mask-image: linear-gradient(to right, #000 calc(100% - 34px), transparent calc(100% - 16px)); }
 
 .thr-new {
   display: grid; place-items: center; flex: none; width: 28px; height: 28px; margin-left: 4px; padding: 0;
-  border: 1px solid var(--border); border-radius: var(--r-md); background: none; color: var(--text-muted); cursor: pointer;
-  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out), border-color var(--t-hover) var(--ease-out);
+  border: 0; border-radius: 6px; background: none; color: color-mix(in srgb, var(--ink) 48%, transparent); cursor: pointer;
+  transition: background-color .14s ease, color .14s ease;
 }
-.thr-new:hover, .thr-new.on { background: var(--hover); color: var(--ink); border-color: var(--border-strong); }
+/* + is the kit's ghost icon button: no edge, a soft fill under the pointer. */
+.thr-new:hover, .thr-new.on { background: var(--aui-subtle, var(--hover)); color: var(--ink); }
 .thr-new:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* All threads: shown once the strip runs past its edge; how many, and a dot when one out of sight waits on you. */
 .thr-all {
-  position: relative; display: inline-flex; align-items: center; gap: 3px; flex: none; height: 28px; margin-left: 4px; padding: 0 6px 0 8px;
-  border: 1px solid var(--border); border-radius: var(--r-md); background: none; color: var(--text-muted); cursor: pointer;
-  font: 500 12px/1 var(--font); font-variant-numeric: tabular-nums;
-  transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out), border-color var(--t-hover) var(--ease-out);
+  position: relative; display: inline-flex; align-items: center; gap: 4px; flex: none; height: 28px; margin-left: 4px; padding: 0 6px 0 8px;
+  border: 0; border-radius: 6px; background: none; color: color-mix(in srgb, var(--ink) 62%, transparent); cursor: pointer;
+  font: 500 12px/16px var(--font); font-variant-numeric: tabular-nums;
+  transition: background-color .14s ease, color .14s ease;
 }
-.thr-all:hover, .thr-all.on { background: var(--hover); color: var(--ink); border-color: var(--border-strong); }
+.thr-all:hover, .thr-all.on { background: var(--aui-subtle, var(--hover)); color: var(--ink); }
 .thr-all:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .thr-all + .thr-new { margin-left: 2px; }
 .thr-all-dot { position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 2px var(--bg); }
@@ -215,10 +217,10 @@
 .thr-from-empty { display: flex; align-items: center; gap: 8px; padding: 10px; color: var(--text-muted); font-size: 12.5px; }
 .thr-from-empty .spinner { width: 12px; height: 12px; }
 
-.thr-from-chip { display: flex; align-items: center; gap: 6px; align-self: flex-start; max-width: 100%; height: 24px; margin: 8px 10px 0; padding: 0 4px 0 8px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--violet) 14%, transparent); color: var(--ink); font: 500 12px var(--font); }
+.thr-from-chip { display: flex; align-items: center; gap: 6px; align-self: flex-start; max-width: 100%; height: 24px; margin: 8px 10px 0; padding: 0 4px 0 8px; border-radius: var(--r-sm, 6px); background: color-mix(in srgb, var(--violet) 14%, transparent); color: var(--ink); font: 500 12px var(--font); }
 .thr-from-chip .fi { flex: none; color: var(--violet); }
 .thr-from-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.thr-from-x { display: grid; place-items: center; flex: none; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-muted); cursor: pointer; }
+.thr-from-x { display: grid; place-items: center; flex: none; width: 18px; height: 18px; padding: 0; border: 0; border-radius: var(--r-sm, 6px); background: none; color: var(--text-muted); cursor: pointer; }
 .thr-from-x:hover { background: var(--hover); color: var(--ink); }
 .thr-from-where { margin: -4px 0 0; }
 html.desktop :is(.thr-from-btn, .thr-from-item, .thr-from-x) { cursor: pointer; }

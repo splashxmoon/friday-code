@@ -1,5 +1,5 @@
 import { computerAllow, computerStatus, setComputerUse } from "./computer.js";
-import { readLimits } from "./limits.js";
+import { accountEmail, readLimits } from "./limits.js";
 import { findApp, forgetLoginStatus, loginStatusQuick } from "./adapters.js";
 import { isUnknown, orElse, probeTool } from "./tool-probe.js";
 import { mkdir, mkdtemp, open, rm, rmdir, stat, writeFile } from "node:fs/promises";
@@ -11,7 +11,7 @@ import { ADAPTERS, ANTIGRAVITY_MODELS, antigravityModels, childEnv, findBin, for
 import { discoverAgentFiles, parseModelList } from "./agent-files.js";
 import { appStarted, clearBrowserCaches, dropShots, emptyTrash, measure, retireCopy, retireOlder, tidy } from "./storage.js";
 import { worktreeRoot } from "./git.js";
-import { addWorktree, branchesOf, dropSpares, dropWorktree, markMadeHere, fetchBranch, primeSpares, remoteBranchesOf, repoInfo, repoItems, startRepo, worktreeState } from "./git.js";
+import { addWorktree, branchesOf, dropSpares, dropWorktree, markMadeHere, fetchBranch, primeSpares, remoteBranchesOf, repoInfo, repoItems, repoWatch, startRepo, worktreeState } from "./git.js";
 import { listCliSessions } from "./imports.js";
 import { installFromRegistry, registryRows } from "./acp-registry.js";
 import { acpSignInState, callbackFromElsewhere, cancelAcpSignIn, forgetProof, settleSignIn, startAcpSignIn } from "./acp-signin.js";
@@ -36,7 +36,7 @@ import { iosLiveUrl } from "./ios-live.js";
 import { readRules, writeRules, type RulesOp } from "./repo-rules.js";
 import { folderSetup, saveEnvironment } from "./environment.js";
 import { cancelLogin, finishLogin, openInTerminal, shellLine, startLogin } from "./terminal.js";
-import { accountEnv, addAccount, DEFAULT_ACCOUNT, getAccount, hasAccounts, isOut, listAccounts, removeAccount, renameAccount, type AccountTool } from "./accounts.js";
+import { accountDir, accountEnv, addAccount, DEFAULT_ACCOUNT, getAccount, hasAccounts, isOut, listAccounts, preferredAccount, removeAccount, renameAccount, setPreferredAccount, type AccountTool } from "./accounts.js";
 import { browse, cloneRepo, defaultCloneRoot, describe, findByName, ghBin, githubRepos, issues, pullRequests, recentReposCached, teamPullRequests } from "./workspace.js";
 import { githubCancel, githubConnect, githubDisconnect, githubStatus } from "./github.js";
 import { prOpen } from "./pr-ide.js";
@@ -45,7 +45,8 @@ import { savedDirs, startDirs } from "./extra-dirs.js";
 import { readRepo } from "./repo-read.js";
 import { stopVscode, vscodeCancel, vscodeCommand, vscodeInstall, vscodeMarketplace, vscodeOpen, vscodeRemove, vscodeSetMarketplace, vscodeStart, vscodeStatus, vscodeTheme } from "./vscode.js";
 import { changedSince, citedLines, codeGraph, lineCounts, readForPage, surveyRepo } from "./dive.js";
-import { addOwnModels, detectLocal, discoverModels, listOwnModels, ownComplete, ownVision, removeOwnModel, saveOwnModel, testOwnModel } from "./own-models.js";
+import { ownContext, ownContextSave } from "./own-context.js";
+import { addOwnModels, detectLocal, discoverModels, listOwnModels, ownComplete, ownVision, ownWindow, removeOwnModel, saveOwnModel, testOwnModel } from "./own-models.js";
 
 /**
  * Everything Friday can ask someone's machine to do on their behalf: what
@@ -130,6 +131,10 @@ export const HOST_METHODS = [
   "models.own.discover",
   "models.own.detect",
   "models.own.vision",
+  "models.own.window",
+  // A local model's context: what each window would cost here, and its choices and window changed (own-context.ts).
+  "models.own.context",
+  "models.own.context.save",
   "llm.complete",
   "skills.install",
   // The Skills page (skill-library.ts): the person's skills in ~/.agents/skills, and each coding tool's to copy from.
@@ -163,6 +168,7 @@ export const HOST_METHODS = [
   "accounts.add",
   "accounts.rename",
   "accounts.remove",
+  "accounts.prefer",
   // The coding tools kept up to date (tool-updates.ts): which are behind, one updated now, and updating by itself on or off.
   "tools.updates",
   "tools.update",
@@ -347,14 +353,20 @@ async function accountParam(tool: EngineTool, v: unknown): Promise<string | unde
 }
 
 /** A tool's accounts for its row: only when it has more than one, unless `always`. */
-async function accountRows(tool: AccountTool, bin: string, always = false): Promise<{ accounts?: { id: string; label: string; loggedIn: boolean | null; out?: boolean; outUntil?: number | null }[] }> {
+async function accountRows(tool: AccountTool, bin: string, always = false): Promise<{ accounts?: { id: string; label: string; loggedIn: boolean | null; out?: boolean; outUntil?: number | null; preferred?: true; email?: string }[] }> {
   const all = await listAccounts(tool);
   if (all.length < 2 && !always) return {};
+  const pick = await preferredAccount(tool);
   return {
     accounts: await Promise.all(
       all.map(async (a) => ({
         id: a.id,
         label: a.label,
+        // The one new sessions start on, from any window or none (accounts.ts preferredAccount).
+        ...(a.id === pick ? { preferred: true as const } : {}),
+        // Who it is signed in as, from the tool's own file (Arun, 2026-11-26: "show the email for the accounts as well"), so two
+        // accounts are told apart by more than the names given them, before their usage has been read.
+        ...(await accountEmail(tool, a.id === DEFAULT_ACCOUNT ? null : accountDir(tool, a.id)).then((e) => (e ? { email: e } : {}), () => ({}))),
         loggedIn: await loginStatusQuick(tool, bin, 1_500, a.id === DEFAULT_ACCOUNT ? undefined : a.id),
         ...(isOut(a) ? { out: true, outUntil: a.outUntil ?? null } : {}),
       })),
@@ -505,6 +517,9 @@ export async function callHost(method: string, params: Record<string, unknown> =
       return githubItem({ url: str(params.url, 300) });
     case "repo.local":
       return localRepo({ repo: str(params.repo, 200) });
+    // An automation watching a GitHub repository (automations.ts): one look, read-only, through this computer's gh.
+    case "gh.watch":
+      return repoWatch(str(params.repo, 201), str(params.event, 10));
     case "repo.items": {
       const p = at(params.path);
       if (!(await isDir(p))) throw new Error(`There's no folder at ${p}.`);
@@ -531,6 +546,12 @@ export async function callHost(method: string, params: Record<string, unknown> =
         ...(typeof params.provider === "string" ? { provider: str(params.provider, 30) } : {}),
         ...(str(params.id, 20) ? { id: str(params.id, 20) } : {}),
       });
+    case "models.own.context":
+      return ownContext({ id: str(params.id, 20) });
+    case "models.own.context.save":
+      return ownContextSave({ id: str(params.id, 20), prefs: params.prefs, window: params.window, apply: params.apply });
+    case "models.own.window":
+      return ownWindow({ id: str(params.id, 20) });
     case "models.own.vision":
       return ownVision({ id: str(params.id, 20) });
     case "models.own.remove":
@@ -760,13 +781,20 @@ export async function callHost(method: string, params: Record<string, unknown> =
       await renameAccount(tool, str(params.id, 40), str(params.label, 40));
       return { ok: true };
     }
+    // The account new sessions of a tool start on, for every way a session starts on this computer.
+    case "accounts.prefer": {
+      const tool = str(params.tool, 20) as EngineTool;
+      if (!hasAccounts(tool)) throw new Error("Unknown account.");
+      await setPreferredAccount(tool, str(params.id, 40) || DEFAULT_ACCOUNT);
+      return { ok: true };
+    }
     // Gone from this computer: signed out first, so Claude Code's keychain item goes with it, then its folder.
     case "accounts.remove": {
       const tool = str(params.tool, 20) as EngineTool;
       const id = str(params.id, 40);
       if (!hasAccounts(tool) || !(await getAccount(tool, id))) throw new Error("There's no such account.");
       if (id === DEFAULT_ACCOUNT) throw new Error("That's the tool's own sign-in. Sign out of it instead.");
-      const using = [...ctx.runners.values()].find((r) => r.opts.tool === tool && r.opts.account === id);
+      const using = [...ctx.runners.values()].find((r) => r.opts.tool === tool && (r.opts.account ?? r.accountId) === id);
       if (using) throw new Error(`An agent in a session is running on that account. Stop it first.`);
       const bin = await findBin(tool);
       if (bin) await runCli(bin, ADAPTERS[tool].logout, 20_000, accountEnv(tool, id)).catch(() => null);

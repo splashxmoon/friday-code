@@ -29,7 +29,7 @@
 .kg-check > input { margin-top: 3px; }
 .kg-note { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-md, 8px); background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; resize: vertical; }
 .kg-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.kg-chip { padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--ink-2); font-size: 12px; cursor: pointer; }
+.kg-chip { padding: 3px 10px; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); background: none; color: var(--ink-2); font-size: 12px; cursor: pointer; }
 .kg-chip[aria-pressed="true"], .kg-chip[aria-checked="true"] { border-color: var(--ink-2); background: var(--bg-2, var(--hover)); color: var(--ink); }
 .kg-hint, .kg-err { margin: 0; color: var(--text-muted); font-size: 12px; }
 .kg-err { color: var(--danger, var(--ink)); }
@@ -97,7 +97,7 @@
 .kg-room-top { display: flex; align-items: baseline; gap: 10px; min-width: 0; color: var(--ink); font-size: 13px; }
 .kg-room-top .kg-said { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kg-room-meta { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.kg-room-chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink-2); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.kg-room-chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: var(--r-sm, 6px); background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink-2); font-size: 12px; font-weight: 500; white-space: nowrap; }
 .kg-room-chip i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); }
 .kg-room-chip[data-state="working"] { background: color-mix(in srgb, var(--mate-working) 14%, transparent); color: var(--ink); }
 .kg-room-chip[data-state="working"] i { background: var(--mate-working); animation: kg-pulse 1.4s ease-in-out infinite; }

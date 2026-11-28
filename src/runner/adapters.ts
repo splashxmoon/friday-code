@@ -6,7 +6,7 @@ import { constants } from "node:fs";
 import { createRequire } from "node:module";
 import { devNull, homedir } from "node:os";
 import path from "node:path";
-import { codexEffort, ENGINE_EFFORTS, ENGINE_NAMES, type AgentTaskStatus, type EngineEffort, type EngineMode, type EngineTool, type ToolCall } from "../types.js";
+import { codexEffort, ENGINE_EFFORTS, ENGINE_NAMES, TOOL_MODES, type AgentTaskStatus, type EngineEffort, type EngineMode, type EngineTool, type ToolCall } from "../types.js";
 import { testFailedInChain } from "../receipt.js";
 import { contains } from "../folder-key.js";
 import { execCli, noteBackground } from "./spawn-cli.js";
@@ -15,7 +15,7 @@ import { localEdition } from "../local-edition.js";
 import { mcpForAgent, type AcpMcpServer } from "./mcp-servers.js";
 import { reviewTarget } from "./tool-commands.js";
 import { ampConfig, claudeConfig, codexConfig, type FridayMcp } from "./friday-mcp.js";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
@@ -491,6 +491,14 @@ export function askedItem(tool: string, input: Record<string, unknown>): { scope
   return { scope: "turn", item: p ? `${tool} ${p}` : tool };
 }
 
+/**
+ * A yes to commands, as Claude Code's own rules: each command, for either shell. Claude Code reads a `*` in such a rule as "anything"
+ * (and `:*` as "anything after"), so a command with one in it would be allowed as far more than the card showed (Security L12).
+ * Where it asks while the turn waits (TurnSpec.ask) that command gets no rule: it is asked about once more, and the yes then is
+ * to that one run. Where it can't ask, the rule is all a yes can be, and stays.
+ */
+const grantRules = (t: TurnSpec): string[] => (t.grant?.scope === "commands" ? t.grant.items.filter((c) => !t.ask || !c.includes("*")).flatMap((c) => SHELL_TOOLS.map((s) => `${s}(${c})`)) : []);
+
 /** Claude Code tool names → the session's names, so every CLI's shell call is a "shell" card. */
 function claudeTool(name: string, input: Record<string, unknown>): { name: string; args: Record<string, unknown> } {
   const p = str(input.file_path) || str(input.notebook_path) || str(input.path);
@@ -499,12 +507,16 @@ function claudeTool(name: string, input: Record<string, unknown>): { name: strin
     case "Bash":
     case "PowerShell":
       return { name: "shell", args: { command: str(input.command), ...(input.description ? { description: input.description } : {}) } };
-    case "Edit":
+    // MultiEdit's changes kept as its `edits` (each cut like a Write's), so what it changed counts (the Captain page's Changes
+    // read none of them, 2026-11-27).
     case "MultiEdit":
+      return { name: "edit", args: { path: p, ...(Array.isArray(input.edits) ? { edits: input.edits.slice(0, 50).map((e: Record<string, unknown>) => ({ old_string: cut(str(e?.old_string), 2000), new_string: cut(str(e?.new_string), 2000) })) } : {}) } };
+    case "Edit":
     case "NotebookEdit":
       return { name: "edit", args: { path: p, ...(input.old_string !== undefined ? { old_string: input.old_string, new_string: input.new_string } : {}) } };
+    // Its content cut for the log, with how many lines it really wrote, so a long file counts in full.
     case "Write":
-      return { name: "write", args: { path: p, content: cut(str(input.content), 2000) } };
+      return { name: "write", args: { path: p, content: cut(str(input.content), 2000), lines: str(input.content) ? str(input.content).replace(/\n$/, "").split("\n").length : 0 } };
     // Which part it read, too: a long file read in parts is several reads, not the same read again (the loop guard pauses
     // on the same call four times; benchmark, 2026-11-17: a run reading routing.py in four parts was stopped as a loop).
     case "Read":
@@ -596,8 +608,8 @@ export const claude: Adapter = {
       ? ["--allowedTools", ...AUTO_TOOLS.filter((x) => !SHELL_TOOLS.includes(x))]
       : t.mode === "full" || t.grant?.scope === "turn"
       ? ["--allowedTools", ...AUTO_TOOLS, ...(t.mode === "full" ? [...(t.mcp ?? []), ...(t.connections?.names ?? [])].map((s) => `mcp__${s}`) : []), ...(t.grant?.scope === "turn" ? t.grant.items.filter((i) => MCP_TOOL.test(i)) : [])]
-      : t.grant?.scope === "commands"
-        ? ["--allowedTools", ...t.grant.items.flatMap((c) => SHELL_TOOLS.map((s) => `${s}(${c})`))]
+      : t.grant?.scope === "commands" && grantRules(t).length
+        ? ["--allowedTools", ...grantRules(t)]
         : []),
     // From a file when it is too long for the command line (the runner decides): Windows caps a whole one at 32,767 characters,
     // and an imported conversation alone came close to that. Others stay inline, which every version takes.
@@ -2548,7 +2560,7 @@ export const amp: Adapter = {
   bins: ["amp"],
   login: ["login"],
   logout: ["logout"],
-  modes: ["full"],
+  modes: TOOL_MODES.amp!.modes,
   prespawn: true,
   // `--mode` (low, medium, high, ultra) is how Amp picks its models, and a thread keeps the one it started with.
   args: (t) => [
@@ -2617,6 +2629,33 @@ const museArgs = (v: unknown): Record<string, unknown> => {
 /** The kinds of change Manual lets through unasked, as Claude Code's acceptEdits does. */
 const MUSE_FREE_IN_EDITS = new Set(["read", "search", "edit", "write", "web_search", "web_fetch"]);
 
+/**
+ * Friday's MCP server for a Muse conversation, so its agents have the tools for talking to the others as every other tool's do
+ * (Arun, 2026-11-27: "fix uneven across tools"). Muse takes MCP servers for one conversation in `session/start`'s and
+ * `session/resume`'s `config.mcpServers` (its MSP schema, 1.4.25), once `initialize` has granted the `sessionMcp` capability;
+ * `optional`, so a server that won't start never costs the turn. Checked against Muse 1.4.25 with a stand-in server: started
+ * and listed in Auto and inside its sandbox alike. Nothing when it wasn't granted or there is no server to give.
+ */
+export function museMcp(friday: FridayMcp | undefined, granted: unknown): { config?: { mcpServers: Record<string, unknown> } } {
+  if (!friday || !Array.isArray(granted) || !granted.includes("sessionMcp")) return {};
+  return { config: { mcpServers: { friday: { transport: "stdio", command: friday.command, args: friday.args, env: friday.env, mode: "optional" } } } };
+}
+
+/**
+ * A Muse turn refused on its plan's allowance (its TurnError's `quota`: `limitKind` "tierLimit" and `resetsAtMs`, MSP schema 1.4.25),
+ * said in the words the hand-off out of usage reads, with when it comes back (limit-reset.ts), whatever Muse's own message said.
+ * Null for any other failure.
+ */
+export function museQuota(error: unknown, now = Date.now()): string | null {
+  const q = (error as { quota?: { resetsAtMs?: unknown } } | null)?.quota;
+  if (!q || typeof q !== "object") return null;
+  const said = str((error as { message?: unknown }).message).trim();
+  const at = typeof q.resetsAtMs === "number" && q.resetsAtMs > now ? q.resetsAtMs : null;
+  const mins = at ? Math.ceil((at - now) / 60_000) : 0;
+  const when = at ? `, resets in ${mins >= 60 ? `${Math.floor(mins / 60)} hours ${mins % 60} minutes` : `${mins} minutes`}` : "";
+  return `Muse Code hit its plan's usage limit${when}.${said ? ` ${said}` : ""}`;
+}
+
 export const muse: Adapter = {
   tool: "muse",
   bins: ["muse"],
@@ -2632,7 +2671,9 @@ export const muse: Adapter = {
   // Its own sandbox off only where Friday lets it act unasked; the workspace trusted, since Friday opened it there.
   args: (t) => ["serve", "--trust-workspace", ...(t.mode === "full" ? ["--disable-sandbox"] : [])],
   env: (): Record<string, string> => ({ MUSE_NO_AUTO_UPDATE: "1" }),
-  stdin: () => rpc({ id: 0, method: "initialize", params: { clientInfo: { name: "friday", title: "Friday", version: "1" }, capabilities: { requestedCapabilities: [] } } }),
+  // `sessionMcp` lets a conversation be opened with MCP servers of its own (see museMcp): asked for only when there is Friday's to
+  // give. A Muse that doesn't know it leaves it out of what it grants, and the conversation opens without.
+  stdin: (t) => rpc({ id: 0, method: "initialize", params: { clientInfo: { name: "friday", title: "Friday", version: "1" }, capabilities: { requestedCapabilities: t.friday ? ["sessionMcp"] : [] } } }),
   parser(t, io) {
     if (!t || !io) return () => [];
     const turn = t;
@@ -2648,6 +2689,8 @@ export const muse: Adapter = {
     let over = false;
     let text = "";
     let thought = "";
+    /** Friday's MCP server for this conversation, once Muse has granted `sessionMcp` (see museMcp). */
+    let mcp: Record<string, unknown> = {};
     /** Each item's kind, by its id, so a delta goes to the words or the reasoning. */
     const kinds = new Map<string, string>();
     /** Text already said for an item, so its completion doesn't say it twice. */
@@ -2729,6 +2772,7 @@ export const muse: Adapter = {
           providerId: "meta",
           approvalMode: turn.mode === "full" ? "allowAll" : "promptUnmatched",
           permissionProfile: turn.mode === "full" ? ":unrestricted" : ":ask-me",
+          ...mcp,
         },
         (r) => (r.error ? failed("Muse Code couldn't start the conversation", r.error) : opened(r)),
       );
@@ -2738,7 +2782,7 @@ export const muse: Adapter = {
       if (!turn.resumeId) return startFresh();
       sid = turn.resumeId;
       // Its own conversation again, so it remembers; one it no longer has starts over.
-      ask("session/resume", { sessionId: sid, excludeItems: true, permissionProfile: turn.mode === "full" ? ":unrestricted" : ":ask-me" }, (r) => (r.error ? startFresh() : opened(r)));
+      ask("session/resume", { sessionId: sid, excludeItems: true, permissionProfile: turn.mode === "full" ? ":unrestricted" : ":ask-me", ...mcp }, (r) => (r.error ? startFresh() : opened(r)));
       return [];
     };
 
@@ -2838,6 +2882,7 @@ export const muse: Adapter = {
       if (m.id !== undefined && !m.method) {
         if (m.id === 0) {
           if (m.error) return failed("Muse Code didn't start", m.error);
+          mcp = museMcp(turn.friday, m.result?.grantedCapabilities);
           wire.write(rpc({ method: "initialized" }));
           return openSession();
         }
@@ -2877,7 +2922,7 @@ export const muse: Adapter = {
         case "turn/completed": {
           if (turnId && p.turnId && p.turnId !== turnId) return [];
           const end = str(p.terminal);
-          return finish(end === "failed" ? str(p.error?.message) || str(p.failureReason) || "The turn failed" : undefined);
+          return finish(end === "failed" ? museQuota(p.error) || str(p.error?.message) || str(p.failureReason) || "The turn failed" : undefined);
         }
         case "session/closed":
           return finish(turnId ? undefined : "Muse Code closed the conversation before the turn began");
@@ -3276,7 +3321,8 @@ export const pi: Adapter = {
  * process ending is the turn ending. `line` sorts a line that isn't plain answer text (a token count, an edit it applied, its
  * banner) into what it says instead; anything it leaves alone streams as text. The answer so far is kept as a message before a
  * tool card and when the process ends, as the JSON tools' answers are. A clean exit is `done`; any other exit says nothing, so
- * the runner reports the tool's own last words on stderr.
+ * the runner reports the tool's own last words on stderr. `onEnd` may end it its own way (a `done` with an error, for a tool that
+ * exits cleanly after giving up on its provider), and then no other `done` is added.
  */
 export function plainText(line?: (l: string) => AdapterOut[] | null, onEnd?: (ok: boolean) => AdapterOut[]): Parser {
   let text = "";
@@ -3294,7 +3340,11 @@ export function plainText(line?: (l: string) => AdapterOut[] | null, onEnd?: (ok
     text += `${l}\n`;
     return [{ kind: "delta", text: `${l}\n`, channel: "text" }];
   }) as Parser;
-  parse.end = (code) => (code === 0 ? [...flush(), ...(onEnd?.(true) ?? []), { kind: "done" }] : [...flush(), ...(onEnd?.(false) ?? [])]);
+  parse.end = (code) => {
+    if (code !== 0) return [...flush(), ...(onEnd?.(false) ?? [])];
+    const own = onEnd?.(true) ?? [];
+    return [...flush(), ...own, ...(own.some((o) => o.kind === "done") ? [] : [{ kind: "done" as const }])];
+  };
   return parse;
 }
 
@@ -3304,6 +3354,16 @@ const tokens = (n: string | undefined, k: string | undefined) => (n ? Math.round
 /** Aider's own lines about itself rather than the answer: its banner, the files it sees, its warnings. */
 const AIDER_SAYS = /^(?:Aider v\d|Main model:|Weak model:|Editor model:|Model:|Git repo:|Repo-map:|Added .+ to the chat|Use \/help|Cur working dir:|Note: in-chat|Warning:|Can't initialize prompt toolkit|Newer aider version|Run pip install|Update git name|Scanning repo:|Initial repo scan|https:\/\/aider\.chat\/)/;
 const AIDER_TOKENS = /^Tokens: ([\d.]+)(k?) sent(?:, ([\d.]+)(k?) cache write)?(?:, ([\d.]+)(k?) cache hit)?, ([\d.]+)(k?) received/;
+
+/**
+ * Aider giving up on its model provider: litellm's error (`litellm.RateLimitError: …`, `…insufficient_quota…`) and its own words
+ * for it ("The API provider has rate limited you. Try again later or check your quotas."), from its exceptions.py. It retries one of
+ * these for about a minute, saying "Retrying in 2.0 seconds..." each time, then prints it once more and exits 0, as if the turn had
+ * gone well; so the last one not followed by a retry is how the turn ended (aiderParser), and a usage limit among them reaches the
+ * hand-off out of usage as every other tool's does (Arun, 2026-11-27: "fix uneven across tools").
+ */
+const AIDER_PROVIDER_ERROR = /^(?:litellm\.\w+(?:Error|Exception)\b|The API provider (?:has rate limited you|timed out|'s servers are down)|Permission was denied\. Check your API key)/;
+const AIDER_RETRY = /^Retrying in [\d.]+ seconds/;
 
 /** Aider's lines that aren't answer text: its token counts as usage, each file it changed as an edit card, its banner aside. */
 export function aiderLine(l: string, id: () => string): AdapterOut[] | null {
@@ -3354,7 +3414,7 @@ export const aider: Adapter = {
   bins: ["aider"],
   login: [],
   logout: [],
-  modes: ["full", "plan"],
+  modes: TOOL_MODES.aider!.modes,
   args(t) {
     const history = aiderHistory(t);
     mkdirSync(path.dirname(history), { recursive: true });
@@ -3386,9 +3446,16 @@ export const aider: Adapter = {
   parser(t) {
     let n = 0;
     const history = t && !t.ephemeral ? aiderHistory(t) : null;
+    // Its provider's last error not followed by a retry (AIDER_PROVIDER_ERROR): the turn failed on it, though Aider exits 0.
+    let gaveUp: string[] = [];
     return plainText(
-      (l) => aiderLine(l, () => `aider-${++n}`),
-      (ok) => (ok && history ? [{ kind: "session", id: history }] : []),
+      (l) => {
+        if (AIDER_RETRY.test(l)) gaveUp = [];
+        else if (AIDER_PROVIDER_ERROR.test(l)) gaveUp = [...gaveUp, l.trim()].slice(-2);
+        else if (gaveUp.length && l.trim() && !/^Open URL for more info/i.test(l)) gaveUp = [];
+        return AIDER_PROVIDER_ERROR.test(l) || AIDER_RETRY.test(l) ? [{ kind: "delta", text: `${l}\n`, channel: "reasoning" }] : aiderLine(l, () => `aider-${++n}`);
+      },
+      (ok) => [...(ok && history ? [{ kind: "session" as const, id: history }] : []), ...(ok && gaveUp.length ? [{ kind: "done" as const, error: gaveUp.join("\n") }] : [])],
     );
   },
   explain(e) {
@@ -3401,17 +3468,115 @@ export const aider: Adapter = {
 /** Crush's conversation, as Friday keeps it: "its latest one in this folder", which `--continue` picks up. */
 export const CRUSH_LAST = "crush-latest";
 
+/** Crush's own config folder, where it looks for it: CRUSH_GLOBAL_CONFIG, else $XDG_CONFIG_HOME/crush, else ~/.config/crush (on Windows too). */
+export const crushConfigDir = (env: NodeJS.ProcessEnv = process.env, home = homedir()): string => env.CRUSH_GLOBAL_CONFIG || path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "crush");
+
+/** Crush's built-in tools that change something or run a command (its config.go allToolNames, 0.103): hidden from it in Plan. */
+export const CRUSH_PLAN_DENY = ["bash", "edit", "multiedit", "write", "download", "job_kill", "lsp_rename", "lsp_replace_symbol"];
+
+/** JSON with comments and trailing commas, as Crush's own crush.json examples are written, read as JSON; null when it still isn't. */
+export function looseJson(text: string): unknown {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!;
+    if (c === '"') {
+      // A string, escapes and all, copied as it is.
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
+      out += text.slice(i, j + 1);
+      i = j;
+    } else if (c === "/" && text[i + 1] === "/") {
+      while (i < text.length && text[i] !== "\n") i++;
+      out += "\n";
+    } else if (c === "/" && text[i + 1] === "*") {
+      const close = text.indexOf("*/", i + 2);
+      i = close < 0 ? text.length : close + 1;
+    } else if (c !== "," || !/^\s*[}\]]/.test(text.slice(i + 1))) out += c;
+  }
+  try {
+    return JSON.parse(out);
+  } catch {
+    return null;
+  }
+}
+
+/** A path as one single-quoted word in a crushrc (Bash), forward slashes, which Crush's own Bash and Windows both take. */
+const bashWord = (p: string) => `'${p.replace(/\\/g, "/").replace(/'/g, "'\\''")}'`;
+
+/**
+ * The config folder a Crush turn runs with (CRUSH_GLOBAL_CONFIG), when it needs one of Friday's: Friday's MCP server, so its agents
+ * have the tools for talking to the others as every other tool's do, and in Plan its editing and shell tools hidden (Arun,
+ * 2026-11-27: "fix uneven across tools"). `crush run` takes no config flag and approves every tool call itself, and the only
+ * other places it reads config from are the person's own files and the repository's, neither Friday's to write.
+ *
+ * So the folder holds their own config with Friday's additions: a crush.json that is their global crush.json (comments and
+ * trailing commas allowed) plus the `friday` MCP server, their CRUSH.md and AGENTS.md still named as its global context (Crush
+ * would otherwise look for them beside this folder), and in Plan `disabled_tools`; and, when they have a global crushrc, a crushrc
+ * that sources theirs and then (in Plan) denies the same tools, since a crushrc is read after the JSON beside it. Named by what is
+ * in it, so a lane reuses one; old ones are cleared after a week. Their data folder (sign-ins, sessions) is untouched.
+ *
+ * Null when the turn needs nothing (no MCP server and not Plan), or their crush.json can't be read outside Plan: then Crush runs on
+ * their config alone, without Friday's server. In Plan it still runs with the folder, so a Plan turn is never one that can edit.
+ */
+export function crushConfig(t: TurnSpec, env: NodeJS.ProcessEnv = process.env, home = homedir()): string | null {
+  const plan = t.mode === "plan";
+  if (!plan && !t.friday) return null;
+  const real = crushConfigDir(env, home);
+  let text: string | null = "";
+  try {
+    text = readFileSync(path.join(real, "crush.json"), "utf8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") text = null;
+  }
+  const parsed = text === null ? null : text.trim() ? looseJson(text) : {};
+  const mine = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, any>) : null;
+  if (!mine && !plan) return null;
+  const own = mine ?? {};
+  const opts = own.options && typeof own.options === "object" ? own.options : {};
+  const json = {
+    ...own,
+    ...(t.friday ? { mcp: { ...(own.mcp && typeof own.mcp === "object" ? own.mcp : {}), friday: { type: "stdio", command: t.friday.command, args: t.friday.args, env: t.friday.env, timeout: 30 } } } : {}),
+    options: {
+      ...opts,
+      global_context_paths: Array.isArray(opts.global_context_paths) ? opts.global_context_paths : [path.join(real, "CRUSH.md"), path.join(path.dirname(real), "AGENTS.md")],
+      ...(plan ? { disabled_tools: [...new Set([...(Array.isArray(opts.disabled_tools) ? opts.disabled_tools : []), ...CRUSH_PLAN_DENY])] } : {}),
+    },
+  };
+  const theirRc = path.join(real, "crushrc");
+  const rcLines = [...(existsSync(theirRc) ? [`source ${bashWord(theirRc)}`] : []), ...(plan ? [`permissions deny ${CRUSH_PLAN_DENY.join(" ")}`] : [])];
+  const rc = rcLines.length ? `# Written by Friday for its own turns of Crush (CRUSH_GLOBAL_CONFIG names this folder): your crushrc, then Friday's additions.\n${rcLines.join("\n")}\n` : "";
+  const body = `${JSON.stringify(json, null, 2)}\n`;
+  const root = path.join(home, ".friday", "crush");
+  const dir = path.join(root, createHash("sha1").update(body).update(rc).digest("hex").slice(0, 12));
+  if (!existsSync(path.join(dir, "crush.json"))) {
+    mkdirSync(dir, { recursive: true });
+    // It can hold their providers' keys, as their own crush.json does: readable by them alone.
+    writeFileSync(path.join(dir, "crush.json"), body, { mode: 0o600 });
+    if (rc) writeFileSync(path.join(dir, "crushrc"), rc, { mode: 0o600 });
+    try {
+      for (const name of readdirSync(root)) {
+        const old = path.join(root, name);
+        if (old !== dir && Date.now() - statSync(old).mtimeMs > 7 * 86_400_000) rmSync(old, { recursive: true, force: true });
+      }
+    } catch {
+      // Tidying only: one left behind is a kilobyte.
+    }
+  }
+  return dir;
+}
+
 /**
  * Crush (Charm's coding agent, `crush`), which speaks no ACP: one `crush run` a turn, the instruction on stdin and its answer
- * printed as plain text (`--quiet`, no spinner). A non-interactive run approves everything itself, so it runs only in Auto. It
- * prints no conversation id, so the next turn carries on its most recent conversation in this folder (`--continue`).
+ * printed as plain text (`--quiet`, no spinner). A non-interactive run approves everything itself, so there is no Manual; Plan
+ * hides its editing and shell tools (crushConfig). It prints no conversation id, so the next turn carries on its most recent
+ * conversation in this folder (`--continue`).
  */
 export const crush: Adapter = {
   tool: "crush",
   bins: ["crush"],
   login: ["login"],
   logout: ["logout"],
-  modes: ["full"],
+  modes: TOOL_MODES.crush!.modes,
   args: (t) => [
     "run",
     "--quiet",
@@ -3420,6 +3585,10 @@ export const crush: Adapter = {
     ...(t.effort && offered(t, "--reasoning-effort") ? ["--reasoning-effort", lowMediumHigh(t.effort)] : []),
   ],
   optional: ["--reasoning-effort"],
+  env(t): Record<string, string> {
+    const dir = crushConfig(t);
+    return dir ? { CRUSH_GLOBAL_CONFIG: dir } : {};
+  },
   stdin: (t) => notedPrompt(t),
   parser: (t) => plainText(undefined, (ok) => (ok && !t?.ephemeral ? [{ kind: "session", id: CRUSH_LAST }] : [])),
   explain(e) {
@@ -3520,10 +3689,18 @@ export function shellEnv(base: NodeJS.ProcessEnv = process.env): Record<string, 
   return env;
 }
 
+/**
+ * Friday's own server's secrets, which sit in this process's environment where the server and the runner are one (the open-source
+ * edition, FRIDAY_URL=local): what signs every session's sign-in and seals the kept tokens. No coding tool has a use for them, and
+ * one that printed its environment put them in the session for everyone in it to read (Security L10). A model's key
+ * (OPENROUTER_API_KEY and the like) stays: the tools read those.
+ */
+const FRIDAY_SERVER_SECRETS = new Set(["SESSION_SECRET", "TOKEN_ENCRYPTION_KEY", "TOKEN_ENCRYPTION_KEYS"]);
+
 export function childEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const hosted = !!(base.CLAUDECODE || base.CLAUDE_CODE_ENTRYPOINT || base.CLAUDE_CODE_DESKTOP_APP_VERSION);
   const env: NodeJS.ProcessEnv = { ...base, PATH: childPath() };
-  for (const k of Object.keys(env)) if (HOST_SESSION_VARS.has(k) || k.startsWith("CLAUDE_CODE_SDK_")) delete env[k];
+  for (const k of Object.keys(env)) if (HOST_SESSION_VARS.has(k) || k.startsWith("CLAUDE_CODE_SDK_") || FRIDAY_SERVER_SECRETS.has(k)) delete env[k];
   // Inside a host session this points at the host's local auth proxy, not at
   // anything the person configured, and it only works with the host's token.
   if (hosted && env.ANTHROPIC_BASE_URL && /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(env.ANTHROPIC_BASE_URL)) delete env.ANTHROPIC_BASE_URL;

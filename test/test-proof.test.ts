@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { countsLine, tailOf, testCounts, testRunsIn } from "../src/test-proof.js";
+import { countsLine, expectedGot, tailOf, testCounts, testRunsIn } from "../src/test-proof.js";
 import type { SessionEvent } from "../src/types.js";
 
 test("testCounts reads the summary of the runners people use", () => {
@@ -74,4 +74,14 @@ test("testPart and cargo workspaces", async () => {
   assert.equal(testPart("cd /x/y && npm test"), "npm test");
   assert.equal(testPart("ls"), "ls");
   assert.deepEqual(testCounts("test result: ok. 10 passed; 0 failed; 0 ignored\ntest result: ok. 3 passed; 1 failed; 2 ignored"), { passed: 13, failed: 1, skipped: 2 });
+});
+
+test("expectedGot reads what a failing test expected and got, in the runners people use", () => {
+  assert.deepEqual(expectedGot("✖ cart total rounds to cents (1.2ms)\n  AssertionError: 10.004 !== 10\n"), { expected: "10", got: "10.004" });
+  assert.deepEqual(expectedGot("    Expected: 10.3\n    Received: 10.299999\n"), { expected: "10.3", got: "10.299999" });
+  assert.deepEqual(expectedGot("FAIL: expected 3, got 4"), { expected: "3", got: "4" });
+  assert.deepEqual(expectedGot("AssertionError [ERR_ASSERTION]: expected 10.00, got 10.004\n  error: 'expected 10.00, got 10.004'"), { expected: "10.00", got: "10.004" });
+  assert.deepEqual(expectedGot("AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n10.004 !== 10\n"), { expected: "10", got: "10.004" });
+  assert.deepEqual(expectedGot("  AssertionError [ERR_ASSERTION]: expected 10.00, got 10.004\n  {\n    actual: false,\n    expected: true,\n  }"), { expected: "10.00", got: "10.004" });
+  assert.equal(expectedGot("ℹ tests 3\nℹ pass 3"), null);
 });

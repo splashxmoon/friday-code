@@ -2,7 +2,7 @@
 // waits on its own tool, as a sign-in page does, and Windows opens that window with the command as written.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { windowsTerminalArgs } from "../src/runner/terminal.js";
+import { windowsCommand, windowsTerminalArgs } from "../src/runner/terminal.js";
 import { signInFinished } from "../src/client/MachineBadge.js";
 
 test("Windows: the command goes to cmd as written, quoted so a path with a space survives /c and cmd /k", () => {
@@ -45,4 +45,15 @@ test("a sign-in typed into Friday's own terminal ends its shell with it, so its 
   assert.equal(shellLine(["/opt/homebrew/bin/kilo", "auth", "login"], {}, "darwin", "", true), "/opt/homebrew/bin/kilo auth login; exit");
   assert.equal(shellLine(["C:\\x\\agent.exe", "login"], {}, "win32", "", true), "& 'C:\\x\\agent.exe' 'login'; exit $LASTEXITCODE");
   assert.equal(shellLine(["agent.exe", "login"], {}, "win32", "cmd.exe", true), "agent.exe login & exit");
+});
+
+// Security L9: cmd reads & | < > ^ and brackets as its own unless the word is quoted, and fills in %NAME% even when it is.
+test("Windows: a word cmd would read as its own is quoted, and one it can't be told safely is shown, not run", () => {
+  assert.deepEqual(windowsCommand(["C:\\Users\\R&D\\agy.cmd", "login"]), { command: `"C:\\Users\\R&D\\agy.cmd" login`, safe: true });
+  assert.equal(windowsCommand(["tool", "a|b", "c>d", "e^f", "(g)"]).command, `tool "a|b" "c>d" "e^f" "(g)"`);
+  assert.deepEqual(windowsCommand(["codex", "login"], { CODEX_HOME: "C:\\Users\\Ana & Li\\.friday\\accounts\\work" }), { command: `set "CODEX_HOME=C:\\Users\\Ana & Li\\.friday\\accounts\\work" && codex login`, safe: true });
+  assert.equal(windowsCommand(["npm", "install", "-g", "@openai/codex"]).command, "npm install -g @openai/codex", "a plain command is as it was");
+  assert.equal(windowsCommand(["tool", "%COMSPEC%"]).safe, false);
+  assert.equal(windowsCommand(["tool"], { HOME_DIR: 'C:\\a" & calc & "' }).safe, false);
+  assert.equal(windowsCommand(["tool", "a\nb"]).safe, false);
 });

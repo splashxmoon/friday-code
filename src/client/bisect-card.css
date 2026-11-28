@@ -21,3 +21,18 @@
 .bsc-btn:focus-visible, .bsc-file:focus-visible, .bsc-sha:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
 .bsc-said { color: var(--text-muted); font-size: 12px; }
 .bsc-writing { margin: 8px 0; color: var(--text-muted); font-size: 12.5px; }
+
+/* ── Measured to the shared kit (affect-pro SPEC.md §1, 2026-11-27): a card at radius 10 on a ring, its head 13/500/20 with the commit
+   as an 18px chip at radius 5, body 13/400/20, the files 12/20 mono, a 44px foot of 28px buttons at radius 6 (the pick dark). */
+.bsc-card { padding: 0 16px; border: 0; border-radius: 10px; box-shadow: var(--ia-ring, 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .05)); font: 400 13px/20px var(--font); }
+.bsc-head { min-height: 44px; box-sizing: border-box; padding: 10px 0 6px; }
+.bsc-head b, .bsc-title { font-size: 13px; font-weight: 500; line-height: 20px; }
+.bsc-sha { height: 18px; padding: 0 6px; border-radius: 5px; background: color-mix(in srgb, var(--ink) 6%, transparent); font: 500 11px/18px var(--mono, ui-monospace, monospace); }
+.bsc-by, .bsc-check, .bsc-said { font-size: 12px; line-height: 16px; }
+.bsc-acts { min-height: 44px; box-sizing: border-box; gap: 8px; margin: 12px -16px 0; padding: 8px 8px 8px 16px; }
+.bsc-btn { height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: var(--card); box-shadow: var(--ia-ring, 0 0 0 .5px var(--border-strong)); font: 500 13px/20px var(--font); transition: background-color .14s ease, transform .14s cubic-bezier(.22, 1, .36, 1); }
+.bsc-btn.on { background: var(--accent); color: var(--on-accent); box-shadow: 0 1px 2px rgb(0 0 0 / .16); }
+.bsc-btn:active { transform: scale(.98); }
+/* The buttons sit at the foot's right end, the main one last; what was asked stays at the left. */
+.bsc-acts { justify-content: flex-end; }
+.bsc-said { margin-right: auto; }

@@ -125,7 +125,7 @@
 .dd-find-hint { flex: none; font-size: 12px; color: var(--text-muted); opacity: .8; }
 .dd-recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
 .dd-recent-label { margin-right: 2px; color: var(--text-muted); font-size: 12px; }
-.dd-recent-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 220px; height: 26px; padding: 0 9px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--ink-2); font: inherit; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out); }
+.dd-recent-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 220px; height: 26px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); background: transparent; color: var(--ink-2); font: inherit; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out); }
 .dd-recent-chip:hover { background: var(--hover); color: var(--ink); }
 .dd-recent-chip > svg { flex: none; color: var(--text-muted); }
 .dd-home-empty .dd-recent { justify-content: center; }
@@ -392,3 +392,76 @@ html.glass.dark .dd-askbar { background: #232327; }
 /* The map takes the page's whole middle and right: no outline beside it. */
 .dd-repo.is-map:not(.with-code) .dd-grid { grid-template-columns: 232px minmax(0, 1fr); }
 @media (max-width: 760px) { .dd-repo.is-map .dd-grid { grid-template-columns: 1fr; } }
+
+/* ── The shared kit's measurements (affect-pro SPEC.md, 2026-11-27), laid over the page above: cards radius 10 with a ring for an
+   edge rather than a border (Project Card), the repo's name 13/500/20 over 12/400/16 meta; section labels the kit's eyebrows
+   (10/500/16 in small capitals, 0.5px apart); the page list's rows 32 tall at radius 6 with a soft fill for the one open (Prompt
+   Library's list); inputs and wells radius 8; the question box the composer's radius 16 on a ring; buttons and chips rounded
+   squares, never pills (Arun, 2026-11-14). Friday's colours and Geist stay. */
+.dd-page {
+  --dd-ring: var(--aui-shadow-card, 0 0 0 1px var(--border)), 0 1px 2px rgb(0 0 0 / .05);
+  --dd-ring-hover: 0 0 0 1px var(--border-strong), 0 2px 6px -2px rgb(0 0 0 / .12);
+}
+html.dark .dd-page { --dd-ring: var(--aui-shadow-card, 0 0 0 1px var(--border)), 0 1px 2px rgb(0 0 0 / .4); --dd-ring-hover: 0 0 0 1px var(--border-strong), 0 2px 6px -2px rgb(0 0 0 / .5); }
+.dd-home-title, .dd-top-name { font-size: 15px; font-weight: 500; line-height: 24px; letter-spacing: 0; }
+.dd-lede { font-size: 13px; line-height: 20px; color: var(--text-muted); }
+.dd-h2, .dd-side-label, .dd-toc .dd-side-label { font-size: 10px; font-weight: 500; line-height: 16px; letter-spacing: .5px; text-transform: uppercase; color: var(--faint, var(--text-muted)); }
+.dd-side-label { margin: 18px 8px 6px; }
+/* A repo: the kit's card. */
+.dd-shelf { gap: 8px; }
+.dd-card { gap: 8px; padding: 12px; border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--dd-ring); transition: box-shadow .2s ease; }
+.dd-card:hover { border-color: transparent; box-shadow: var(--dd-ring-hover); }
+.dd-card-icon { width: 28px; height: 28px; border-radius: 7px; background: var(--card); box-shadow: var(--dd-ring); }
+.dd-card-name { font-size: 13px; font-weight: 500; line-height: 20px; letter-spacing: 0; }
+.dd-card-meta { font-size: 12px; line-height: 16px; color: var(--text-muted); }
+.dd-card-foot { min-height: 32px; margin: auto -12px -12px; padding: 0 12px; border-top-color: var(--border); font-size: 12px; line-height: 16px; }
+.dd-card-state .dd-bar, .dd-bar { height: 3px; border-radius: 2px; }
+.dd-bar > span { border-radius: 2px; transition: transform .6s cubic-bezier(.32, .72, .24, 1); }
+/* Finding a repo: a 40px field on the ring, radius 10. */
+.dd-find { height: 40px; padding: 0 10px 0 12px; border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--dd-ring); font-size: 13px; transition: box-shadow .16s ease; }
+.dd-find:hover { box-shadow: var(--dd-ring-hover); }
+.dd-find[aria-expanded="true"] { box-shadow: 0 0 0 1px var(--border-focus); }
+.dd-recent-chip { height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px; }
+.dd-tool { border-radius: 6px; font-size: 13px; transition: background-color .15s ease; }
+.dd-intro { border: 0; border-radius: 12px; background: var(--card); box-shadow: var(--dd-ring); }
+.dd-intro-title { font-weight: 500; }
+.dd-intro-art { border: 0; border-radius: 8px; box-shadow: inset 0 0 0 .5px var(--border-strong); }
+/* Writing it: the steps as a card of 36px rows. */
+.dd-steps { padding: 4px; border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--dd-ring); }
+.dd-steps li { min-height: 36px; border-radius: 6px; font-size: 13px; }
+/* The page list: 32px rows at radius 6, the open one a soft fill at 500. */
+.dd-side-list[aria-label="Pages"] { gap: 1px; }
+.dd-side-item, .dd-side-page { min-height: 32px; padding: 0 8px; border-radius: 6px; font-size: 13px; line-height: 20px; transition: background-color .14s ease, color .14s ease; }
+.dd-side-item[aria-current] { background: color-mix(in srgb, var(--ink) 6%, transparent); font-weight: 500; }
+.dd-side-x { width: 24px; height: 24px; border-radius: 6px; }
+/* On this page: 12/400 rows on a hairline, the one read in ink. */
+.dd-toc button { padding: 5px 0 5px 12px; font-size: 12px; line-height: 18px; transition: color .14s ease, border-color .14s ease; }
+/* The page's own parts. */
+.dd-top { min-height: 44px; }
+.dd-files { border: 0; border-radius: 8px; box-shadow: var(--dd-ring); }
+.dd-files > summary { min-height: 36px; font-size: 13px; }
+.dd-file { height: 24px; border-radius: 6px; }
+.dd-warn { border-radius: 8px; }
+.dd-pager-btn { border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--dd-ring); transition: box-shadow .2s ease; }
+.dd-pager-btn:hover { border-color: transparent; background: var(--card); box-shadow: var(--dd-ring-hover); }
+.dd-pager-name { font-size: 13px; }
+.dd-uncovered ul { border: 0; border-radius: 10px; box-shadow: var(--dd-ring); }
+.dd-uncovered h2 { font-weight: 500; }
+.dd-refresh { height: 28px; border: 0; border-radius: 6px; background: var(--card); box-shadow: var(--dd-ring); font-size: 13px; font-weight: 500; }
+.dd-code { border: 0; border-radius: 10px; box-shadow: var(--dd-ring); }
+.dd-code-range { height: 18px; border-radius: 5px; font-size: 11px; font-weight: 500; }
+.dd-answer-del { height: 28px; border-radius: 6px; }
+/* The question box: the composer's radius 16 on a ring, its send a 28px square at radius 8. */
+.dd-askbar { border: 0; border-radius: 16px; box-shadow: 0 0 0 1px var(--border-strong), 0 8px 28px -12px rgb(0 0 0 / .18); transition: box-shadow .16s ease; }
+.dd-askbar:focus-within { box-shadow: 0 0 0 1px var(--border-focus), 0 8px 28px -12px rgb(0 0 0 / .18); }
+html.glass .dd-askbar { box-shadow: 0 0 0 1px var(--border-strong); }
+.dd-askbar-model { height: 28px; border-radius: 6px; font-size: 12px; }
+.dd-send { border-radius: 8px; transition: background-color .15s ease, transform .16s cubic-bezier(.22, 1, .36, 1); }
+.dd-send:active:not(:disabled) { transform: scale(.96); }
+/* Cards rise in as the shelf opens, on the kit's SHEET curve; still when less motion is asked. */
+@keyframes dd-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.dd-shelf > li { animation: dd-in .38s cubic-bezier(.32, .72, .24, 1) both; }
+.dd-shelf > li:nth-child(2) { animation-delay: .05s; } .dd-shelf > li:nth-child(3) { animation-delay: .1s; } .dd-shelf > li:nth-child(n+4) { animation-delay: .15s; }
+@media (prefers-reduced-motion: reduce) { .dd-shelf > li { animation: none; } }
+html.reduce-motion .dd-shelf > li { animation: none; }
+html.glass :is(.dd-card, .dd-pager-btn, .dd-steps, .dd-intro, .dd-find) { background: var(--glass-float, var(--card)); }

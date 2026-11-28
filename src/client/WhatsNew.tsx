@@ -63,7 +63,7 @@ const knew = (userId: string) => {
 };
 
 // Across the top, the tallest in the middle: the lead there, the rest either side of it, lower as they go out.
-const SPOTS = [
+export const SPOTS = [
   { size: 64, y: -14 },
   { size: 52, y: -6 },
   { size: 54, y: -4 },
@@ -71,11 +71,11 @@ const SPOTS = [
   { size: 44, y: 12 },
 ];
 // Left to right: the 4th, 2nd, 1st (the lead), 3rd, 5th.
-const ORDER = [3, 1, 0, 2, 4];
+export const ORDER = [3, 1, 0, 2, 4];
 // With no crew of five yet, Friday's own.
 const MASCOTS = ["v2:Nova-0", "v2:Ivy-7", "v2:Mira-l", "v2:Rex-e", "v2:Sol-s"];
 
-function useFaces(): string[] {
+export function useFaces(): string[] {
   const t = useTeamNow();
   const mates = (t?.teammates ?? []).slice();
   const lead = mates.findIndex((m) => m.lane === t?.lead);

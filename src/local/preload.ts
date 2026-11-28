@@ -72,6 +72,17 @@ contextBridge.exposeInMainWorld("fridayDesktop", {
       return () => void ipcRenderer.off("friday:tray-shown", h);
     },
   },
+  /** Hosts (desktop-hosts.ts, spec 15): the switcher's list, a host's window opened, and Settings › Hosts. */
+  hosts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke("friday:hosts-list"),
+    open: (id: string): void => ipcRenderer.send("friday:host-open", id),
+    settings: (): void => ipcRenderer.send("friday:hosts-settings"),
+    onChange: (fn: () => void): (() => void) => {
+      const h = () => fn();
+      ipcRenderer.on("friday:hosts-changed", h);
+      return () => void ipcRenderer.off("friday:hosts-changed", h);
+    },
+  },
   /** How many things wait on you, on the dock icon; 0 clears it. */
   setBadge: (n: number): void => ipcRenderer.send("friday:badge", n),
   /** The system's folder picker, for where a coding agent works. */

@@ -72,7 +72,7 @@ test("a task's review goes to an agent on the same computer first; one elsewhere
     at([
       [{ type: "session.created", title: "s", ownerId: "u", ownerName: "Arun" } as EventBody, undefined],
       [{ type: "engine.attached", engine: { tool: "codex", cwd: "/Users/arun/edge-3854d945", hostId: "arun", hostName: "Arun", mode: "full", branch: "friday/codex" } } as EventBody, "doer"],
-      [{ type: "engine.attached", engine: { tool: "claude", cwd: "/Users/arokia/edge", hostId: "arokia", hostName: "Arokia", mode: "full" } } as EventBody, "far"],
+      [{ type: "engine.attached", engine: { tool: "claude", cwd: "/Users/maya/shop", hostId: "maya", hostName: "Maya", mode: "full" } } as EventBody, "far"],
       [{ type: "engine.attached", engine: { tool: "claude", cwd: "/Users/arun/edge-d41d587d", hostId: "arun", hostName: "Arun", mode: "full" } } as EventBody, "near"],
       [{ type: "agent.diff", base: "abc", files: [{ path: "scripts/run.sh", status: "modified", additions: 2, deletions: 1, patch: "@@ -1 +1,2 @@\n-old\n+new\n+more" }] } as EventBody, "doer"],
     ]),
@@ -84,7 +84,7 @@ test("a task's review goes to an agent on the same computer first; one elsewhere
     [{ type: "engine.attached", engine: { tool: "codex", cwd: "/Users/arun/a", hostId: "arun", hostName: "Arun", mode: "full" } } as EventBody, "doer"],
     [{ type: "engine.attached", engine: { tool: "codex", cwd: "/Users/arun/b", hostId: "arun", hostName: "Arun", mode: "full" } } as EventBody, "twin"],
     [{ type: "engine.attached", engine: { tool: "claude", cwd: "/Users/arun/c", hostId: "arun", hostName: "Arun", mode: "full" } } as EventBody, "other"],
-    [{ type: "engine.attached", engine: { tool: "cursor", cwd: "/Users/arokia/d", hostId: "arokia", hostName: "Arokia", mode: "full" } } as EventBody, "away"],
+    [{ type: "engine.attached", engine: { tool: "cursor", cwd: "/Users/maya/d", hostId: "maya", hostName: "Maya", mode: "full" } } as EventBody, "away"],
   ]));
   assert.equal(pickReviewer(more, "doer", ["twin", "away", "other"]), "other", "on this computer, another tool than the one that did it");
   assert.equal(pickReviewer(more, "doer", ["twin", "away"]), "twin", "being able to open the folder comes before another tool");

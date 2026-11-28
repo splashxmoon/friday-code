@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Choice, SettingsGroup, SettingsRow as Row } from "@/components/dass";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { SettingsGroup, SettingsRow as Row } from "@/components/dass";
+import { Switch, Choice } from "./settings-kit.js";
+import { Select } from "@/components/affect";
 import { hostApi } from "./local.js";
 import { groupOwn } from "./own-groups.js";
 import type { OwnModelView } from "../runner/own-models.js";
@@ -84,26 +84,21 @@ export function VoiceSection({ identity }: { identity: Identity }) {
             }
           >
             <Select
-              value={picked}
+              className="voice-select"
+              aria-label="Speech model"
+              value={picked || null}
               disabled={!speech.list?.length}
-              onValueChange={(v) => {
+              placeholder={speech.list === null ? "Reading your servers…" : speech.list.length ? "Pick one" : "None found"}
+              options={[
+                ...(speech.list ?? []).map((s) => ({ value: `${s.id}|${s.model}`, label: s.label })),
+                // Picked before and not listed now (the server is down): still shown as picked.
+                ...(picked && speech.list && !speech.list.some((s) => `${s.id}|${s.model}` === picked) ? [{ value: picked, label: prefs.ownModel }] : []),
+              ]}
+              onChange={(v) => {
                 const [own, ...rest] = v.split("|");
                 setVoicePrefs({ own: own ?? "", ownModel: rest.join("|") });
               }}
-            >
-              <SelectTrigger size="sm" aria-label="Speech model" className="voice-select h-8 text-[13px]">
-                <SelectValue placeholder={speech.list === null ? "Reading your servers…" : speech.list.length ? "Pick one" : "None found"} />
-              </SelectTrigger>
-              <SelectContent>
-                {(speech.list ?? []).map((s) => (
-                  <SelectItem key={`${s.id}|${s.model}`} value={`${s.id}|${s.model}`}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-                {/* Picked before and not listed now (the server is down): still shown as picked. */}
-                {picked && speech.list && !speech.list.some((s) => `${s.id}|${s.model}` === picked) && <SelectItem value={picked}>{prefs.ownModel}</SelectItem>}
-              </SelectContent>
-            </Select>
+            />
           </Row>
         )}
         <Row label="Start talking" hint="The mic in the box always works too">
@@ -118,18 +113,7 @@ export function VoiceSection({ identity }: { identity: Identity }) {
           />
         </Row>
         <Row label="Language" hint="What you speak">
-          <Select value={prefs.language} onValueChange={(v) => setVoicePrefs({ language: v })}>
-            <SelectTrigger size="sm" aria-label="Language" className="voice-select h-8 text-[13px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {LANGUAGES.map(([code, name]) => (
-                <SelectItem key={code} value={code}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Select className="voice-select" aria-label="Language" value={prefs.language} options={LANGUAGES.map(([code, name]) => ({ value: code, label: name }))} onChange={(v) => setVoicePrefs({ language: v })} />
         </Row>
         <Row label="Send when you stop" hint={prefs.send ? "On: three words or more are sent as you stop; fewer wait in the box" : "Off: the words wait in the box for you to read first"}>
           <Switch aria-label="Send when you stop" checked={prefs.send} onCheckedChange={(v) => setVoicePrefs({ send: v })} />

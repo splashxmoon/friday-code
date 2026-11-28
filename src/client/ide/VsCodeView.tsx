@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+// The kit's button (components/affect): Code loads on its own, so it stays out of the first screen.
+import { Button as KitButton } from "@/components/affect/button";
 import { api } from "../api.js";
 import { hostApi } from "../local.js";
 import { FridayMark, Icon } from "../icons.js";
@@ -216,9 +217,9 @@ function InstallCard({ identity, status, onStatus, onRefresh }: { identity: Iden
             <>
               {error && <p className="vsc-error" role="alert">{error}</p>}
               <div className="vsc-acts">
-                <Button type="button" size="sm" onClick={() => void install()} disabled={starting}>
+                <KitButton onClick={() => void install()} disabled={starting}>
                   {starting ? "Starting…" : error ? "Try again" : size ? `Install Friday IDE · ${size}` : "Install Friday IDE"}
-                </Button>
+                </KitButton>
               </div>
               <span className="vsc-fine">{size ? `${size} download, about ${onDisk} on disk, in Friday's own folder. Remove it any time in Settings.` : `About ${onDisk} on disk, in Friday's own folder. Remove it any time in Settings.`}</span>
             </>
@@ -767,7 +768,7 @@ function VsCodeWorkspace({ identity, sid, root, agentWorking = null, status, onR
               <h2>Friday IDE didn't start</h2>
               <p className="vsc-error" role="alert">{plainTrouble(trouble)}</p>
               <div className="vsc-acts">
-                <Button type="button" size="sm" onClick={() => setAgain((n) => n + 1)}>Try again</Button>
+                <KitButton onClick={() => setAgain((n) => n + 1)}>Try again</KitButton>
               </div>
             </div>
           </div>

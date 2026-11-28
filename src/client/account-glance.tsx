@@ -34,7 +34,7 @@ function Bar({ name, row }: { name: string; row: AccountView["five"] }) {
 
 /** "Resets in 2h 05m" → "2h", for the ring's middle when a used-up 5 hours says when it's back. */
 
-export function AccountRow({ tool, v, inUse, page = false, end }: { tool: EngineTool; v: AccountView; inUse: boolean; page?: boolean; end?: ReactNode }) {
+export function AccountRow({ tool, v, inUse, page = false, end, act }: { tool: EngineTool; v: AccountView; inUse: boolean; page?: boolean; end?: ReactNode; /** Under its name and email: a press of its own (Use for new sessions), kept out of the bars' way. */ act?: ReactNode }) {
   const five = v.out ? 100 : (v.five?.used ?? null);
   return (
     <li className={`acg-acct${page ? " page" : ""}`} aria-label={`${v.label} account`}>
@@ -52,6 +52,7 @@ export function AccountRow({ tool, v, inUse, page = false, end }: { tool: Engine
         </div>
         {/* Its email as it is ("get rid of the hidden thing… and its logic for the emails too"). */}
         {v.email && <span className="acg-mail" title={v.email}>{v.email}</span>}
+        {act}
       </div>
       <div className="acg-bars">
         <Bar name="Weekly" row={v.week} />
@@ -67,8 +68,10 @@ export function AccountRow({ tool, v, inUse, page = false, end }: { tool: Engine
 
 /** The card over a rail ring, for a tool with more than one account: each of them, the one in use first marked. */
 export function AccountGlance({ tool, identity }: { tool: EngineTool; identity: Identity }) {
-  const views = accountViews(useToolLimits(identity), tool);
-  const using = inUseAccount(tool, views.map((v) => v.id));
+  const read = useToolLimits(identity);
+  const views = accountViews(read, tool);
+  const kept = read && read !== "none" && (tool === "claude" || tool === "codex") ? read.accounts?.[tool]?.find((a) => a.preferred)?.id : undefined;
+  const using = inUseAccount(tool, views.map((v) => v.id), kept);
   return (
     <div className="ag">
       <div className="acg-head">

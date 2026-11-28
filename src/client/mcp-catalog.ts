@@ -637,6 +637,8 @@ export const MCP_CATALOG: CatalogEntry[] = [
     id: "coda",
     name: "Coda",
     domain: "coda.io",
+    // coda.io has no /favicon.ico: asked for first, it failed with an error in the console before the fallback drew it.
+    logo: "https://www.google.com/s2/favicons?domain=coda.io&sz=64",
     mark: "file",
     blurb: "Read and update the docs and tables your team keeps in Coda.",
     url: "https://coda.io/apis/mcp",

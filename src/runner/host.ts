@@ -239,7 +239,7 @@ export class LinkHost {
       this.send({ kind: "result", id, ok: true, value });
       this.log(`${method} ok`);
       // Signing in is the one thing that changes what this machine offers.
-      if (method === "login" || method === "logout" || method === "gh-login" || method === "accounts.add" || method === "accounts.remove") {
+      if (method === "login" || method === "logout" || method === "gh-login" || method === "accounts.add" || method === "accounts.remove" || method === "accounts.prefer") {
         forgetLoginStatus();
         this.send({ kind: "tools", tools: await scanTools() });
       }

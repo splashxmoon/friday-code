@@ -42,11 +42,9 @@ import { applyFonts, applyTheme, FRIDAY_PALETTES, forgetTheme, keepTheme, PRESET
 import { Icon } from "./icons.js";
 import { Skeleton } from "./ui.js";
 import { DownloadIcon, ExternalLinkIcon, UploadIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { chooseLimitAlerts, limitAlertsOn } from "./limitHistory.js";
-import { Choice, dangerOutline, Note, SettingsGroup, SettingsRow as Row, StateBadge } from "@/components/dass";
+import { dangerOutline, Note, SettingsGroup, SettingsRow as Row } from "@/components/dass";
+import { Button, Input, Switch, Choice, StateBadge, Kbd } from "./settings-kit.js";
 import { sendFeedback } from "./feedback.js";
 import { healthRows } from "./health-line.js";
 import { openSettings } from "./openSettings.js";
@@ -662,7 +660,7 @@ export function ShortcutsTab() {
   return (
     <section className="flex flex-col gap-5">
       <p className="m-0 text-[13px] text-[var(--text-muted)]">
-        Press <kbd className="dass-kbd ml-0">?</kbd> anywhere outside a text box to see this list.
+        Press <Kbd>?</Kbd> anywhere outside a text box to see this list.
       </p>
       <ShortcutList />
     </section>
@@ -1061,6 +1059,12 @@ export function AboutTab({ onReplayTour, part = "updates" }: { onReplayTour?: ()
           <Button variant="outline" size="sm" onClick={() => window.dispatchEvent(new Event("friday:setup"))}>
             Set up this computer
           </Button>
+          {/* Friday's first launch again, then the welcome it hands on to (FirstLaunch.tsx; Settings › Help & feedback). */}
+          {isLocal() && (
+            <Button variant="outline" size="sm" onClick={() => window.dispatchEvent(new CustomEvent("friday:setup", { detail: "intro" }))}>
+              Play the intro
+            </Button>
+          )}
           {!isLocal() && (
             <Button variant="outline" size="sm" onClick={onReplayTour}>
               Replay the tour

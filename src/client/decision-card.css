@@ -12,7 +12,7 @@
 .dq-opt kbd { display: grid; flex: none; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: var(--card-2); color: var(--ink-3); font: 600 10.5px/1 var(--font); }
 .dq-opt:hover kbd { background: var(--ink); color: var(--bg); }
 .dq-opt-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.dq-rec { flex: none; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink-2); font-size: 11px; font-weight: 500; line-height: 17px; }
+.dq-rec { flex: none; padding: 1px 7px; border-radius: var(--r-sm, 6px); background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink-2); font-size: 11px; font-weight: 500; line-height: 17px; }
 .dq-opt.is-other { color: var(--ink-3); }
 .dq-pen { flex: none; width: 20px; height: 14px; color: var(--ink-3); }
 

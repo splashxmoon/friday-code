@@ -17,6 +17,7 @@ import { bootPage, bootPageUrl } from "./boot-page.js";
 import { CrashGuard, errorPage, errorPageUrl, goneWords } from "./crash-recovery.js";
 import { registerBrowser } from "./desktop-browser.js";
 import { registerTray } from "./desktop-tray.js";
+import { registerHosts } from "./desktop-hosts.js";
 import { registerScreen } from "../desktop-screen.js";
 import { registerTerminal, stopTerminals } from "../desktop-terminal.js";
 import { registerUpdates } from "../desktop-update.js";
@@ -24,7 +25,9 @@ import { killTools } from "../runner/spawn-cli.js";
 import { setBrowserCaches, sizeOf } from "../runner/storage.js";
 import { watchBorrowed } from "./borrowed.js";
 import { isOwnUrl } from "./own-url.js";
+import { refusesFrameNavigation } from "../frame-guard.js";
 import { startLocal, type Started } from "./start.js";
+import { KEY_HEADER, keyCookie } from "./local-key.js";
 import { setWindowOpener } from "./window-opener.js";
 import { capturePreview, recordClip } from "../desktop-capture.js";
 import { useInProcessCapture } from "../runner/screenshot.js";
@@ -256,13 +259,11 @@ function open(url: string) {
   // A page drawn from text in a frame with no origin of its own (a Work session's page an agent made, a live visual in the chat)
   // never leaves for another address: will-navigate above hears the window's own page only, and a frame's script could carry
   // what it read to anywhere in its address (Arun, 2026-10-28: "iron everything and ensure we are good… any logic errors").
+  // What Friday itself puts in such a frame still loads (frame-guard.ts): a frame sandboxed from the start has no origin either,
+  // so the first load of its frame page (page-csp.ts), or of a backdrop's walled-off file (backdrop.tsx), was refused and it
+  // stayed blank. Only those paths; anywhere else is still refused.
   win.webContents.on("will-frame-navigate", (e) => {
-    if (e.isMainFrame || /^about:/i.test(e.url)) return;
-    // A backdrop's page (backdrop.tsx): a frame sandboxed from the start has no origin either, so its first load, of Friday's own
-    // walled-off backdrop file, was refused and it stayed blank. Only that path; anywhere else is still refused.
-    if (own(e.url) && new URL(e.url).pathname.startsWith("/api/local/backdrops/f/")) return;
-    const f = e.frame;
-    if (f && (f.url === "about:srcdoc" || f.origin === "null")) e.preventDefault();
+    if (refusesFrameNavigation({ isMainFrame: e.isMainFrame, url: e.url, frameUrl: e.frame?.url, frameOrigin: e.frame?.origin, own })) e.preventDefault();
   });
   win.webContents.on("render-process-gone", (_e, d) => recoverPage(d.reason, d.exitCode));
   // A page stuck (a long synchronous render): said in the log, so a hang someone reports can be seen there.
@@ -335,6 +336,17 @@ async function exited(pid: number | undefined, ms: number): Promise<void> {
  * Friday started for this app, or the one already running on this folder (the terminal edition's) borrowed. A borrowed one is
  * watched: when it stops, this app starts its own and the window goes to it, instead of staying on an address nothing answers.
  */
+/**
+ * Friday's own window let in: this install's key (local-key.ts) as a cookie in the app's own jar, set here by the app and never
+ * put in an address, kept from the page's scripts and from any request another site starts. The Preview's jar never has it.
+ */
+async function letIn(f: Started): Promise<void> {
+  if (!f.key) return;
+  await session.defaultSession.cookies
+    .set({ url: f.url, name: keyCookie(new URL(f.url).port), value: f.key, httpOnly: true, sameSite: "strict", expirationDate: Math.round(Date.now() / 1000) + 365 * 86_400 })
+    .catch((e: Error) => console.error("[friday] couldn't let its own window in:", e.message));
+}
+
 async function begin(): Promise<boolean> {
   // Friday not starting (its folder can't be written, a disk full) left an app with no window and nothing to say why.
   try {
@@ -343,6 +355,7 @@ async function begin(): Promise<boolean> {
     // it is handed them rather than asking over a channel (runner/screenshot.ts; Arun, 2026-11-21: "not working....").
     useInProcessCapture({ capture: (shot) => capturePreview(shot), clip: (ask) => recordClip(ask) });
     friday = await startLocal({ atComputer: () => powerMonitor.getSystemIdleTime() < 120 });
+    await letIn(friday);
   } catch (e) {
     console.error("[friday] couldn't start:", e instanceof Error ? (e.stack ?? e.message) : e);
     await processLog()?.flush();
@@ -422,7 +435,7 @@ else {
     }
     if (what === "copy") {
       const asked = friday
-        ? await fetch(`${friday.url}/api/local/diagnostics`, { signal: AbortSignal.timeout(10_000) })
+        ? await fetch(`${friday.url}/api/local/diagnostics`, { signal: AbortSignal.timeout(10_000), headers: { [KEY_HEADER]: friday.key } })
             .then((r) => r.json() as Promise<{ text?: string }>)
             .catch(() => null)
         : null;
@@ -580,12 +593,15 @@ else {
       logLine("info", `The computer ${why}`);
       for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send("friday:resume");
     };
+    // Hosts (desktop-hosts.ts): their windows, and the switcher's list and presses; tried again at once when the computer wakes.
+    const hostsDesk = registerHosts({ appUrl: () => friday?.url ?? null, key: () => friday?.key ?? "", showMain: () => (friday ? (open(friday.url), win) : null), dir: here });
+    powerMonitor.on("resume", () => hostsDesk.kick());
     powerMonitor.on("resume", () => resumed("woke from sleep"));
     powerMonitor.on("unlock-screen", () => resumed("was unlocked"));
     tray.start();
     app.on("activate", () => friday && open(friday.url));
     // Updates as the product app has them (desktop-update.ts): checked in the background, downloaded, and offered once ready.
-    registerUpdates();
+    registerUpdates(fromApp);
   });
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();

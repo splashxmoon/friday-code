@@ -13,7 +13,10 @@ if (process.env.FAKE_GH_DIR) {
   if (dir) appendFileSync(path.join(dir, "calls.log"), `${args.join(" ")}\n`);
   const read = (name) => (dir && existsSync(path.join(dir, name)) ? readFileSync(path.join(dir, name), "utf8") : null);
 
-  if (args[0] === "pr" && args[1] === "view") {
+  // An automation watching a repository (automations.ts gh.watch): who's signed in, and the open issues in issues.json.
+  if (args[0] === "api" && args[1] === "user") process.stdout.write("ada\n");
+  else if (args[0] === "issue" && args[1] === "list") process.stdout.write(read("issues.json") ?? "[]");
+  else if (args[0] === "pr" && args[1] === "view") {
     const pr = read("pr.json");
     if (pr === null) {
       process.stderr.write('no pull requests found for branch "refunds"\n');

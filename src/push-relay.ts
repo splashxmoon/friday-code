@@ -177,11 +177,12 @@ export function apns(c: PushConfig, d: Device, jwt: string, payload: Record<stri
 
 /**
  * The relay on its own: one route, POST /api/push/relay (the path Friday's hosted service answers it at, so FRIDAY_PUSH_RELAY
- * reads the same either way), and GET /healthz. Behind a proxy, the sender's address is the first X-Forwarded-For when
- * TRUST_PROXY is set.
+ * reads the same either way), and GET /healthz. Behind a proxy, the sender's address is the last X-Forwarded-For entry (the proxy's
+ * own) when TRUST_PROXY is set.
  */
 export function relayServer(relay: PushRelay, o: { trustProxy?: boolean; reach?: ReachRelay } = {}): http.Server {
-  const fromOf = (req: http.IncomingMessage) => (o.trustProxy ? String(req.headers["x-forwarded-for"] ?? "").split(",")[0]!.trim() : "") || req.socket.remoteAddress || "";
+  // The last entry is the one the proxy added; the first is whatever the sender wrote, and a new one each time passed the limits.
+  const fromOf = (req: http.IncomingMessage) => (o.trustProxy ? String(req.headers["x-forwarded-for"] ?? "").split(",").pop()!.trim() : "") || req.socket.remoteAddress || "";
   const server = http.createServer((req, res) => {
     const send = (status: number, body: object) => (res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" }), res.end(JSON.stringify(body)));
     if (req.method === "GET" && req.url === "/healthz") return send(200, { ok: true, push: relay.on, ...(o.reach ? { linked: o.reach.linked } : {}) });

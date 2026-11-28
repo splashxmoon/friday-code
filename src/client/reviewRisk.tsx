@@ -11,10 +11,11 @@ import { Badge } from "@/components/ui/badge";
  * "Quick to review" heading over the changes with nothing against them, and approving several of those at once.
  */
 
+// The kit's status chip (affect SPEC §1.2): coloured text on a tint of its colour, no outline; red only when it is high.
 const LEVEL_TEXT: Record<Risk["level"], string> = {
-  high: "border-[color-mix(in_srgb,var(--red)_40%,var(--border))] text-[var(--red)]",
-  medium: "border-[var(--border-strong)] text-[var(--ink-2)]",
-  low: "border-[var(--border)] text-[var(--text-muted)]",
+  high: "bg-[color-mix(in_srgb,var(--red)_12%,transparent)] text-[var(--red)]",
+  medium: "bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] text-[var(--ink-2)]",
+  low: "bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] text-[var(--text-muted)]",
 };
 
 /** The one reason a change is where it is in the queue; the rest in its tooltip. */
@@ -23,7 +24,7 @@ export function RiskChip({ risk, className }: { risk: Risk; className?: string }
   return (
     <Badge
       variant="outline"
-      className={cn("h-5 max-w-[190px] min-w-0 shrink rounded-md px-1.5 text-[12px] font-medium", LEVEL_TEXT[risk.level], className)}
+      className={cn("h-5 max-w-[190px] min-w-0 shrink rounded-[5px] border-0 px-[7px] text-[12px] leading-4 font-medium", LEVEL_TEXT[risk.level], className)}
       title={`${risk.level === "high" ? "High risk" : risk.level === "medium" ? "Some risk" : "Low risk"}: ${why}`}
       aria-label={`${risk.level} risk: ${risk.top}`}
       data-risk={risk.level}
@@ -37,7 +38,7 @@ export function RiskChip({ risk, className }: { risk: Risk; className?: string }
 export function QuickHeader({ n, children }: { n: number; children?: ReactNode }) {
   return (
     // In sentence case, as every other heading in the app is (Arun, 2026-10-28: "TEST EVERYTHING… EVERY INTERACTION, EVERY VISUAL").
-    <div className="flex h-7 items-center gap-1.5 px-2 pt-1 text-[12px] font-medium text-[var(--text-muted)]" title="Small changes with nothing sensitive, failing or found by the reviewer">
+    <div className="flex h-7 items-center gap-1.5 px-2 pt-1 text-[12px] leading-4 font-medium text-[var(--text-muted)]" title="Small changes with nothing sensitive, failing or found by the reviewer">
       <span>Quick to review</span>
       <span className="tabular-nums">{n}</span>
       {children && <span className="ml-auto flex items-center">{children}</span>}

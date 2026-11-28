@@ -178,7 +178,7 @@ export function StateBadge({ tone, children, className, title }: { tone?: "live"
       variant="outline"
       title={title}
       className={cn(
-        "h-5 rounded-md border-[var(--border)] px-1.5 text-[12px] font-medium text-[var(--ink-2)]",
+        "h-5 rounded-[6px] border-[var(--border)] px-1.5 text-[12px] font-medium text-[var(--ink-2)]",
         tone === "live" && "border-transparent bg-[color-mix(in_srgb,var(--dass-live)_14%,transparent)] text-[var(--dass-live)]",
         tone === "needs" && "border-transparent bg-[color-mix(in_srgb,var(--dass-needs)_16%,transparent)] text-[var(--dass-needs)]",
         tone === "danger" && "border-transparent bg-[color-mix(in_srgb,var(--red)_14%,transparent)] text-[var(--red)]",

@@ -11,7 +11,8 @@ import path from "node:path";
 import { WebSocket, createWebSocketStream } from "ws";
 import { PhoneAccess, type PhoneKV } from "../src/local/phone.js";
 import { PushRelay, relayServer } from "../src/push-relay.js";
-import { CLOSE, ReachRelay } from "../src/reach-relay.js";
+import { statSync } from "node:fs";
+import { CLAIM_TTL_SEC, CLOSE, ReachRelay, fileClaims } from "../src/reach-relay.js";
 
 function memKV(): PhoneKV {
   const s = new Map<string, string>();
@@ -164,4 +165,108 @@ test("an id is held by the secret that first claimed it; tries to reach are limi
   await tryReach();
   await tryReach();
   assert.equal(await tryReach(), 429, "three a minute here");
+});
+
+// 2026-11-27 security review (M2, L8): what one address can take from the relay, and what a restart forgets.
+test("ids can't be claimed in a loop: so many an hour from one address, kept for ninety days past the last link, with room for so many computers", async (t) => {
+  const kept: { id: string; ttl: number }[] = [];
+  const touched: { id: string; ttl: number }[] = [];
+  const m = new Map<string, string>();
+  const reach = new ReachRelay({
+    limits: { claimsPerHour: 2, homes: 2 },
+    claims: { get: async (id) => m.get(id) ?? null, set: async (id, h, ttl) => void (m.set(id, h), kept.push({ id, ttl })), touch: async (id, ttl) => void touched.push({ id, ttl }) },
+  });
+  const server = relayServer(new PushRelay(null), { reach });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  t.after(() => (reach.close(), server.close()));
+  const base = `ws://127.0.0.1:${(server.address() as { port: number }).port}/api/relay`;
+  const open: WebSocket[] = [];
+  t.after(() => open.forEach((w) => w.terminate()));
+  const link = (id: string, secret = "s".repeat(40)) =>
+    new Promise<number>((resolve) => {
+      const ws = new WebSocket(`${base}/home?id=${id}`, { headers: { "x-friday-secret": secret } });
+      open.push(ws);
+      ws.on("open", () => resolve(200));
+      ws.on("unexpected-response", (_q, res) => resolve(res.statusCode ?? 0));
+      ws.on("error", () => {});
+    });
+  const [a, b, c] = ["a", "b", "c"].map((x) => x.repeat(32)) as [string, string, string];
+  assert.equal(await link(a), 200);
+  assert.equal(await link(b), 200);
+  assert.equal(await link(c), 429, "a third id from this address within the hour is refused");
+  assert.equal(m.has(c), false, "and nothing was kept for it");
+  assert.deepEqual(kept.map((k) => k.ttl), [CLAIM_TTL_SEC, CLAIM_TTL_SEC], "a claim is kept for a while, not for ever");
+  // A computer that already holds its id is not a new claim: it links again, and its claim is kept longer.
+  assert.equal(await link(a), 200);
+  assert.deepEqual(touched, [{ id: a, ttl: CLAIM_TTL_SEC }]);
+  assert.equal(await link(a, "t".repeat(40)), 401, "still only by its own secret");
+  // Room for two computers here: an id claimed earlier (by a computer now away) waits its turn rather than being a third socket.
+  m.set(c, m.get(a)!);
+  assert.equal(reach.linked, 2);
+  assert.equal(await link(c), 429);
+});
+
+test("phones still waiting for the computer count toward its streams", async (t) => {
+  const reach = new ReachRelay({ limits: { streams: 2, openMs: 5_000 } });
+  const server = relayServer(new PushRelay(null), { reach });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  t.after(() => (reach.close(), server.close()));
+  const base = `ws://127.0.0.1:${(server.address() as { port: number }).port}/api/relay`;
+  const id = "d".repeat(32);
+  // A computer that is linked and never opens the streams it is asked for.
+  const home = new WebSocket(`${base}/home?id=${id}`, { headers: { "x-friday-secret": "s".repeat(40) } });
+  let asked = 0;
+  home.on("message", () => asked++);
+  await new Promise((r) => home.on("open", r));
+  const phones: WebSocket[] = [];
+  t.after(() => [home, ...phones].forEach((w) => w.terminate()));
+  const phone = () =>
+    new Promise<number | "waiting">((resolve) => {
+      const ws = new WebSocket(`${base}/reach/${id}`);
+      phones.push(ws);
+      ws.on("open", () => setTimeout(() => resolve("waiting"), 300));
+      ws.on("close", (code) => resolve(code));
+      ws.on("error", () => {});
+    });
+  assert.equal(await phone(), "waiting");
+  assert.equal(await phone(), "waiting");
+  assert.equal(await phone(), CLOSE.busy, "a third is told the computer is busy, not held");
+  assert.equal(asked, 2, "and the computer was never asked for it");
+});
+
+test("behind a proxy the limits count against the proxy's own entry, not one the sender wrote", async (t) => {
+  const reach = new ReachRelay({ limits: { reachesPerMinute: 1 } });
+  const server = relayServer(new PushRelay(null), { reach, trustProxy: true });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  t.after(() => (reach.close(), server.close()));
+  const base = `ws://127.0.0.1:${(server.address() as { port: number }).port}/api/relay`;
+  const tryReach = (forwarded: string) =>
+    new Promise<number>((resolve) => {
+      const ws = new WebSocket(`${base}/reach/${"e".repeat(32)}`, { headers: { "x-forwarded-for": forwarded } });
+      ws.on("close", (code) => resolve(code));
+      ws.on("unexpected-response", (_q, res) => resolve(res.statusCode ?? 0));
+      ws.on("error", () => {});
+    });
+  // As a proxy that appends would send them: what the sender wrote first, then the address the proxy saw.
+  assert.equal(await tryReach("1.1.1.1, 203.0.113.9"), CLOSE.offline);
+  assert.equal(await tryReach("2.2.2.2, 203.0.113.9"), 429, "a new first entry is not a new sender");
+  assert.equal(await tryReach("2.2.2.2, 203.0.113.10"), CLOSE.offline, "another address the proxy saw is");
+});
+
+test("a relay somebody runs themselves keeps its claims across a restart, in a file only its user reads", async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), "friday-claims-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "relay", "claims.json");
+  const first = fileClaims(file);
+  await first.set("a".repeat(32), "hash-a", 3600);
+  await first.set("b".repeat(32), "hash-b", -1);
+  await new Promise((r) => setTimeout(r, 1300));
+  if (process.platform !== "win32") assert.equal(statSync(file).mode & 0o777, 0o600);
+  // The relay started again: the id is still that computer's, so nobody else's secret can claim it first.
+  const again = fileClaims(file);
+  assert.equal(await again.get("a".repeat(32)), "hash-a");
+  assert.equal(await again.get("b".repeat(32)), null, "one not linked with for its whole time is forgotten");
+  const reach = new ReachRelay({ claims: again });
+  t.after(() => reach.close());
+  assert.equal(await (reach as unknown as { owns(id: string, secret: string, from: string): Promise<boolean | "limited"> }).owns("a".repeat(32), "x".repeat(40), "1.2.3.4"), false);
 });

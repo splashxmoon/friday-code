@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeftIcon, ArrowRightIcon, BugIcon, UsersIcon, CheckIcon, ChevronDownIcon, XIcon, ClockIcon, CopyIcon, FolderOpenIcon, GitPullRequestIcon, InboxIcon, PlayIcon, PlusIcon, ScrollTextIcon, Trash2Icon, WebhookIcon, WrenchIcon, ZapIcon, type LucideIcon } from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, BotIcon, BugIcon, UsersIcon, CalendarIcon, CheckIcon, ChevronDownIcon, CircleAlertIcon, XIcon, ClockIcon, CopyIcon, FolderOpenIcon, GitPullRequestIcon, InboxIcon, MessageSquareTextIcon, PlayIcon, PlusIcon, ScrollTextIcon, ShieldIcon, Trash2Icon, WebhookIcon, WrenchIcon, ZapIcon, type LucideIcon } from "lucide-react";
 import type { AgentSchedule, AgentView } from "../agents.js";
-import type { Automation, AutomationRun } from "../automations.js";
+import type { Automation, AutomationRun, GithubEvent } from "../automations.js";
 import { ENGINE_NAMES, type EngineMode, type EngineTool } from "../types.js";
 import { api } from "./api.js";
 import { CrewWorkflowRow, useCrewWorkflows } from "./TeamWorkflows.js";
@@ -13,20 +13,22 @@ import { WorkspaceCard } from "./Workspace.js";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { holdLeave } from "./leave-guard.js";
 import { isLocal } from "./edition.js";
-import { EngineMark, FridayMark } from "./BrandMarks.js";
+import { EngineMark, FridayMark, GitHubMark } from "./BrandMarks.js";
 import { useMachine } from "./local.js";
 import type { Identity, RecentSession } from "./storage.js";
 import { TaskMark, type TaskMarkState } from "./TaskMark.js";
 import { relTime, useConfirm, type Confirmation } from "./ui.js";
+import "./auto-flow.css";
+import "./automations.css";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/dass";
-import { PageTabs, Tip } from "@/components/dass/page-bits";
+import { Tip } from "@/components/dass/page-bits";
+import { Badge, Button as KitButton, NumberInput, SegmentedControl, Spinner, TagInput } from "@/components/affect";
 
 /**
  * Automations (Arun, 2026-10-23: "get rid of the agents tab page and replace it with automations, this will for the coding
@@ -45,11 +47,13 @@ type View = Omit<Automation, "when"> & {
   mayHand?: boolean;
   runs: AutomationRun[];
   today: number;
+  /** Watching GitHub: when it last looked, and what stopped it ("" when it worked). */
+  look?: { at: number; note: string } | null;
 };
 type Draft = {
   name: string;
   on: boolean;
-  when: { kind: "schedule"; schedule: AgentSchedule } | { kind: "webhook"; url?: string } | { kind: "session"; sessionId: string; sessionTitle: string; on: "finished" | "failed" } | { kind: "manual" };
+  when: { kind: "schedule"; schedule: AgentSchedule } | { kind: "webhook"; url?: string } | { kind: "session"; sessionId: string; sessionTitle: string; on: "finished" | "failed" } | { kind: "manual" } | GithubWhen;
   who: { tool: EngineTool | "friday"; team: EngineTool[]; mode: EngineMode; model: string; agentId: string };
   folder: string;
   copy: boolean;
@@ -67,6 +71,10 @@ const TZ = (() => {
 })();
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAYS = [1, 2, 3, 4, 5];
+
+type GithubWhen = { kind: "github"; repo: string; event: GithubEvent; label: string };
+const GITHUB_WORD: Record<GithubEvent, string> = { issue: "A new issue", pr: "Someone opens a pull request", ci: "A check fails on the default branch" };
+const github = (event: GithubEvent, label = ""): GithubWhen => ({ kind: "github", repo: "", event, label });
 
 const blank = (): Draft => ({
   name: "",
@@ -132,6 +140,38 @@ const TEMPLATES: { id: string; title: string; blurb: string; icon: LucideIcon; t
  */
 const LOCAL_TEMPLATES: typeof TEMPLATES = [
   {
+    id: "gh-ci",
+    icon: WrenchIcon,
+    tone: "--st-blocked",
+    title: "Fix failing CI",
+    blurb: "When a check fails on the main branch, a coding tool finds why and opens a fix.",
+    make: () => ({ name: "Fix failing CI", when: github("ci"), does: "A check failed on the main branch. Read its log, find the cause, fix it, and run the tests again.\n\n{{event}}", then: { pr: true, notify: true } }),
+  },
+  {
+    id: "gh-review",
+    icon: GitPullRequestIcon,
+    tone: "--st-review",
+    title: "Review every PR",
+    blurb: "Each new pull request from someone else: reads it, runs the tests, drafts a review for you.",
+    make: () => ({ name: "Review every PR", when: github("pr"), who: { tool: "claude", team: [], mode: "plan", model: "", agentId: "" }, does: "Review this pull request: read the change against what it says it does, run the tests if you can, and give a short review with anything that must change before it merges.\n\n{{event}}", then: { pr: false, notify: true } }),
+  },
+  {
+    id: "gh-label",
+    icon: BugIcon,
+    tone: "--st-working",
+    title: "Fix labelled issues",
+    blurb: "Label an issue “friday” and a coding tool picks it up and opens a pull request.",
+    make: () => ({ name: "Fix labelled issues", when: github("issue", "friday"), does: "Fix this issue. Find where it lives in the code, make the change, and test it.\n\n{{event}}", then: { pr: true, notify: true } }),
+  },
+  {
+    id: "gh-triage",
+    icon: InboxIcon,
+    tone: "--st-queued",
+    title: "Triage new issues",
+    blurb: "Each new issue: finds where it lives in the code and how big the fix is. Changes nothing.",
+    make: () => ({ name: "Triage new issues", when: github("issue"), who: { tool: "claude", team: [], mode: "plan", model: "", agentId: "" }, does: "A new issue came in. Find where in the code it lives, say how big the fix is and who should look at it. Don't change anything.\n\n{{event}}", then: { pr: false, notify: true } }),
+  },
+  {
     id: "nightly-tests",
     icon: CheckIcon,
     tone: "--st-review",
@@ -148,7 +188,8 @@ const LOCAL_TEMPLATES: typeof TEMPLATES = [
     make: () => ({ name: "Monday dependencies", when: { kind: "schedule", schedule: { every: "weekly", at: "09:00", days: [1], tz: TZ } }, does: "Check the project's dependencies for updates. Update the ones that are safe (patch and minor), run the tests, and list the major updates you left alone with what each would take.", then: { pr: true, notify: true } }),
   },
 ];
-const templates = () => (isLocal() ? [...TEMPLATES.filter((t) => t.make().when?.kind !== "webhook"), ...LOCAL_TEMPLATES] : TEMPLATES);
+// The GitHub ones first on your own computer: they stand in for the webhook ones, which GitHub can't reach here.
+const templates = () => (isLocal() ? [...LOCAL_TEMPLATES, ...TEMPLATES.filter((t) => t.make().when?.kind !== "webhook")] : TEMPLATES);
 
 const runMark = (s: AutomationRun["status"]): TaskMarkState => (s === "running" || s === "starting" ? "working" : s === "done" || s === "quiet" ? "done" : s === "failed" ? "blocked" : "open");
 // A quiet run had nothing new to say, and nobody was told (automations.ts).
@@ -274,6 +315,7 @@ export function AutomationsPage({
         id={editing.id}
         initial={editing.draft}
         runs={list?.find((a) => a.id === editing.id)?.runs ?? []}
+        look={list?.find((a) => a.id === editing.id)?.look ?? null}
         mine={editing.id ? (list?.find((a) => a.id === editing.id)?.mine ?? true) : true}
         onOpen={onOpen}
         onSavedAgents={onSavedAgents}
@@ -522,7 +564,9 @@ function WhenChip({ when }: { when: Draft["when"] | View["when"] }) {
         ? [WebhookIcon, "--st-working", "Webhook"]
         : when.kind === "session"
           ? [ZapIcon, "--st-review", when.on === "failed" ? "When an agent fails" : "When an agent finishes"]
-          : [PlayIcon, "--text-muted", "Run now"];
+          : when.kind === "github"
+            ? [when.event === "pr" ? GitPullRequestIcon : when.event === "ci" ? WrenchIcon : BugIcon, "--st-working", when.event === "pr" ? "New PR" : when.event === "ci" ? "Check fails" : when.label ? `Issue “${when.label}”` : "New issue"]
+            : [PlayIcon, "--text-muted", "Run now"];
   return (
     <span className="auto-when" style={{ "--tone": `var(${tone})` } as React.CSSProperties}>
       <Icon className="size-3" />
@@ -564,6 +608,13 @@ function Intro({ onStart }: { onStart: () => void }) {
 
 function WhoMark({ tool, size = 15 }: { tool: EngineTool | "friday"; size?: number }) {
   return tool === "friday" ? <FridayMark size={size} /> : <EngineMark tool={tool} size={size} />;
+}
+
+/** What starts a run, as an icon: the trigger choice's and the When step's node (the polish mock's calendar, mark, hook and bot). */
+function whenIcon(kind: Draft["when"]["kind"], size: number) {
+  if (kind === "github") return <GitHubMark size={size} />;
+  const Icon = kind === "schedule" ? CalendarIcon : kind === "webhook" ? WebhookIcon : kind === "session" ? BotIcon : PlayIcon;
+  return <Icon style={{ width: size, height: size }} />;
 }
 
 /** Why an automation's owner is no longer in the workspace, after their name. */
@@ -666,15 +717,88 @@ function Row({
 }
 
 
-/** One line of the sentence: what it is on the left, its controls on the right. */
-function Part({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
+/**
+ * One step of the sentence, read top down: its icon in a small rounded square on the line that joins the steps, then a card with
+ * what it is and its controls (friday-polish.html #automation). Cards, not full-width rows (Arun, 2026-11-16: "design this into a
+ * card instead of being a full width row").
+ */
+function Step({ icon, label, hint, state, children }: { icon: ReactNode; label: string; hint?: ReactNode; /** A test run's progress at this step: going, done, or where it stopped. */ state?: StepState; children: ReactNode }) {
   return (
-    <div className="grid gap-2 border-b border-[var(--border)] px-4 py-4 last:border-b-0 sm:grid-cols-[120px_1fr] sm:gap-4">
-      <div>
-        <div className="text-[13px] font-medium">{label}</div>
-        {hint && <div className="mt-0.5 text-[12px] leading-snug text-[var(--text-muted)]">{hint}</div>}
+    <div className="af-step" data-state={state}>
+      <span className="af-node" aria-hidden>
+        {icon}
+      </span>
+      <div className="af-card">
+        <div className="af-hd">
+          <b>{label}</b>
+          {hint && <span>{hint}</span>}
+        </div>
+        {children}
       </div>
-      <div className="flex min-w-0 flex-col gap-2.5">{children}</div>
+    </div>
+  );
+}
+
+
+type StepState = "going" | "lit" | "fail";
+type StepKey = "when" | "who" | "where" | "does" | "then" | "limits";
+/**
+ * A test run's progress down the steps, from the run itself (app.ts runAutomation): asked, the trigger fired; started, its run
+ * exists; running, the tool is at work in its folder on what it was told; done, it got to the end, within its limits. Failed or
+ * skipped, the step it stopped at is red. Nothing is lit that the run hasn't said.
+ */
+function stepsFor(r: AutomationRun | undefined, asking: boolean): Partial<Record<StepKey, StepState>> {
+  if (!r) return asking ? { when: "going" } : {};
+  const all = { when: "lit", who: "lit", where: "lit", does: "lit", then: "lit", limits: "lit" } as const;
+  switch (r.status) {
+    case "starting":
+    case "waiting":
+      return { when: "lit", who: "going" };
+    case "running":
+      return { when: "lit", who: "lit", where: "lit", does: "going" };
+    case "done":
+    case "quiet":
+      return all;
+    case "failed":
+      return r.sid ? { when: "lit", who: "lit", where: "lit", does: "fail" } : { when: "lit", who: "fail" };
+    case "skipped":
+      return /its limit/.test(r.note ?? "") ? { when: "lit", limits: "fail" } : { when: "lit", who: "fail" };
+  }
+}
+
+/** The command GitHub's look names to fix it, from the server's words ("… (gh auth login)."), and what to say beside it. */
+function ghFix(note: string): { text: string; command: string | null } {
+  const m = /^(.*?)\s*\((gh [^)]+)\)\.?$/.exec(note);
+  if (!m) return { text: note, command: null };
+  return { text: m[2] === "gh auth login" ? "gh isn't signed in on this computer." : `${m[1]}.`, command: m[2]! };
+}
+/** What only new ones start, said under the GitHub line. */
+const GITHUB_NEW: Record<GithubEvent, string> = { issue: "issues", pr: "pull requests", ci: "failed checks" };
+
+/**
+ * The editor's prompt with {{event}} drawn as a token: a highlight layer under a see-through textarea, the same font, size and
+ * wrapping, so the text stays one plain string you type in (a textarea can't hold a chip), and the token sits where the words are.
+ */
+function PromptField({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  const layer = useRef<HTMLDivElement>(null);
+  return (
+    <div className="af-prompt">
+      <div ref={layer} className="af-prompt-layer" aria-hidden>
+        {value.split(/(\{\{event\}\})/).map((part, i) => (part === "{{event}}" ? <span key={i} className="af-tok">{part}</span> : part))}
+        {/* A last empty line keeps its height, as the textarea's does. */}
+        {"\u200b"}
+      </div>
+      <textarea
+        className="af-prompt-input"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onScroll={(e) => layer.current && (layer.current.scrollTop = e.currentTarget.scrollTop)}
+        placeholder={placeholder}
+        aria-label="What it does"
+        rows={4}
+        maxLength={8000}
+        spellCheck={false}
+      />
     </div>
   );
 }
@@ -706,11 +830,11 @@ function WherePick({ identity, tool, folder, onFolder }: { identity: Identity; t
   const [open, setOpen] = useState(false);
   const name = folder.split(/[\\/]/).filter(Boolean).at(-1) ?? folder;
   return (
-    <span className="auto-where">
+    <span className={cn("auto-where", !folder && "new")}>
       <button ref={btn} type="button" className="auto-where-btn" aria-expanded={open} aria-label={folder ? `Works in ${name}, choose another folder` : "New folder each run, choose a folder"} title={folder || undefined} onClick={() => setOpen((o) => !o)}>
         <FolderOpenIcon className="size-[15px] shrink-0 text-[var(--ink-3)]" />
-        <span className="auto-where-name">{folder ? name : "New folder"}</span>
-        <span className="auto-where-sub">{folder ? folder : "a new project folder each run"}</span>
+        <span className="auto-where-name">{folder ? name : "New folder each run"}</span>
+        {folder && <span className="auto-where-sub">{folder}</span>}
         <ChevronDownIcon className="size-3.5 shrink-0 text-[var(--ink-3)]" />
       </button>
       {folder && (
@@ -745,6 +869,7 @@ function Editor({
   id,
   initial,
   runs,
+  look,
   mine,
   onOpen,
   onSavedAgents,
@@ -759,6 +884,7 @@ function Editor({
   id: string | null;
   initial: Draft;
   runs: AutomationRun[];
+  look: View["look"];
   mine: boolean;
   ask: (c: Confirmation) => void;
   onOpen: (sid: string, invite: string) => void;
@@ -771,17 +897,52 @@ function Editor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [copiedCmd, setCopiedCmd] = useState(false);
+  const [checking, setChecking] = useState(false);
+  // A test run: Run now for this automation (POST /run), lit down the steps as its run goes.
+  const [test, setTest] = useState<{ id: string | null } | null>(null);
   const machine = useMachine(identity).state;
   useEffect(() => setD(initial), [initial]);
   // Every run it has kept, not only the latest few the list has, and kept current while a run goes.
   const [history, setHistory] = useState(runs);
+  // Watching GitHub: how its last look went, kept current with its runs (a look every two minutes).
+  const [seen, setSeen] = useState(look);
+  useEffect(() => setSeen(look), [look]);
   useEffect(() => {
     if (!id) return;
-    const read = () => void api<{ runs: AutomationRun[] }>(identity, `/api/automations/${id}/runs`).then((r) => setHistory(r.runs), () => {});
+    const read = () => void api<{ runs: AutomationRun[]; look?: View["look"] }>(identity, `/api/automations/${id}/runs`).then((r) => (setHistory(r.runs), r.look !== undefined && setSeen(r.look)), () => {});
     read();
-    const t = setInterval(() => document.visibilityState === "visible" && read(), 10_000);
+    // Every second and a half while a test run goes, so its steps light as it moves; every ten otherwise.
+    const t = setInterval(() => document.visibilityState === "visible" && read(), test ? 1500 : 10_000);
     return () => clearInterval(t);
-  }, [id, identity]);
+  }, [id, identity, test]);
+  const testRun = test?.id ? history.find((r) => r.id === test.id) : undefined;
+  const testGoing = !!test && (!testRun || ["starting", "running", "waiting"].includes(testRun.status));
+  const lit = test ? stepsFor(testRun, !test.id) : {};
+  const runTest = async () => {
+    if (!id) return;
+    setTest({ id: null });
+    try {
+      const { run } = await api<{ run: AutomationRun }>(identity, `/api/automations/${id}/run`, { method: "POST", body: "{}" });
+      setHistory((h) => [run, ...h.filter((x) => x.id !== run.id)]);
+      setTest({ id: run.id });
+    } catch (e) {
+      setTest(null);
+      setError((e as Error).message);
+    }
+  };
+  // Check again: the look GitHub's loop makes every two minutes, now (app.ts POST /look), so a fix shows at once.
+  const checkAgain = async () => {
+    if (!id) return;
+    setChecking(true);
+    try {
+      setSeen((await api<{ look: View["look"] }>(identity, `/api/automations/${id}/look`, { method: "POST", body: "{}" })).look);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setChecking(false);
+    }
+  };
   const set = (change: Partial<Draft>) => setD((x) => ({ ...x, ...change }));
   const who = (change: Partial<Draft["who"]>) => setD((x) => ({ ...x, who: { ...x.who, ...change } }));
 
@@ -808,6 +969,12 @@ function Editor({
     if (sched?.every === "weekly" && !sched.days.length) {
       setError("Pick the days it runs on, or choose Every day.");
       document.querySelector<HTMLElement>('.automations-page [role="group"][aria-label="Days"] button')?.focus();
+      return;
+    }
+    // Watching GitHub with no repository, or one that isn't owner/name (a link is fine: the server takes it apart).
+    if (d.when.kind === "github" && !/^(https:\/\/github\.com\/)?[\w.-]+\/[\w.-]+?(\.git)?\/?$/.test(d.when.repo.trim())) {
+      setError("Say which GitHub repository it watches, as owner/name (or paste its link).");
+      document.querySelector<HTMLElement>('.automations-page input[aria-label="Which GitHub repository"]')?.focus();
       return;
     }
     setSaving(true);
@@ -842,19 +1009,40 @@ function Editor({
     <div className="page conns-page automations-page px-6! max-[640px]:px-4!">
       <div className="page-inner"><div className="mx-auto w-full max-w-[820px]">
         <div className="mb-4 flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="h-8 px-2 text-[13px]" onClick={() => (unsaved ? askLeave(onClose) : onClose())}>
-            <ArrowLeftIcon /> Automations
-          </Button>
+          <KitButton variant="ghost" size="sm" icon={<ArrowLeftIcon />} onClick={() => (unsaved ? askLeave(onClose) : onClose())}>
+            Automations
+          </KitButton>
           <div className="ml-auto flex items-center gap-2">
             {id && mine && (
-              <Button variant="ghost" size="sm" className="h-8 px-2 text-[13px] text-[var(--text-muted)]" onClick={() => onDelete(d.name)}>
-                <Trash2Icon /> Delete
-              </Button>
+              <KitButton variant="ghost" size="sm" icon={<Trash2Icon />} onClick={() => onDelete(d.name)}>
+                Delete
+              </KitButton>
             )}
-            {mine && (
-              <Button size="sm" className="h-8 px-3 text-[13px]" disabled={saving || unchanged} title={unchanged ? "Nothing changed since it was saved" : undefined} onClick={() => void save()}>
-                {saving ? "Saving…" : id ? (unchanged ? "Saved" : "Save") : "Create automation"}
-              </Button>
+            {/* Saved is a state, so a chip; Save is the button only when there is something to save, and it ends the row. */}
+            {mine && unchanged && !saving && (
+              <Badge tone="success" dot size="md">
+                Saved
+              </Badge>
+            )}
+            {/* Test run: the list's Run now, from here, on what's saved, lighting the steps as it goes. */}
+            {id && mine && (
+              <KitButton
+                variant="secondary"
+                size="sm"
+                disabled={unsaved}
+                aria-busy={testGoing || undefined}
+                title={unsaved ? "Save first: a test run runs what's saved" : undefined}
+                // Running reads in full ink with its spinner, as the mock has it; the kit's loading look greys the label out.
+                icon={testGoing ? <Spinner size={13} /> : testRun?.status === "done" || testRun?.status === "quiet" ? <CheckIcon /> : testRun?.status === "failed" || testRun?.status === "skipped" ? <CircleAlertIcon /> : <PlayIcon />}
+                onClick={() => !testGoing && void runTest()}
+              >
+                {!test ? "Test run" : testGoing ? (testRun?.status === "waiting" ? "Waiting for your computer" : "Running") : `${RUN_WORD[testRun!.status]} · run again`}
+              </KitButton>
+            )}
+            {mine && !unchanged && (
+              <KitButton variant="primary" size="sm" loading={saving} onClick={() => void save()}>
+                {saving ? "Saving…" : id ? "Save" : "Create automation"}
+              </KitButton>
             )}
           </div>
         </div>
@@ -884,10 +1072,13 @@ function Editor({
           </p>
         )}
 
-        <fieldset disabled={!mine} className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
-          <Part label="When" hint="What starts a run.">
-            <PageTabs<Draft["when"]["kind"]>
-              label="When"
+        <fieldset disabled={!mine} className="af-flow">
+          <Step icon={whenIcon(d.when.kind, 14)} label="When" hint="what starts a run" state={lit.when}>
+            {/* The kit's segmented control, each choice with its icon, the same one the step's node takes once chosen. */}
+            <SegmentedControl<Draft["when"]["kind"]>
+              aria-label="When"
+              variant="tray"
+              size="sm"
               value={d.when.kind}
               onChange={(k) =>
                 set({
@@ -903,15 +1094,20 @@ function Editor({
                               const r = recents.find((x) => !history.some((h) => h.sid === x.sid));
                               return { kind: "session" as const, sessionId: r?.sid ?? "", sessionTitle: r?.alias || r?.title || "", on: "finished" as const };
                             })()
-                          : { kind: "manual" },
+                          : k === "github"
+                            ? github("issue")
+                            : { kind: "manual" },
                 })
               }
-              options={[
-                { value: "schedule", label: "On a schedule" },
-                { value: "webhook", label: "A webhook" },
-                { value: "session", label: "An agent finishes" },
-                { value: "manual", label: "Only Run now" },
-              ]}
+              options={(
+                [
+                  ["schedule", "Schedule"],
+                  ["github", "GitHub"],
+                  ["webhook", "Webhook"],
+                  ["session", "Agent finishes"],
+                  ["manual", "Only Run now"],
+                ] as const
+              ).map(([value, label]) => ({ value, label, icon: whenIcon(value, 14) }))}
             />
             {sched && (
               <div className="flex flex-wrap items-center gap-2">
@@ -962,6 +1158,79 @@ function Editor({
               ) : (
                 <span className="text-[13px] text-[var(--text-muted)]">Its address shows here once it's created.</span>
               ))}
+            {d.when.kind === "github" && (
+              <div className="flex flex-col gap-2">
+                {/* One line, as it reads: a new issue in acme/site labelled friday. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select value={d.when.event} onValueChange={(v) => d.when.kind === "github" && set({ when: { ...d.when, event: v as GithubEvent, label: v === "issue" ? d.when.label : "" } })}>
+                    <SelectTrigger size="sm" aria-label="What happens" className="h-8 w-auto min-w-[150px] text-[13px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(GITHUB_WORD) as GithubEvent[]).map((k) => (
+                        <SelectItem key={k} value={k}>
+                          {GITHUB_WORD[k]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-[13px] text-[var(--text-muted)]">in</span>
+                  <span className="af-repo">
+                    <GitHubMark size={13} />
+                    <Input
+                      value={d.when.repo}
+                      onChange={(e) => d.when.kind === "github" && set({ when: { ...d.when, repo: e.target.value.trim() } })}
+                      placeholder="owner/repository"
+                      aria-label="Which GitHub repository"
+                      spellCheck={false}
+                      className="h-8 w-[200px] pl-7 text-[13px] md:text-[13px]"
+                    />
+                  </span>
+                  {d.when.event === "issue" && (
+                    <>
+                      <span className="text-[13px] text-[var(--text-muted)]">labelled</span>
+                      {/* The label as a tag you take off (the kit's tag input); one label, so a new one takes the old one's place. */}
+                      <TagInput
+                        className="af-label"
+                        aria-label="Only issues with this label"
+                        placeholder="any label"
+                        value={d.when.label ? [d.when.label] : []}
+                        onChange={(tags) => d.when.kind === "github" && set({ when: { ...d.when, label: tags.at(-1) ?? "" } })}
+                      />
+                    </>
+                  )}
+                </div>
+                {/* What went wrong on the last look is a fix to make, in amber, with the command to copy when GitHub gave one, and
+                    Check again to look now rather than in two minutes; not a red line. */}
+                {seen?.note &&
+                  ((fix) => (
+                    <div className="af-call" role="status">
+                      <CircleAlertIcon aria-hidden />
+                      <span>{fix.text}</span>
+                      {fix.command && (
+                        <code>
+                          {fix.command}
+                          <button
+                            type="button"
+                            aria-label="Copy the command"
+                            onClick={() => void navigator.clipboard.writeText(fix.command!).then(() => (setCopiedCmd(true), setTimeout(() => setCopiedCmd(false), 1500)))}
+                          >
+                            {copiedCmd ? <CheckIcon /> : <CopyIcon />}
+                          </button>
+                        </code>
+                      )}
+                      {id && (
+                        <KitButton variant="secondary" size="sm" className="af-call-again" loading={checking} onClick={() => void checkAgain()}>
+                          Check again
+                        </KitButton>
+                      )}
+                    </div>
+                  ))(ghFix(seen.note))}
+                <span className="text-[12px] text-[var(--text-muted)]">
+                  {seen && !seen.note ? `Looked ${relTime(seen.at)}. ` : ""}Checks every 2 minutes while Friday runs. Only new {GITHUB_NEW[d.when.event]} start a run.
+                </span>
+              </div>
+            )}
             {d.when.kind === "session" && (
               <div className="flex flex-wrap items-center gap-2">
                 <Select value={d.when.on} onValueChange={(v) => d.when.kind === "session" && set({ when: { ...d.when, on: v as "finished" | "failed" } })}>
@@ -995,9 +1264,9 @@ function Editor({
                 </Select>
               </div>
             )}
-          </Part>
+          </Step>
 
-          <Part label="Who" hint="Which coding tool does it, and with whom.">
+          <Step icon={<WhoMark tool={d.who.tool} size={14} />} label="Who" hint="which tool, and with what access" state={lit.who}>
             <div className="flex flex-wrap items-center gap-2">
               <Select value={d.who.tool} onValueChange={(v) => who({ tool: v as Draft["who"]["tool"], team: d.who.team.filter((t) => t !== v) })}>
                 <SelectTrigger size="sm" aria-label="Coding tool" className="h-8 min-w-[170px] text-[13px]">
@@ -1021,6 +1290,7 @@ function Editor({
               {!friday && (
                 <Select value={d.who.mode} onValueChange={(v) => who({ mode: v as EngineMode })}>
                   <SelectTrigger size="sm" aria-label="What it may do" className="h-8 min-w-[150px] text-[13px]">
+                    <ShieldIcon className="size-3.5 text-[var(--ink-3)]" />
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1069,10 +1339,10 @@ function Editor({
                 </div>
               </div>
             )}
-          </Part>
+          </Step>
 
           {!friday && (
-            <Part label="Where" hint="The folder on your computer it works in.">
+            <Step icon={<FolderOpenIcon />} label="Where" hint="the folder it works in" state={lit.where}>
               <WherePick identity={identity} tool={d.who.tool as EngineTool} folder={d.folder} onFolder={(folder) => set({ folder })} />
               {d.folder && (
                 <label className="flex items-center gap-2 text-[13px]">
@@ -1081,14 +1351,14 @@ function Editor({
                 </label>
               )}
               {!d.folder && d.who.team.length > 0 && <span className="text-[12px] text-[var(--text-muted)]">Helpers need a folder to share: without one, the lead works alone.</span>}
-            </Part>
+            </Step>
           )}
 
-          <Part label="Does" hint={<>What it's told. <code className="text-[12px]">{"{{event}}"}</code> is what started the run.</>}>
-            <Textarea value={d.does} onChange={(e) => set({ does: e.target.value })} placeholder="Fix whatever made the build fail, and run the tests again." aria-label="What it does" rows={5} maxLength={8000} className="text-[13px] md:text-[13px]" />
-          </Part>
+          <Step icon={<MessageSquareTextIcon />} label="Does" hint="what it's told" state={lit.does}>
+            <PromptField value={d.does} onChange={(does) => set({ does })} placeholder="Fix whatever made the build fail, and run the tests again." />
+          </Step>
 
-          <Part label="Then" hint="When it's done.">
+          <Step icon={<GitPullRequestIcon />} label="Then" hint="when it's done" state={lit.then}>
             {!friday && (
               <label className="flex items-center gap-2 text-[13px]">
                 <Switch checked={d.then.pr} onCheckedChange={(pr) => set({ then: { ...d.then, pr } })} aria-label="Open a pull request" />
@@ -1102,37 +1372,38 @@ function Editor({
                 Tell me when a run ends, where my notifications go
               </label>
             )}
-          </Part>
+          </Step>
 
-          <Part label="Limits" hint="So it can't run away.">
+          <Step icon={<ShieldIcon />} label="Limits" hint="so it can't run away" state={lit.limits}>
             <div className="flex flex-wrap items-center gap-2 text-[13px]">
               At most
-              <Input
-                type="number"
+              {/* The kit's number input: a step either side, typing still works, kept between 1 and 200. */}
+              <NumberInput
+                className="af-perday"
+                size="sm"
                 min={1}
                 max={200}
                 value={d.limits.perDay}
-                onChange={(e) => set({ limits: { ...d.limits, perDay: Math.max(1, Math.min(200, Number(e.target.value) || 1)) } })}
+                onValueChange={(n) => set({ limits: { ...d.limits, perDay: Math.max(1, Math.min(200, n ?? 1)) } })}
                 aria-label="Runs a day"
-                className="h-8 w-[72px] text-[13px] md:text-[13px]"
               />
               runs a day
             </div>
             {!friday && (
               <div className="flex flex-wrap items-center gap-2 text-[13px]">
-                If my computer isn't on
+                If this computer is off
                 <Select value={d.limits.offline} onValueChange={(v) => set({ limits: { ...d.limits, offline: v as "wait" | "skip" } })}>
-                  <SelectTrigger size="sm" aria-label="If my computer isn't on" className="h-8 min-w-[200px] text-[13px]">
+                  <SelectTrigger size="sm" aria-label="If this computer is off" className="h-8 w-auto min-w-[170px] text-[13px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="wait">wait for it, up to 12 hours</SelectItem>
-                    <SelectItem value="skip">skip that run</SelectItem>
+                    <SelectItem value="wait">Wait up to 12 hours</SelectItem>
+                    <SelectItem value="skip">Skip that run</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             )}
-          </Part>
+          </Step>
         </fieldset>
 
         {id && (

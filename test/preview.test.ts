@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
@@ -55,6 +55,15 @@ test("a folder of HTML previews with no install, and serves its files", async ()
   assert.equal(climbed.status, 403, "a path that climbs out of the folder is refused");
   const dotted = await fetchPreview(info.port, "/../../../etc/hosts");
   assert.doesNotMatch(Buffer.from(dotted.body, "base64").toString(), /localhost/, "and never serves a file from outside it");
+
+  // Security L6: a link in the folder to a file outside it (a repository can ship one) is not a way out either.
+  await writeFile(path.join(dir, "outside.txt"), "not the preview's");
+  await symlink(path.join(dir, "outside.txt"), path.join(site, "notes.txt"));
+  await symlink(path.join(site, "app.css"), path.join(site, "alias.css"));
+  const linked = await fetchPreview(info.port, "/notes.txt");
+  assert.equal(linked.status, 403, "a link out of the folder is refused");
+  assert.doesNotMatch(Buffer.from(linked.body, "base64").toString(), /not the preview's/);
+  assert.equal((await fetchPreview(info.port, "/alias.css")).status, 200, "a link inside it is served");
 
   // Starting again is the same preview, not a second one.
   assert.equal((await startPreview(site)).port, info.port);

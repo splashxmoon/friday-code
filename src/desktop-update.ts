@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, powerMonitor } from "electron";
 import pkg from "electron-updater";
 import { stallGuard } from "./update-stall.js";
+import { cannotSelfUpdate } from "./update-kind.js";
 
 /**
  * Keeping the app up to date: the product app (desktop/main.ts) and the open-source one (src/local/desktop.ts) alike, each from
@@ -118,6 +119,9 @@ export function install(): void {
 /** FRIDAY_NO_UPDATE_CHECK=1: the app never asks GitHub for a newer version, nor downloads one. */
 let OFF = process.env.FRIDAY_NO_UPDATE_CHECK === "1";
 let OFF_SAYS = "Update checks are off (FRIDAY_NO_UPDATE_CHECK=1).";
+// Installed by a package manager rather than as an AppImage (update-kind.ts): the package manager updates it.
+const PACKAGED_BY = cannotSelfUpdate(process.platform, process.env);
+if (PACKAGED_BY && !OFF) [OFF, OFF_SAYS] = [true, PACKAGED_BY];
 
 /** Ask the feed now. Safe to call from a button. */
 export function check(): UpdateState {
@@ -165,10 +169,12 @@ function plainly(message: string): string {
   return message.split("\n")[0]!.slice(0, 200);
 }
 
-export function registerUpdates(): void {
-  ipcMain.handle("friday:update-state", () => state);
-  ipcMain.handle("friday:update-check", () => check());
-  ipcMain.handle("friday:update-install", () => {
+/** `fromApp`: whether a request comes from Friday's own page: only it may read the update's state, look for one or restart into it. */
+export function registerUpdates(fromApp: (e: Electron.IpcMainInvokeEvent) => boolean = () => true): void {
+  ipcMain.handle("friday:update-state", (e) => (fromApp(e) ? state : null));
+  ipcMain.handle("friday:update-check", (e) => (fromApp(e) ? check() : state));
+  ipcMain.handle("friday:update-install", (e) => {
+    if (!fromApp(e)) return false;
     install();
     return true;
   });

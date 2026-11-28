@@ -7,7 +7,7 @@ import { codexRoots } from "./imports.js";
 import { ghBin } from "./workspace.js";
 import { readOtherTools, stillReading, type ToolAllowance } from "./tool-limits.js";
 import type { EngineTool } from "../types.js";
-import { ACCOUNT_TOOLS, accountDir, accountEnv, DEFAULT_ACCOUNT, isOut, listAccounts, toolHome, type AccountTool } from "./accounts.js";
+import { ACCOUNT_TOOLS, accountDir, accountEnv, DEFAULT_ACCOUNT, isOut, listAccounts, preferredAccount, toolHome, type AccountTool } from "./accounts.js";
 
 /**
  * What each coding CLI says about its own limits, read on this machine.
@@ -133,6 +133,8 @@ export interface AccountUsage {
   /** When it comes back, in ms, when its message said. */
   outUntil?: number | null;
   why?: string;
+  /** The one new sessions start on (accounts.ts preferredAccount). */
+  preferred?: true;
 }
 
 /** Friday's data on this computer (FRIDAY_STATE_DIR: the tests' own, so a stand-in's limits never land in a real one). */
@@ -1040,7 +1042,7 @@ const claudeWindow = (w: ClaudeLimit): LimitWindow => ({
 });
 
 /** Who a sign-in is, where the tool keeps that beside it: Claude Code's .claude.json, the email in Codex's ID token. */
-async function accountEmail(tool: AccountTool, dir: string | null): Promise<string | null> {
+export async function accountEmail(tool: AccountTool, dir: string | null): Promise<string | null> {
   try {
     if (tool === "claude") {
       const file = dir ? path.join(dir, ".claude.json") : process.env.CLAUDE_CONFIG_DIR ? path.join(process.env.CLAUDE_CONFIG_DIR, ".claude.json") : path.join(homedir(), ".claude.json");
@@ -1065,10 +1067,11 @@ export async function readAccounts(now = Date.now(), opts: { askClaude?: boolean
     ACCOUNT_TOOLS.map(async (tool) => {
       const all = await listAccounts(tool);
       if (all.length < 2) return;
+      const pick = await preferredAccount(tool);
       out[tool] = await Promise.all(
         all.map(async (a): Promise<AccountUsage> => {
           const dir = a.id === DEFAULT_ACCOUNT ? null : accountDir(tool, a.id);
-          const base = { id: a.id, label: a.label, email: await accountEmail(tool, dir), ...(isOut(a, now) ? { out: true, outUntil: a.outUntil ?? null } : {}) };
+          const base = { id: a.id, label: a.label, email: await accountEmail(tool, dir), ...(isOut(a, now) ? { out: true, outUntil: a.outUntil ?? null } : {}), ...(a.id === pick ? { preferred: true as const } : {}) };
           if (tool === "claude") {
             const id = a.id === DEFAULT_ACCOUNT ? undefined : a.id;
             if (opts.askClaude !== false) await askClaudeUsage(id);

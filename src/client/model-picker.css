@@ -1,0 +1,46 @@
+/* The tool and model picker (AgentModelPicker.tsx) in the affectUI model picker's measurements (scratchpad SPEC model-picker,
+   command-menu): a popover at radius 10 with the kit's float shadow, opening with a short fade and a soft scale from its corner;
+   section labels 10/500 uppercase; rows 32 tall at radius 6 whose tint steps crisply under the pointer; the effort levels a 22px
+   segmented row; the plan and routing under hairlines. One row a model with one plain word, as the approved compact picker has it
+   (Arun, 2026-11-18: "a bit more comapct"), not the reference's two-line rows. Named under html to outweigh style.css. */
+html .amp.mpc {
+  --mp-fill: var(--aui-subtle, color-mix(in srgb, var(--ink) 5%, transparent));
+  --mp-t2: color-mix(in srgb, var(--ink) 62%, transparent);
+  --mp-t3: color-mix(in srgb, var(--ink) 48%, transparent);
+  border: 0; border-radius: 10px; box-shadow: var(--aui-shadow-popover, var(--shadow-pop));
+  font-variant-numeric: tabular-nums; transform-origin: top left; animation: mp-open .32s cubic-bezier(.32, .72, .24, 1) both;
+}
+html .amp.mpc .mpc-search { flex: none; height: 40px; box-sizing: border-box; gap: 10px; padding: 0 12px; border-bottom-color: var(--border); color: var(--mp-t3); }
+html .amp.mpc .mpc-search input { font: 400 13px/20px var(--font); }
+html .amp.mpc .mpc-search input::placeholder { color: var(--mp-t3); }
+html .amp.mpc .mpc-rail { width: 40px; gap: 2px; padding: 4px 0; }
+html .amp.mpc .mpc-tab { width: 28px; height: 28px; border-radius: 6px; transition: background-color .14s ease, color .14s ease; }
+html .amp.mpc .mpc-tab:hover { background: var(--mp-fill); }
+html .amp.mpc .mpc-tab[data-on] { background: var(--card); box-shadow: var(--aui-shadow-card, 0 0 0 1px var(--border)); }
+html .amp.mpc .mpc-tab[data-on]::before { display: none; }
+html .amp.mpc .mpc-list { padding: 0 4px 4px; }
+html .amp.mpc :is(.mpc-head, .amp-group-label) { align-items: center; min-height: 28px; box-sizing: border-box; padding: 10px 8px 4px; color: var(--mp-t3); font: 500 10px/16px var(--font); letter-spacing: .5px; text-transform: uppercase; }
+html .amp.mpc .mpc-head.mpc-ahead { text-transform: none; letter-spacing: 0; font-size: 12px; }
+html .amp.mpc .mpc-head-lim { font-variant-numeric: tabular-nums; }
+html .amp.mpc .mpc-row { min-height: 32px; gap: 10px; padding: 0 8px; border-radius: 6px; color: var(--ink); font: 400 13px/20px var(--font); transition: background-color .09s ease-out; }
+html .amp.mpc .mpc-row:is(:hover, :focus-visible) { background: var(--mp-fill); }
+html .amp.mpc .mpc-row[data-on] { background: var(--mp-fill); }
+html .amp.mpc .mpc-row[data-on] .mpc-name { font-weight: 500; }
+html .amp.mpc .mpc-word { color: var(--mp-t3); font-size: 12px; line-height: 16px; }
+html .amp.mpc .mpc-check { width: 16px; color: var(--live); }
+/* The effort levels: a label in T2 and a 22px segmented row, each level 12/500 with a 0.5px inset ring, the chosen one filled. */
+html .amp.mpc .mpc-foot { flex: none; gap: 10px; min-height: 36px; box-sizing: border-box; padding: 6px 8px 6px 12px; border-top-color: var(--border); }
+html .amp.mpc .mpc-foot-k { color: var(--mp-t2); font: 400 13px/20px var(--font); }
+html .amp.mpc .mpc-seg { gap: 4px; padding: 0; border-radius: 0; background: none; }
+/* Six levels or more don't fit beside the label at 22px each: the label goes over them and they share the row, as seven did. */
+html .amp.mpc .mpc-foot:has(> .mpc-seg > button:nth-child(6)) { flex-wrap: wrap; row-gap: 6px; padding-top: 8px; padding-bottom: 8px; }
+html .amp.mpc .mpc-foot:has(> .mpc-seg > button:nth-child(6)) > .mpc-foot-k { flex-basis: 100%; padding-left: 0; }
+html .amp.mpc .mpc-foot:has(> .mpc-seg > button:nth-child(6)) .mpc-seg button { flex: 1 0 auto; }
+html .amp.mpc .mpc-seg button { height: 22px; padding: 0 7px; border-radius: 5px; box-shadow: inset 0 0 0 .5px var(--border-strong); color: var(--mp-t2); font: 500 12px/16px var(--font); transition: background-color .18s ease, color .18s ease; }
+html .amp.mpc .mpc-seg button:hover { color: var(--ink); }
+html .amp.mpc .mpc-seg button[data-on] { background: var(--mp-fill); box-shadow: inset 0 0 0 .5px var(--border-strong); color: var(--ink); }
+/* Routing: a 32px switch row. */
+html .amp.mpc .ampd-route { flex: none; min-height: 36px; box-sizing: border-box; padding: 0 8px 0 12px; }
+html .amp.mpc .ampd-route-name { color: var(--ink); font: 400 13px/20px var(--font); }
+@keyframes mp-open { from { opacity: 0; transform: scale(.97); } }
+@media (prefers-reduced-motion: reduce) { html .amp.mpc { animation: none; } html .amp.mpc * { transition: none !important; } }

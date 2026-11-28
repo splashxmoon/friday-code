@@ -1,0 +1,303 @@
+/* ── Settings, measured to the shared kit (affect-pro SPEC.md §1, integration-settings, memory-panel, 2026-11-27) ──
+   Loaded with the Settings page and the Usage page only (both lazy), so nothing here reaches the first screen. Every rule sits
+   under .settings-page or .usage-page: the same shadcn pieces look as they did everywhere else.
+   Type: titles 15/500/24, labels and buttons 13/500/20, body 13/400/20, help 12/400/16, section labels 10/500/16 uppercase
+   with 0.5px tracking, chips 11/500/16. Geometry: cards 10 with a ring for their edge instead of a border, inputs 8, buttons
+   and rows 6, chips 5, kbd 5; buttons 28 tall, inputs 32, menu rows 32. Colours stay Friday's tokens, so dark, light and glass
+   all follow; the font stays Geist. Switches stay green when on (Arun, 2026-10-20: "make all of the toggle buttons green"). */
+:root :is(.settings-page, .usage-page) {
+  --sp-expo: cubic-bezier(.22, 1, .36, 1);
+  --sp-sheet: cubic-bezier(.32, .72, .24, 1);
+  --sp-pop: cubic-bezier(.34, 1.56, .64, 1);
+  --sp-drop: rgb(0 0 0 / .05);
+  /* SH-card: a half-pixel ring and a soft drop, in place of a border. */
+  --sp-ring: 0 0 0 .5px var(--border-strong), 0 1px 2px var(--sp-drop);
+  /* SH-in6 / SH-in10: inset rings for wells, chips, kbd and trays. */
+  --sp-in6: inset 0 0 0 .5px var(--border);
+  --sp-in10: inset 0 0 0 .5px var(--border-strong);
+  /* F6, F3: the neutral fills, from the ink so glass tints them too. */
+  --sp-f6: color-mix(in srgb, var(--ink) 6%, transparent);
+  --sp-f4: color-mix(in srgb, var(--ink) 4.5%, transparent);
+  --sp-f3: color-mix(in srgb, var(--ink) 3%, transparent);
+  --sp-f12: color-mix(in srgb, var(--ink) 14%, transparent);
+  --sp-focus: 0 0 0 .5px var(--border-focus), 0 0 0 3px color-mix(in srgb, var(--ink) 10%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+:root.dark :is(.settings-page, .usage-page) { --sp-drop: rgb(0 0 0 / .4); }
+
+/* ── The left menu: a 15/500 title, a 32px search, uppercase group labels and 32px rows ── */
+:root .settings-page .settings-menu > h1.page-top { padding: 0 8px; font-size: 15px; font-weight: 500; line-height: 24px; letter-spacing: 0; }
+:root .settings-page .settings-menu > [data-slot="input-group"] { height: 32px; border: 0; border-radius: 8px; background: var(--card); box-shadow: var(--sp-ring); transition: box-shadow .16s ease; }
+:root .settings-page .settings-menu > [data-slot="input-group"]:focus-within { box-shadow: var(--sp-focus); }
+:root .settings-page .settings-menu > [data-slot="input-group"] input { font-size: 13px; line-height: 20px; }
+:root .settings-page .settings-menu > [data-slot="input-group"] input::placeholder { color: var(--faint); opacity: .8; }
+:root .settings-page .set-nav-group { gap: 2px !important; }
+:root .settings-page .set-nav-group > div:first-child { height: 30px; padding: 10px 8px 4px; font-size: 10px; font-weight: 500; line-height: 16px; letter-spacing: .5px; text-transform: uppercase; }
+:root .settings-page .set-nav-group > button.dass-row { height: 32px; min-height: 32px; padding: 0 8px; gap: 8px; border-radius: 6px; font-size: 13px; line-height: 20px; color: var(--ink-2); transition: background-color .14s ease, color .14s ease; }
+:root .settings-page .set-nav-group > button.dass-row svg { width: 16px; height: 16px; color: var(--text-muted); transition: color .14s ease; }
+:root .settings-page .set-nav-group > button.dass-row:hover:not([data-active]) { background: var(--sp-f3); color: var(--ink); }
+:root .settings-page .set-nav-group > button.dass-row[data-active] { background: var(--sp-f6); color: var(--ink); font-weight: 500; }
+:root .settings-page .set-nav-group > button.dass-row[data-active] svg { color: var(--ink); }
+:root .settings-page .set-nav-group > button.dass-row:focus-visible { outline: 0; box-shadow: var(--sp-focus); }
+
+/* ── A section's head: its 20px title stays the page's step, the line under it 13/400/20 ── */
+:root .settings-page header > .min-w-0 > p { margin-top: 2px; font-size: 13px; line-height: 20px; }
+
+/* ── A group of settings: a card of radius 10 with a ring, its title 15/500/24, rows divided by full-width hairlines ── */
+:root .settings-page .tray.tray-group { --tray-r: 10px; padding: 0; border: 0 !important; box-shadow: var(--sp-ring) !important; overflow: clip; }
+:root .settings-page .tray.tray-group.tray-danger { box-shadow: 0 0 0 .5px color-mix(in srgb, var(--red) 45%, transparent), 0 1px 2px var(--sp-drop) !important; }
+:root .settings-page .tray-group > .tray-head { min-height: 48px; padding: 12px 12px 12px 16px; gap: 8px; border-bottom: 1px solid var(--border); }
+:root .settings-page .tray-group > .tray-head > h3 { font-size: 15px; font-weight: 500; line-height: 24px; letter-spacing: 0; }
+:root .settings-page .tray-group > .tray-head > :not(h3):not(.ml-auto) { font-size: 12px; line-height: 16px; color: var(--text-muted); }
+:root .settings-page .tray-group > .tray-in { padding: 0 !important; border-radius: 0; }
+:root .settings-page .tray-group > .tray-in > * { padding-left: 16px; padding-right: 16px; }
+:root .settings-page .tray-group > .tray-in > [data-set-row] { gap: 6px 24px; padding-top: 14px; padding-bottom: 14px; }
+/* A row: its name 13/500/20, what it does 12/400/16 in the meta grey. */
+:root .settings-page [data-set-row] > .min-w-0 > :first-child { font-size: 13px; font-weight: 500; line-height: 20px; color: var(--ink); }
+:root .settings-page [data-set-row] > .min-w-0 > :first-child + div { margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+/* A loose fact line under a group ("What runs here …"): term 12/500, its words 12/400. */
+:root .settings-page dl > .contents > dt { font-size: 12px; font-weight: 500; line-height: 16px; color: var(--ink-2); }
+:root .settings-page dl > .contents > dd { font-size: 12px; line-height: 16px; }
+
+/* The older card shape some sections still draw (set-card): the same ring, radius and rows. */
+:root .settings-page .set-card { padding: 0 16px; border: 0; border-radius: 10px; box-shadow: var(--sp-ring); }
+:root .settings-page .set-card.set-computer { padding: 4px 16px; }
+:root .settings-page .set-card .set-row { padding: 14px 0; border-top-color: var(--border); }
+:root .settings-page .set-card .set-label { font-size: 13px; font-weight: 500; line-height: 20px; }
+:root .settings-page .set-card .set-text .muted.small { font-size: 12px; line-height: 16px; }
+
+/* ── The app's own buttons that Settings' sections still draw (.btn, in shared pieces): the kit's shape, 28 tall, radius 6,
+   13/500, the secondary one the card colour with a ring ── */
+:root .settings-page .btn:not(.link-btn) { min-height: 28px; height: 28px; padding: 0 10px; gap: 6px; border-radius: var(--aui-radius, 6px); font-size: 13px; font-weight: 500; line-height: 20px; }
+:root .settings-page .btn.small { height: 28px; min-height: 28px; }
+:root .settings-page .btn:not(.primary):not(.ghost):not(.destructive):not(.dark):not(.on) { border: 0 !important; background: var(--card); box-shadow: var(--sp-ring) !important; }
+:root .settings-page .btn:not(.primary):not(.ghost):not(.destructive):not(.dark):not(.on):hover:not(:disabled) { background: var(--hover); }
+:root .settings-page .btn.ghost:hover:not(:disabled) { background: var(--sp-f6); }
+:root .settings-page .icon-btn { border-radius: 6px; }
+
+/* ── Inputs and selects: 32 tall, radius 8, padding 0 10, the card colour with a ring; a soft focus ring ── */
+:root .settings-page :is([data-slot="input"], [data-slot="select-trigger"], [data-slot="textarea"], .set-input, .set-select, .own-select, .own-pick-btn) {
+  min-height: 32px; border: 0 !important; border-radius: 8px !important; background: var(--card) !important; box-shadow: var(--sp-ring) !important; font-size: 13px; line-height: 20px; color: var(--ink);
+  transition: box-shadow .16s ease, background-color .16s ease;
+}
+:root .settings-page :is([data-slot="input"], [data-slot="select-trigger"], .set-input, .set-select, .own-select, .own-pick-btn) { height: 32px; padding: 0 8px 0 10px; }
+:root .settings-page :is([data-slot="input"], [data-slot="textarea"], .set-input)::placeholder { color: var(--faint); opacity: .8; }
+:root .settings-page :is([data-slot="input"], [data-slot="select-trigger"], [data-slot="textarea"], .set-input, .set-select, .own-select, .own-pick-btn):focus-visible,
+:root .settings-page :is([data-slot="input"], [data-slot="textarea"], .set-input):focus { outline: 0; box-shadow: var(--sp-focus) !important; }
+:root .settings-page [data-slot="select-trigger"] svg { width: 16px; height: 16px; opacity: .6; }
+
+/* ── The kit's switch, on in the app's green (Arun, 2026-10-20: "make all of the toggle buttons green") ── */
+:root .settings-page .ui-tfc__input.font-mono { font-family: var(--mono); }
+:root .settings-page .ui-swc.set-switch { --ui-swc-on: var(--dass-on); --ui-swc-on-hover: color-mix(in srgb, var(--dass-on) 85%, var(--ink)); }
+/* A switch Settings' shared pieces still draw with shadcn's: the same 26×16 track and 12px knob. */
+:root .settings-page [data-slot="switch"][data-size="default"] { width: 26px; height: 16px; padding: 0 2px; border: 0; box-shadow: none; transition: background-color .2s ease; }
+:root .settings-page [data-slot="switch"][data-state="unchecked"] { background: var(--sp-f12) !important; }
+:root .settings-page [data-slot="switch"][data-size="default"] [data-slot="switch-thumb"] { width: 12px; height: 12px; box-shadow: 0 1px 2px rgb(0 0 0 / .18), 0 0 0 .5px rgb(0 0 0 / .04); transition: translate .28s var(--sp-expo); }
+/* Tailwind moves the knob with `translate`, not transform, so the slide is said in the same property. */
+:root .settings-page [data-slot="switch"][data-size="default"][data-state="checked"] [data-slot="switch-thumb"] { translate: 10px 0; }
+:root .settings-page [data-slot="switch"][data-size="default"][data-state="unchecked"] [data-slot="switch-thumb"] { translate: 0 0; }
+
+/* ── Segmented control (Choice): a tray of F4, radius 8, padding 2; options 24 tall, radius 6, 13/500; the chosen one lifts
+   to the card colour with a ring (.18s), the others in the secondary grey ── */
+:root :is(.settings-page, .usage-page) [data-slot="toggle-group"]:not(.look-picks) { height: 28px; gap: 2px; padding: 2px; border: 0; border-radius: 8px; background: var(--sp-f4); }
+:root :is(.settings-page, .usage-page) [data-slot="toggle-group"] > [data-slot="toggle-group-item"] { height: 24px; padding: 0 10px; border: 0; border-radius: 6px !important; font-size: 13px; font-weight: 500; line-height: 20px; color: var(--text-muted); transition: color .18s ease, background-color .18s ease, box-shadow .18s ease; }
+:root :is(.settings-page, .usage-page) [data-slot="toggle-group"] > [data-slot="toggle-group-item"]:hover:not([data-state="on"]):not(:disabled) { background: transparent; color: var(--ink); }
+:root :is(.settings-page, .usage-page) [data-slot="toggle-group"] > [data-slot="toggle-group-item"][data-state="on"] { background: var(--card); box-shadow: var(--sp-ring); color: var(--ink); }
+:root.glass :is(.settings-page, .usage-page) [data-slot="toggle-group"] > [data-slot="toggle-group-item"][data-state="on"] { background: var(--glass-pane-on, var(--card-2)); }
+
+/* ── Chips: 18 tall, radius 5, padding 0 6, 11/500/16, coloured words on a tint of the same colour ── */
+:root :is(.settings-page, .usage-page) [data-slot="badge"] { height: 18px; padding: 0 6px; gap: 4px; border-radius: 5px; font-size: 11px; font-weight: 500; line-height: 16px; }
+:root :is(.settings-page, .usage-page) [data-slot="badge"][data-variant="outline"]:not([class*="bg-[color-mix"]) { border: 0; background: var(--sp-f6); color: var(--ink-2); }
+
+/* ── Keys: at least 20×20, radius 5, padding 0 5, an inset ring, 11/500/16 in the meta grey ── */
+:root .settings-page .kbd-list kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border: 0; border-radius: 5px; background: var(--card); box-shadow: var(--sp-in10); font: 500 11px/16px var(--font); color: var(--text-muted); }
+
+/* ── Checkbox: 14 square, radius 4, an inset ring; its tick pops on the overshoot curve ── */
+:root .settings-page [data-slot="checkbox"] { width: 14px; height: 14px; border-radius: 4px; }
+
+/* ── Shortcuts: each group a card, its title a 10/500 uppercase label, its rows 36 tall with their keys at the right ── */
+:root .settings-page .kbd-groups { display: flex; flex-direction: column; gap: 20px; }
+:root .settings-page .kbd-group + .kbd-group { margin-top: 0; }
+:root .settings-page .kbd-group-title { padding: 0 2px 8px !important; font-size: 10px; font-weight: 500; line-height: 16px; letter-spacing: .5px; text-transform: uppercase; color: var(--text-muted); }
+:root .settings-page .kbd-group .kbd-list { padding: 4px 6px !important; border-radius: 10px !important; background: var(--card) !important; box-shadow: var(--sp-ring); }
+:root .settings-page .kbd-list li { min-height: 36px; padding: 0 6px 0 10px; gap: 16px; border-top: 0; border-radius: 6px; font-size: 13px; line-height: 20px; color: var(--ink-2); transition: background-color .14s ease; }
+:root .settings-page .kbd-list li:hover { background: var(--sp-f3); }
+:root .settings-page .kbd-list li + li { box-shadow: 0 -1px 0 var(--border); }
+:root .settings-page .kbd-list li:hover, :root .settings-page .kbd-list li:hover + li { box-shadow: none; }
+:root .settings-page .kbd-list .keys { flex: none; align-items: center; gap: 4px; }
+:root .settings-page .kbd-sep { font-size: 12px; color: var(--faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root :is(.settings-page, .usage-page) *, :root :is(.settings-page, .usage-page) *::before, :root :is(.settings-page, .usage-page) *::after { transition-duration: 0s !important; }
+}
+
+/* ── Any other tray on a Settings page (the storage summary, a lone card): the same ring at radius 10 ── */
+:root .settings-page .tray:not(.tray-group) { --tray-r: 10px; border: 0 !important; box-shadow: var(--sp-ring) !important; }
+
+/* ── Appearance: the looks as preview wells of radius 8 with a ring, the chosen one ringed in ink at 1.5px; their names
+   13/500/20, the others in the secondary grey; accent dots stay round ── */
+:root .settings-page .look-picks { gap: 12px; }
+:root .settings-page .look-pick { gap: 8px; font-size: 13px; font-weight: 500; line-height: 20px; color: var(--text-muted); transition: color .14s ease; }
+:root .settings-page .look-thumb { border-radius: 8px; box-shadow: var(--sp-ring); transition: box-shadow .16s ease, transform .16s var(--sp-expo); }
+:root .settings-page .look-pick:hover .look-thumb { box-shadow: 0 0 0 .5px var(--border-hover), 0 1px 2px var(--sp-drop); }
+:root .settings-page .look-pick[data-on] .look-thumb { box-shadow: 0 0 0 1.5px var(--ink), 0 1px 2px var(--sp-drop); }
+:root .settings-page .look-pick:active .look-thumb { transform: scale(.985); }
+:root .settings-page .look-pick:focus-visible .look-thumb { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--border-focus); }
+:root .settings-page .accent-picks { gap: 10px; }
+:root .settings-page .accent-pick { width: 20px; height: 20px; transition: box-shadow .16s ease, transform .22s var(--sp-pop); }
+:root .settings-page .accent-pick:hover { transform: scale(1.08); }
+:root .settings-page .accent-pick[data-on] { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--ink); }
+:root .settings-page .more-themes { height: 28px; gap: 6px; padding: 0 8px 0 4px; border-radius: 6px; font-size: 13px; font-weight: 500; line-height: 20px; transition: background-color .14s ease; }
+:root .settings-page .more-themes:hover { background: var(--sp-f6); }
+:root .settings-page .more-themes svg { transition: transform .22s var(--sp-expo), color .14s ease; }
+:root .settings-page .thm-card .thm-pick { border-radius: 8px; }
+
+/* ── Voice: the two ways as choice tiles of radius 8 with a ring, the chosen one ringed in ink at 1.5px (the kit's card
+   checkbox); name 13/500/20, line 12/400/16 ── */
+:root .settings-page .voice-picks { gap: 8px; }
+:root .settings-page .voice-pick { gap: 10px; padding: 10px 12px; border: 0 !important; border-radius: 8px; background: var(--card); box-shadow: var(--sp-ring); transition: box-shadow .16s ease, background-color .16s ease; }
+:root .settings-page .voice-pick:hover { background: var(--sp-f3); }
+:root .settings-page .voice-pick[data-on] { background: var(--card); box-shadow: 0 0 0 1.5px var(--ink), 0 1px 2px var(--sp-drop); }
+:root .settings-page .voice-pick:focus-visible { outline: 0; box-shadow: var(--sp-focus); }
+:root .settings-page .voice-pick-dot { width: 14px; height: 14px; margin-top: 3px; border-width: 1px; transition: border-color .16s ease, background .22s var(--sp-pop); }
+:root .settings-page .voice-pick-name { font-size: 13px; font-weight: 500; line-height: 20px; }
+:root .settings-page .voice-pick-sub { font-size: 12px; line-height: 16px; }
+:root .settings-page .voice-pick-text { gap: 0; }
+:root .settings-page .voice-select { min-width: 180px; }
+
+/* ── Your models: the add form as the kit's stepper fields, labels 12/500/16 in the secondary grey over 32px fields, 16 apart ── */
+:root .settings-page .own-form-grid { gap: 16px !important; }
+:root .settings-page .own-form-grid :is(label, .own-field) { gap: 8px !important; font-size: 12px !important; font-weight: 500; line-height: 16px; color: var(--ink-2); }
+:root .settings-page .own-form-head { font-size: 13px !important; font-weight: 500; line-height: 20px; }
+:root .settings-page .own-form-actions .muted { font-size: 12px; line-height: 16px; }
+
+/* ── Coding tools: each tool a 48px two-line row (24px tile radius 6, name 13/500/20 over 12/400/16), rows apart by hairlines ── */
+:root .settings-page .set-computer .mb-tool { min-height: 48px; }
+:root .settings-page .set-computer .mb-tool-mark { width: 24px; height: 24px; border-radius: 6px; }
+:root .settings-page .set-computer .mb-tool-name { font-size: 13px; font-weight: 500; line-height: 20px; }
+:root .settings-page .set-computer .mb-tool-line { font-size: 12px; line-height: 16px; }
+:root .settings-page .set-computer :is(.mb-modal-label, .mb-more) { font-size: 13px; font-weight: 500; line-height: 20px; }
+
+/* ── Your computers: the map is the kit's hero well, radius 8, the faintest fill and an inset ring; a machine on it a card ── */
+:root .settings-page .cmap { border: 0; border-radius: 8px; box-shadow: var(--sp-in6); background: radial-gradient(circle, color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.2px) 0 0 / 18px 18px, var(--sp-f3); }
+:root .settings-page .cmap-frame { padding: 2px 0 6px; }
+
+/* ── The Usage page ── */
+/* Section titles 15/500/24, a line beside them 12/400/16. */
+:root .usage-page .lh-section-head > h3, :root .usage-page section[aria-label="Activity"] h2 { font-size: 15px !important; font-weight: 500 !important; line-height: 24px; letter-spacing: 0; }
+:root .usage-page .lh-section-head { align-items: center; margin-bottom: 0; }
+:root .usage-page .lh-read { font-size: 12px; line-height: 16px; }
+/* Accounts: a card per tool (radius 10, a ring), its head 48px (name 13/500, how many 12/400 in the meta grey, Add account the
+   kit's 28px secondary button), a row per account apart by full-width hairlines, its meters 4px on an F6 track. */
+:root .usage-page .acg-page { gap: 12px; }
+:root .usage-page .acg-tool { padding: 0; border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--sp-ring); overflow: clip; }
+:root .usage-page .acg-tool > .acg-head { min-height: 48px; padding: 10px 10px 10px 16px; gap: 8px; border-bottom: 1px solid var(--border); }
+:root .usage-page .acg-head b { font-weight: 500; line-height: 20px; }
+:root .usage-page .acg-n { font-size: 12px; line-height: 16px; }
+:root .usage-page .acg-add { height: 28px; padding: 0 10px 0 8px; gap: 6px; border: 0; border-radius: var(--aui-radius, 6px); background: var(--card); box-shadow: var(--sp-ring); color: var(--ink); font-size: 13px; font-weight: 500; line-height: 20px; transition: background-color .14s ease; }
+:root .usage-page .acg-add:hover { background: var(--hover); }
+:root .usage-page .acg-add svg { width: 16px; height: 16px; }
+:root .usage-page .acg-tool .acg-list { padding: 0; }
+:root .usage-page .acg-acct.page { padding: 12px 10px 12px 16px; transition: background-color .14s ease; }
+:root .usage-page .acg-acct.page + .acg-acct.page { border-top: 1px solid var(--border); }
+:root .usage-page .acg-acct.page:first-child { padding-top: 12px; }
+:root .usage-page .acg-top { font-size: 13px; line-height: 20px; }
+:root .usage-page .acg-top > b { font-weight: 500; }
+:root .usage-page .acg-tag { height: 18px; border-radius: 5px; background: var(--sp-f6); font-size: 11px; line-height: 16px; }
+:root .usage-page .acg-mail { font-size: 12px; line-height: 16px; }
+:root .usage-page .acg-bars { gap: 6px; }
+:root .usage-page .acg-bar { font-size: 12px; line-height: 16px; }
+:root .usage-page .acg-bar-track { height: 4px; border-radius: 2px; background: var(--sp-f6); }
+:root .usage-page .acg-bar-track > i { border-radius: 2px; transition: width .6s var(--sp-expo); }
+:root .usage-page .acg-use { height: 24px; margin-top: 6px; padding: 0 8px; border: 0; border-radius: var(--aui-radius, 6px); background: var(--card); box-shadow: var(--sp-ring); color: var(--ink); font-size: 12px; font-weight: 500; line-height: 16px; }
+:root .usage-page .acg-use:hover { background: var(--hover); }
+:root .usage-page .acg-end .icon-btn { width: 28px; height: 28px; border-radius: 6px; }
+/* Activity: the kit's stat card beside its chart: "Used" 13/400 in the secondary grey, the figure 24/500/32 at −0.24px, the
+   split rows 32 tall with 8px swatches of radius 2, the facts under a hairline. */
+:root .usage-page .tray.us-act { --tray-r: 10px; border: 0 !important; border-radius: 10px !important; box-shadow: var(--sp-ring) !important; overflow: clip; }
+:root .usage-page .us-act-side { gap: 16px; padding: 14px 16px 16px; box-shadow: inset -1px 0 0 var(--border); }
+:root .usage-page .us-k { font-size: 13px; line-height: 20px; color: var(--ink-2); }
+:root .usage-page .us-big { font: 500 24px/32px var(--font); letter-spacing: -.24px; }
+:root .usage-page .us-s { font-size: 12px; line-height: 16px; }
+:root .usage-page .us-split { gap: 6px; }
+:root .usage-page .us-split-row { font-size: 13px; line-height: 20px; }
+:root .usage-page .us-split-row b { font-weight: 500; }
+:root .usage-page .us-split-track { height: 4px; border-radius: 2px; background: var(--sp-f6); }
+:root .usage-page .us-facts { gap: 6px; padding-top: 14px; }
+:root .usage-page .us-facts div { font-size: 12px; line-height: 16px; }
+:root .usage-page .us-act-chart { padding: 14px 16px 12px; }
+:root .usage-page .usage-chart.tools .usage-stack { border-radius: 3px 3px 1px 1px; transition: opacity .16s ease, height .7s var(--sp-expo); }
+:root .usage-page .usage-tick { font-size: 11px; line-height: 16px; height: 16px; }
+/* The day's card: the kit's popover, radius 10, padding 6 10 8, its date 13/500/20, rows 20 tall 12/400 with an 8px swatch. */
+:root .usage-page .usage-tip { gap: 0; padding: 6px 10px 8px; border: 0; border-radius: 10px; box-shadow: 0 0 0 .5px var(--border-strong), 0 12px 28px -10px rgb(0 0 0 / .16), 0 1px 2px var(--sp-drop); font-size: 12px; line-height: 20px; }
+:root.dark .usage-page .usage-tip { box-shadow: 0 0 0 .5px var(--border-strong), 0 12px 28px -10px rgb(0 0 0 / .6); }
+:root .usage-page .usage-tip strong { margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 500; line-height: 20px; }
+:root .usage-page .usage-tip .key { width: 8px; height: 8px; border-radius: 2px; }
+/* By agent: the kit's data table, a 15/500 title over a card whose header row is 36 tall (12/500 in the secondary grey) and its
+   rows 40, each apart by a hairline; the agent's name 13/500 with its 16px mark. */
+:root .usage-page section[aria-label="Activity"] h3 { margin-bottom: 8px !important; font-size: 15px !important; font-weight: 500 !important; line-height: 24px; }
+:root .usage-page [role="table"][aria-label="Tokens by agent"] > [role="row"] { min-height: 40px; padding-top: 0 !important; padding-bottom: 0 !important; transition: background-color .14s ease; }
+:root .usage-page [role="table"][aria-label="Tokens by agent"] > [role="row"]:first-child { min-height: 36px; font-size: 12px; line-height: 16px; color: var(--ink-2); }
+:root .usage-page [role="table"][aria-label="Tokens by agent"] > [role="row"]:not(:first-child):hover { background: var(--sp-f3); }
+:root .usage-page [role="table"][aria-label="Tokens by agent"] [role="cell"] { font-size: 13px; line-height: 20px; }
+:root .usage-page [role="table"][aria-label="Tokens by agent"] [role="cell"].font-semibold { font-weight: 500 !important; }
+:root .usage-page .tray.scroll-x-cue, :root .usage-page .scroll-x-cue.tray { --tray-r: 10px; border: 0 !important; box-shadow: var(--sp-ring) !important; }
+
+/* ── Memory, as the kit's memory panel: the head a 15/500 title with its line 12/400/16 and the switch at the right; off, the
+   line sits in a soft well (F3, radius 8, padding 8 10); each repository a 36px row; each lesson a row of radius 8 (padding
+   8 10 7) that tints on hover, its words 13/400/20 over a 12/400/16 meta line, its actions 28px icon buttons that show on hover ── */
+:root .settings-page .brain-card { margin-top: 0; padding: 0; }
+:root .settings-page .brain-card > .set-row { align-items: flex-start; padding: 14px 16px; border-top: 0; }
+:root .settings-page .brain-card > .set-row .set-label { font-size: 15px; font-weight: 500; line-height: 24px; }
+:root .settings-page .brain-card > .set-row .muted.small { margin-top: 2px; font-size: 12px; line-height: 16px; }
+:root .settings-page .brain-card .mem-off { margin-top: 8px !important; padding: 8px 10px; border-radius: 8px; background: var(--sp-f3); color: var(--ink-2); }
+:root .settings-page .brain-card .ui-swc { margin-top: 4px; }
+:root .settings-page .brain-card .mem-empty { margin: 0; padding: 14px 16px; border-top: 1px solid var(--border); font-size: 13px; line-height: 20px; }
+:root .settings-page .brain-repos { margin-top: 0; padding: 4px 6px 6px; border-top: 1px solid var(--border); }
+:root .settings-page .brain-repo { border-top: 0; }
+:root .settings-page .brain-repo-head { min-height: 36px; padding: 0 10px; gap: 8px; border-radius: 6px; transition: background-color .14s ease; }
+:root .settings-page .brain-repo-head:hover { background: var(--sp-f3); }
+:root .settings-page .brain-repo-head svg { transition: transform .22s var(--sp-expo); }
+:root .settings-page .brain-repo-name { font-size: 13px; font-weight: 500; line-height: 20px; }
+:root .settings-page .brain-repo-head .muted { font-size: 12px; line-height: 16px; }
+:root .settings-page .brain-entries { padding: 0 0 6px 18px; }
+:root .settings-page .mem-row.brain-row { gap: 2px; padding: 8px 100px 7px 10px; border-top: 0; border-radius: 8px; transition: background-color .09s ease-out, opacity .22s ease; }
+:root .settings-page .mem-row.brain-row:hover { background: var(--sp-f3); }
+:root .settings-page .brain-row .mem-text { font-size: 13px; line-height: 20px; color: var(--ink); }
+:root .settings-page .brain-row .mem-meta { font-size: 12px; line-height: 16px; color: var(--text-muted); }
+:root .settings-page .brain-kind { height: 18px; padding: 0 6px; border-radius: 5px; font-size: 11px; font-weight: 500; line-height: 18px; letter-spacing: 0; }
+:root .settings-page .brain-acts { top: 6px; right: 6px; gap: 2px; opacity: 0; transition: opacity .12s ease; }
+:root .settings-page .brain-row:hover .brain-acts, :root .settings-page .brain-row:focus-within .brain-acts { opacity: 1; }
+@media (hover: none) { :root .settings-page .brain-acts { opacity: 1; } }
+:root .settings-page .brain-acts .icon-btn { width: 28px; height: 28px; border-radius: 6px; }
+:root .settings-page .brain-edit input, :root .settings-page .mem-add input { height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--card); box-shadow: var(--sp-ring); font-size: 13px; }
+:root .settings-page :is(.brain-edit, .mem-add) input:focus { outline: 0; box-shadow: var(--sp-focus); }
+:root .settings-page .brain-add { gap: 8px; margin-top: 8px; padding: 0 0 0 10px; }
+:root .settings-page .brain-retired > summary { min-height: 32px; padding: 6px 10px; font-size: 12px; line-height: 20px; }
+
+/* ── Other computers › Add a computer, as the kit's stepper content: the title 15/500/24, what it's for as choice tiles (radius
+   8, a ring, the chosen one ringed in ink), the ways as the kit's segmented control, a link or command in a soft well, the
+   host field 32 tall. The path branches (help this Mac, or run on its own; then one of four ways), so there is no step count
+   to show over it. ── */
+:root .settings-page .computers-add { gap: 12px; padding: 14px 16px 16px; }
+:root .settings-page .computers-add-title { font-size: 15px; font-weight: 500; line-height: 24px; }
+:root .settings-page .computers-choices { gap: 8px; }
+:root .settings-page .computers-choice { padding: 10px 12px; border: 0; border-radius: 8px; background: var(--card); box-shadow: var(--sp-ring); transition: box-shadow .16s ease, background-color .16s ease; }
+:root .settings-page .computers-choice:hover { background: var(--sp-f3); }
+:root .settings-page .computers-choice.on { background: var(--card); box-shadow: 0 0 0 1.5px var(--ink), 0 1px 2px var(--sp-drop); }
+:root .settings-page .computers-choice-title { line-height: 20px; }
+:root .settings-page .computers-choice-hint { font-size: 12px; line-height: 16px; }
+:root .settings-page .computers-choice-foot { font-size: 12px; line-height: 16px; }
+:root .settings-page .computers-choice-mark { border-width: 1px; margin-top: 3px; }
+:root .settings-page .computers-add-body > p { font-size: 13px; line-height: 20px; color: var(--ink-2); }
+:root .settings-page .computers-link-text { padding: 6px 10px; border: 0; border-radius: 8px; background: var(--sp-f3); box-shadow: var(--sp-in6); font-size: 12px; line-height: 20px; }
+:root .settings-page :is(.computers-paste, .computers-add-row) .input, :root .settings-page .input.computers-rename { height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--card); box-shadow: var(--sp-ring); font-size: 13px; }
+:root .settings-page :is(.computers-paste, .computers-add-row) .input:focus, :root .settings-page .input.computers-rename:focus { outline: 0; box-shadow: var(--sp-focus); }
+:root .settings-page .computers-list li { min-height: 44px; }
+:root .settings-page .computers-list li:has(.computers-who) { min-height: 48px; }
+:root .settings-page .computers-said { font-size: 12px; line-height: 16px; }
+:root .settings-page .brain-card .set-label { display: flex; align-items: center; gap: 8px; }
+:root .settings-page .mem-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 5px; background: var(--sp-f6); color: var(--ink-2); font-size: 11px; font-weight: 500; line-height: 18px; font-variant-numeric: tabular-nums; }
+:root .settings-page .brain-kind { background: var(--sp-f6); color: var(--ink-2); }
+:root .settings-page .brain-kind.k-pitfall { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--amber); }
+:root .settings-page .brain-kind.k-correction { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }

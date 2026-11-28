@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { dangerOutline, Note, SettingsGroup, SettingsRow } from "@/components/dass";
+import { Button } from "./settings-kit.js";
 import type { Pile, PileId } from "../runner/storage.js";
 import { api } from "./api.js";
 import type { Identity } from "./storage.js";
@@ -117,23 +117,38 @@ export function StorageSection({ identity }: { identity: Identity }) {
 
   return (
     <section className="flex flex-col gap-5">
-      <div className="sto-sum tray" aria-busy={!m || updating || !!busy}>
-        <div className="sto-sum-top">
-          <div className="sto-total">
-            {m ? <b>{bytes(m.total)}</b> : <Skeleton w={120} h={30} r={8} />}
-            <span>
-              {m ? (
-                <>
-                  kept by Friday in <code>{m.home.replace(/^\/Users\/[^/]+|^\/home\/[^/]+|^[A-Z]:\\Users\\[^\\]+/i, "~")}</code>
-                  <span className="sto-when" role="status">
-                    {updating ? " · Updating…" : m.at ? ` · measured ${measuredWhen(m.at)}` : ""}
-                  </span>
-                </>
-              ) : (
-                "Adding up what Friday keeps on this computer…"
-              )}
-            </span>
+      <div className="sto-card tray">
+        <div className="sto-sum" aria-busy={!m || updating || !!busy}>
+          <div className="sto-sum-top">
+            <div className="sto-total">
+              {m ? <b>{bytes(m.total)}</b> : <Skeleton w={120} h={30} r={8} />}
+              <span>
+                {m ? (
+                  <>
+                    kept by Friday in <code>{m.home.replace(/^\/Users\/[^/]+|^\/home\/[^/]+|^[A-Z]:\\Users\\[^\\]+/i, "~")}</code>
+                    <span className="sto-when" role="status">
+                      {updating ? " · Updating…" : m.at ? ` · measured ${measuredWhen(m.at)}` : ""}
+                    </span>
+                  </>
+                ) : (
+                  "Adding up what Friday keeps on this computer…"
+                )}
+              </span>
+            </div>
           </div>
+          <div className="sto-bar" role="img" aria-label={m ? `Storage by kind: ${piles.filter((p) => p.bytes > 0).map((p) => `${WORDS[p.id].label} ${bytes(p.bytes)}`).join(", ")}` : "Measuring"}>
+            {m && m.total > 0 && piles.map((p) => (p.bytes > 0 ? <i key={p.id} style={{ flexGrow: p.bytes, background: WORDS[p.id].tone }} title={`${WORDS[p.id].label}: ${bytes(p.bytes)}`} /> : null))}
+          </div>
+          <p className="sto-sum-note">
+            {m && clearable > 0 ? `About ${bytes(clearable)} can go now: copies no session uses. ` : ""}
+            {m && soon > 0 ? `${bytes(soon)} more goes once it's a day old. ` : ""}
+            Friday also cleans up by itself a few minutes after it starts and every six hours. Branches are never deleted, and uncommitted work waits a week in the trash.
+          </p>
+        </div>
+        {/* Its foot, as the kit's usage card has one: what just happened on the left, the clean-up at the right end. */}
+        <div className="sto-foot">
+          <Note className="sto-done">{note?.ok ? note.text : ""}</Note>
+          <Note ok={false} className="sto-done">{note && !note.ok ? note.text : ""}</Note>
           <div className="sto-sum-acts">
             {m && desk?.openIn && (
               <Button variant="ghost" size="sm" onClick={() => void showFolder()}>
@@ -145,16 +160,6 @@ export function StorageSection({ identity }: { identity: Identity }) {
             </Button>
           </div>
         </div>
-        <div className="sto-bar" role="img" aria-label={m ? `Storage by kind: ${piles.filter((p) => p.bytes > 0).map((p) => `${WORDS[p.id].label} ${bytes(p.bytes)}`).join(", ")}` : "Measuring"}>
-          {m && m.total > 0 && piles.map((p) => (p.bytes > 0 ? <i key={p.id} style={{ flexGrow: p.bytes, background: WORDS[p.id].tone }} title={`${WORDS[p.id].label}: ${bytes(p.bytes)}`} /> : null))}
-        </div>
-        <p className="sto-sum-note">
-          {m && clearable > 0 ? `About ${bytes(clearable)} can go now: copies no session uses. ` : ""}
-          {m && soon > 0 ? `${bytes(soon)} more goes once it's a day old. ` : ""}
-          Friday also cleans up by itself a few minutes after it starts and every six hours. Branches are never deleted, and uncommitted work waits a week in the trash.
-        </p>
-        <Note className="sto-done">{note?.ok ? note.text : ""}</Note>
-        <Note ok={false} className="sto-done">{note && !note.ok ? note.text : ""}</Note>
       </div>
       <SettingsGroup title="What's kept">
         {/* While the first measurement comes: rows in their own shape, so nothing jumps when it lands. */}

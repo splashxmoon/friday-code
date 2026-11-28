@@ -1,0 +1,154 @@
+/* The Agent Board (Board.tsx), redesigned 2026-11-27 on the shared kit's measurements (affect-pro SPEC.md): the lanes are Agent
+   Inbox's column wells (radius 14, padding 4, a 34px head with the name in small capitals and its count), each card its task card
+   (radius 10, its edge a ring in the shadow, never a border; title 13/500/20, the live line 13/400 in the second ink, meta 12/400/16);
+   what needs you is a row of Approval Gates request cards (radius 14, raised, padding 14 16, the question 15/500/22, the answers under
+   a hairline with the main one last on the right). Buttons 28 tall at radius 6 (small 24), chips 18 at radius 5: rounded squares,
+   never pills (Arun, 2026-11-14). Friday's colours and Geist stay. */
+.board-page {
+  --bd-ring: var(--aui-shadow-card, 0 0 0 1px var(--border)), 0 1px 2px rgb(0 0 0 / .05);
+  --bd-ring-hover: 0 0 0 .5px var(--border-hover), 0 4px 14px -6px rgb(0 0 0 / .12);
+  --bd-raised: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .05), 0 10px 28px -12px rgb(0 0 0 / .16);
+  --bd-well: color-mix(in srgb, #000 22%, var(--bg));
+  --bd-expo: cubic-bezier(.22, 1, .36, 1);
+  --bd-sheet: cubic-bezier(.32, .72, .24, 1);
+}
+:root:not(.dark) .board-page { --bd-well: color-mix(in srgb, var(--ink) 4%, var(--bg)); }
+html.dark .board-page { --bd-ring: var(--aui-shadow-card, 0 0 0 1px var(--border)), 0 1px 2px rgb(0 0 0 / .4); --bd-raised: 0 0 0 .5px var(--border-strong), 0 12px 28px -10px rgb(0 0 0 / .6); --bd-ring-hover: 0 0 0 .5px var(--border-hover), 0 4px 14px -6px rgb(0 0 0 / .5); }
+/* On glass the wells are a tint of the glass, not a solid ground. */
+html.glass .board-page { --bd-well: color-mix(in srgb, var(--ink) 4%, transparent); }
+
+/* ── The search: 32 tall at radius 8, a ring rather than a border. */
+.board-page .bd-search { box-shadow: var(--bd-ring); transition: box-shadow .16s ease; }
+.board-page .bd-search:focus-visible { box-shadow: 0 0 0 1px var(--border-focus); }
+
+/* ── A project filter: a segment 28 tall at radius 6 with a hairline ring; the picked one filled. */
+.board-page .bd-filter {
+  display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent;
+  box-shadow: inset 0 0 0 .5px var(--border-strong); color: var(--text-muted); font: 500 12px/16px var(--font); white-space: nowrap; cursor: pointer;
+  transition: background-color .16s ease, color .16s ease;
+}
+.board-page .bd-filter:hover { background: var(--hover); color: var(--ink); }
+.board-page .bd-filter[aria-pressed="true"] { background: var(--card); box-shadow: var(--bd-ring); color: var(--ink); }
+.board-page .bd-filter:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+
+/* ── Buttons, chips and counts are the kit's (Button, Badge, IconButton): 28 tall at radius 6, chips 18 at radius 5. A key on a
+   button shows only while its card has the keyboard: only then does the key answer it (as the thread's permission card). */
+.board-page .bd-keyed kbd {
+  display: none; height: 18px; min-width: 18px; padding: 0 4px; border: 0; border-radius: 4px; background: var(--hover);
+  color: var(--faint); font: 500 10px/18px var(--font); box-shadow: none;
+}
+.board-page .bd-need:focus-within .bd-keyed kbd { display: inline-grid; place-items: center; }
+.board-page .bd-keyed .ui-buttonc__icon:has(kbd) { width: auto; height: auto; }
+.board-page .bd-keyed[data-variant="primary"] kbd { background: color-mix(in srgb, var(--on-accent) 16%, transparent); color: color-mix(in srgb, var(--on-accent) 72%, transparent); }
+.board-page .bd-empty { margin: 48px auto 0; }
+
+/* ── Needs you: its head, then the request cards. */
+.board-page .bd-needs-head { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 4px; }
+.board-page .bd-needs-title { color: var(--ink); font: 500 13px/20px var(--font); }
+.board-page .bd-needs-said { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); font: 400 12px/16px var(--font); }
+.board-page .bd-need {
+  display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px; border-radius: 14px; background: var(--card);
+  box-shadow: var(--bd-raised); outline: none;
+}
+.board-page .bd-need:focus-visible { box-shadow: var(--bd-raised), 0 0 0 2px var(--border-focus); }
+.board-page .bd-need-who { display: flex; align-items: center; gap: 4px; min-width: 0; color: var(--faint); font: 400 12px/16px var(--font); }
+.board-page .bd-need-who .board-mark { margin: 0 4px 0 0; }
+.board-page .bd-need-where { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font: 500 12px/16px var(--font); text-align: left; }
+.board-page .bd-need-where:hover { color: var(--ink); }
+.board-page .bd-need-when { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.board-page .bd-need-who .ui-bdgc { margin-left: auto; flex: none; }
+.board-page .bd-need-who .ui-bdgc + .ui-bdgc { margin-left: 0; }
+.board-page .bd-need-q {
+  margin: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; color: var(--ink);
+  font: 500 15px/22px var(--font); overflow-wrap: anywhere;
+}
+.board-page .bd-need-q code { padding: 1px 5px; border-radius: 4px; background: var(--hover); font: 500 13px/20px var(--mono); }
+.board-page .bd-need-pre {
+  margin: 0; max-height: 96px; overflow: auto; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--ink) 2.4%, transparent);
+  box-shadow: inset 0 0 0 .5px var(--border-strong); color: var(--ink); font: 400 12px/18px var(--mono); white-space: pre-wrap;
+}
+/* A go-ahead's reason, on a 2px rule at its left (Permission Request). */
+.board-page .bd-need-note { margin: 0; padding-left: 10px; border-left: 2px solid var(--border-strong); color: var(--text-muted); font: 400 12px/18px var(--font); }
+.board-page .bd-need-why { margin: 0; color: var(--text-muted); font: 400 12.5px/18px var(--font); }
+.board-page .bd-need-why b { color: var(--ink-2); font-weight: 500; }
+.board-page .bd-need-foot {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 2px -16px 0; padding: 12px 16px 0; border-top: 1px solid var(--border);
+}
+.board-page .bd-need-who .bd-need-agent { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font: 500 12px/16px var(--font); }
+.board-page .bd-need-branch { flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); font: 400 11.5px/16px var(--font); }
+/* Always allow at the foot's left, as on the Approval Card ("Always allow this action"): 13/400 in the muted ink. */
+.board-page .bd-need-always { flex: 1 1 auto; min-width: 0; margin-right: auto; color: var(--text-muted); font-size: 13px; }
+.board-page .bd-need-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-left: auto; }
+.board-page .bd-need-reply { display: flex; flex-direction: column; gap: 8px; }
+.board-page .bd-need-err { margin: 0; color: var(--red); font: 400 12px/16px var(--font); }
+
+/* ── A lane: a quiet well its cards sit in (radius 14, padding 4), its head 34 tall with the name centred in small capitals. */
+.board-page .board-lane { gap: 6px; padding: 4px; border-radius: 14px; background: var(--bd-well); }
+.board-page .board-lane[data-ping] { box-shadow: 0 0 0 2px var(--border-focus); transition: box-shadow var(--t-open) var(--ease-out); }
+.board-page .bd-lane-head { display: grid; grid-template-columns: 20px minmax(0, 1fr) 20px; align-items: center; height: 34px; padding: 0 8px 0 10px; }
+.board-page .bd-lane-head .bd-count { justify-self: end; }
+.board-page .bd-lane-title {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; color: var(--text-muted);
+  font: 500 11px/20px var(--font); letter-spacing: .88px; text-transform: uppercase;
+}
+.board-page .board-lane .bd-skel { border-radius: 10px; background: var(--card); box-shadow: var(--bd-ring); }
+
+/* ── A card: radius 10, padding 12 14 12 12, gap 6; the ring on rest, a soft lift on hover. */
+.board-page .board-card {
+  gap: 6px; padding: 12px 14px 12px 12px; border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--bd-ring);
+  transition: box-shadow .2s ease;
+}
+.board-page .board-card:hover { box-shadow: var(--bd-ring-hover); }
+.board-page .board-card.needs-you { box-shadow: 0 0 0 .5px color-mix(in srgb, var(--amber) 60%, var(--border-strong)), 0 1px 2px rgb(0 0 0 / .05); }
+.board-page .board-card:has([data-open]:focus-visible) { box-shadow: var(--bd-ring), 0 0 0 2px var(--border-focus); }
+.board-page .board-card .board-mark { margin: 0; }
+.board-page .bd-card-title { display: block; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; color: var(--ink); font: 500 13px/20px var(--font); }
+.board-page .bd-card-when { flex: none; color: var(--faint); font: 400 12px/16px var(--font); }
+/* A working card's clock is the kit's running chip: a ring turning beside the time, in the live blue. The app's own .run
+   (public/style.css) is a flex column, so it is held as a row here: else the ring sat squashed over the time. */
+.board-page .bd-card-when.run {
+  display: inline-flex; flex-direction: row; align-items: center; gap: 5px; height: 18px; padding: 0 6px 0 5px; border-radius: 5px;
+  background: color-mix(in srgb, var(--live) 13%, transparent); color: var(--live); font-weight: 500;
+}
+.board-page .bd-card-when.run::before {
+  content: ""; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--live) 28%, transparent);
+  border-top-color: var(--live); animation: bd-turn .9s linear infinite;
+}
+@keyframes bd-turn { to { transform: rotate(360deg); } }
+/* How full its context is: Context Window's bar at 3px, its fill gliding as the run reads more. */
+.board-page .bd-card-ctx { display: block; height: 3px; margin: 2px 0 0; border-radius: 2px; background: var(--hover-strong); overflow: hidden; }
+.board-page .bd-card-ctx i { display: block; height: 100%; border-radius: 2px; background: var(--live); transition: width .7s var(--bd-expo, ease); }
+.board-page .bd-card-ctx.full i { background: var(--amber); }
+.board-page .bd-card-fact { flex: none; }
+.board-page .bd-card-meta > * + .bd-card-fact { padding-left: 9px; border-left: 1px solid var(--border); }
+/* The pull request's checks as three small bars and two words: green passing, amber running, red failing. */
+.board-page .bd-card-checks { display: inline-flex; flex: none; align-items: center; gap: 2px; color: var(--ink-2); }
+.board-page .bd-card-checks i { width: 4px; height: 10px; border-radius: 2px; background: var(--green); }
+.board-page .bd-card-checks i:last-of-type { margin-right: 4px; }
+.board-page .bd-card-checks[data-checks="pending"] i:last-of-type { background: var(--amber); animation: bd-wait 1.4s ease-in-out infinite; }
+.board-page .bd-card-checks[data-checks="failing"] i:last-of-type { background: var(--red); }
+.board-page .bd-card-checks[data-checks="failing"] { color: var(--red); }
+@keyframes bd-wait { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .board-page .bd-card-when.run::before, .board-page .bd-card-checks i { animation: none; } }
+.board-page .bd-card-line { margin: 0; display: flex; align-items: flex-start; gap: 6px; min-width: 0; color: var(--ink-2); font: 400 13px/19px var(--font); }
+.board-page .bd-card-line .dass-dot { margin-top: 6px; flex: none; }
+.board-page .bd-card-line > :last-child { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; min-width: 0; }
+.board-page .bd-card-line.needs { color: var(--ink); }
+.board-page .bd-card-line.bad { color: var(--red); }
+.board-page .bd-card-meta { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 24px; color: var(--faint); font: 400 12px/16px var(--font); }
+.board-page .bd-card-meta .font-mono { font-size: 11.5px; }
+/* How big the change is, set off from who made it by a hairline (Agent Inbox's meta counts). */
+.board-page .bd-card-size { flex: none; color: var(--faint); font: 400 12px/16px var(--font); }
+.board-page .bd-card-meta > .min-w-0 + .bd-card-size { padding-left: 9px; border-left: 1px solid var(--border); }
+/* On a narrow card with buttons the name gives way (hidden under 22rem), and its hairline goes with it. */
+@container (width < 22rem) { .board-page .bd-card-meta > .min-w-0.hidden + .bd-card-size { padding-left: 0; border-left: 0; } }
+
+/* ── Entrances: a request card rises into the strip, a card into its lane, on the kit's curves; still when less motion is asked. */
+@keyframes bd-rise { from { opacity: 0; transform: translateY(4px); filter: blur(1.5px); } to { opacity: 1; transform: none; filter: none; } }
+.board-page .bd-need { animation: bd-rise .4s var(--bd-expo) both; }
+.board-page .board-card { animation: bd-rise .38s var(--bd-sheet) both; }
+@media (prefers-reduced-motion: reduce) { .board-page .bd-need, .board-page .board-card { animation: none; } .board-page .bd-btn { transition: none; } }
+html.reduce-motion .board-page .bd-need, html.reduce-motion .board-page .board-card { animation: none; }
+/* On glass a card is tinted glass with its top highlight, and still the ring. */
+html.glass .board-page .board-card { box-shadow: inset 0 1px 0 var(--glass-hi), var(--bd-ring); }
+html.glass .board-page .bd-need { background: var(--glass-float); box-shadow: inset 0 1px 0 var(--glass-hi), var(--bd-raised); }

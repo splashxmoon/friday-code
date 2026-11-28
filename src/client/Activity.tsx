@@ -142,9 +142,11 @@ import { ToolResult, ToolResultOutput } from "@/components/agents/tool-result";
 import { cn } from "@/lib/utils";
 import { Tip } from "@/components/dass/page-bits";
 import "./session-chat.css";
+import "./thread-polish.css";
+import "./session-polish.css";
 import { ownPlan } from "../own-plan.js";
 import { taskAllowApplies, can, canDriveLane, driverOf, laneOf, pendingFor, questionsTo, runOf, signoffStatus, type OpenQuestion, type SessionState, type Thread, givenName } from "../session/projection.js";
-import { ENGINE_MODEL_INFO, ENGINE_NAMES, ENGINE_TOOLS, liveMachine, MAIN_LANE, type Attachment, type DiffFile, type EngineMode, type EngineTool, type EventBody, type EventType, type Member, type PresenceMember, type SessionEvent, type Thinking, type ToolCall, effortNote, ENGINE_EFFORT_INFO, EFFORT_RESET_NOTE, effortLevelsOf, type EngineEffort } from "../types.js";
+import { ENGINE_MODEL_INFO, ENGINE_NAMES, ENGINE_TOOLS, liveMachine, MAIN_LANE, modeRefusal, type Attachment, type DiffFile, type EngineMode, type EngineTool, type EventBody, type EventType, type Member, type PresenceMember, type SessionEvent, type Thinking, type ToolCall, effortNote, ENGINE_EFFORT_INFO, EFFORT_RESET_NOTE, effortLevelsOf, type EngineEffort } from "../types.js";
 import { api, fileUrl, uploadFile } from "./api.js";
 import { DropOverlay, pickable, uploadAll, useFileDragging } from "./Attach.js";
 import { AgentMark, Avatar, FridayMark, Icon, type IconName } from "./icons.js";
@@ -222,6 +224,13 @@ const RoomHandedLine = lazy(() => import("./crew-carry.js").then((m) => ({ defau
 const BringReady = lazy(() => import("./crew-carry.js").then((m) => ({ default: m.BringReady })));
 // Several agents in one thread (TeamCard.tsx): fetched only in a thread that has two or more.
 const TeamCard = lazy(() => import("./TeamCard.js").then((m) => ({ default: m.TeamCard })));
+// Proof in the chat (a clip, the tests a check ran, where a check stands), and its styles, load with the first one shown: proof is
+// only in the IDE's chats, and off until turned on (Arun, 2026-11-25), so most sessions never draw one.
+const ProofClipCard = lazy(() => import("./ProofClipCard.js").then((m) => ({ default: m.ProofClipCard })));
+const ProofStatusCard = lazy(() => import("./ProofClipCard.js").then((m) => ({ default: m.ProofStatusCard })));
+const TestProofCard = lazy(() => import("./TestProofCard.js").then((m) => ({ default: m.TestProofCard })));
+// Where a turn's tokens went, opened from its count (CostWaterfall.tsx): loaded at the first press.
+const TurnFall = lazy(() => import("./CostWaterfall.js").then((m) => ({ default: m.TurnFall })));
 const ProposedTeam = lazy(() => import("./TeamCard.js").then((m) => ({ default: m.ProposedTeam })));
 const OpenedThread = lazy(() => import("./TeamCard.js").then((m) => ({ default: m.OpenedThread })));
 const TakeOver = lazy(() => import("./TeamCard.js").then((m) => ({ default: m.TakeOver })));
@@ -243,16 +252,16 @@ const MergedCard = lazy(() => import("./MergedCard.js").then((m) => ({ default: 
 import { isCodeChat } from "./ide/code-chats.js";
 import { IdeChatContext, ideHint } from "./ide/mode.js";
 import { agentNameFor, laneNamesFrom } from "./agent-name.js";
-import { ProofClipCard, ProofStatusCard } from "./ProofClipCard.js";
-import { TestProofCard } from "./TestProofCard.js";
 import { keyOf as commandKey } from "../test-proof.js";
 import { recordProofClip, testWork, useClipMode } from "./proof-clips.js";
-import { CheckBadge } from "./check-badge.js";
+import { CheckBadge, checkStateOf, fixFirstText } from "./check-badge.js";
 import { hasUiChange } from "../preview-check.js";
+import { openSettings } from "./openSettings.js";
+import { summarySections } from "../agent/compact.js";
 import { agentState, lowerWord, phaseRing, plainError, PHASE_WORD, saysItAll, type AgentRing } from "../agent-state.js";
 import { askIosPreview, isLocalUrl, lookOf, openInPreview, pageAppears, servedUrlIn } from "./previewBus.js";
 import { failedWords, latestTests, prefillComposer, ReviewCard, secondReviewOf, testsIn, type TestRun } from "./RunReview.js";
-import { CLASS_LABEL, carefulClass, headlineClass, mayApprove } from "../command-class.js";
+import { CLASS_LABEL, headlineClass, mayApprove } from "../command-class.js";
 import { plainRisk } from "../plain-risk.js";
 import { checkpointsByMessage, isRedo, isSetAside, reversedBy, rewindImpact, rewindsIn, undoneRuns, type Rewind } from "../rewind.js";
 import { Check, ContextMenu, MenuButton, Picker, SkeletonRows, useConfirm, type MenuItem, relTime } from "./ui.js";
@@ -526,6 +535,8 @@ function setupLine(ev: SessionEvent): boolean {
 }
 
 const HIDDEN = new Set<string>([
+  // A compaction undone: its Compacted line says so itself ("Undone"), so the undo is no row of its own (2026-11-28, the feed test).
+  "context.restored",
   // What an agent saved to the project's memory ("Remembered: … · Undo"): kept in Memory, not a row in the chat each time (Arun,
   // 2026-11-20: "get rid of this").
   "brain.remembered",
@@ -724,7 +735,8 @@ export function group(events: SessionEvent[], streaming: boolean | ReadonlySet<s
     if (t === "instruction" && edited.has(ev.seq)) continue;
     const lane = ev.lane ?? MAIN_LANE;
     // Auto's own picks are lines in the feed; what it would have picked elsewhere (`shadow`) is not (see HIDDEN).
-    const shown = (t === "model.routed" ? !(ev.body as Extract<EventBody, { type: "model.routed" }>).shadow : !HIDDEN.has(t)) && !setupLine(ev);
+    // An own model's compaction, with its summary, is a line of its own (the mock's 1A); a coding tool's is said under its run (RunMeta).
+    const shown = (t === "model.routed" ? !(ev.body as Extract<EventBody, { type: "model.routed" }>).shadow : t === "context.compacted" ? !!(ev.body as Extract<EventBody, { type: "context.compacted" }>).summary : !HIDDEN.has(t)) && !setupLine(ev);
     if (t !== "agent.diff" && shown) prevType = t;
     if (t === "run.started") {
       const sha = (ev.body as Extract<EventBody, { type: "run.started" }>).checkpoint;
@@ -2656,7 +2668,7 @@ export function Activity({
               ) : null;
             // The agent the box is aimed at, with its own model: pick Codex and the ring is Codex's.
             const eng = state.engines[target];
-            let gauge: ReactNode = <ContextGauge key={`${target}:${eng?.tool ?? ""}`} solo={!!solo} events={events} lane={target} friday={!eng?.tool} model={eng?.tool ? (eng.model ?? "") : (state.options.model ?? "")} identity={identity} {...(eng?.tool ? { tool: eng.tool } : {})} {...(eng?.account ? { account: eng.account.id } : {})} />;
+            let gauge: ReactNode = <ContextGauge key={`${target}:${eng?.tool ?? ""}`} sid={state.id} invite={ctx.invite} solo={!!solo} events={events} lane={target} friday={!eng?.tool} model={eng?.tool ? (eng.model ?? "") : (state.options.model ?? "")} identity={identity} {...(eng?.tool ? { tool: eng.tool } : {})} {...(eng?.account ? { account: eng.account.id } : {})} />;
             // A team's chats have no coding gauge or jump menu under the box: they are a conversation (teammates.ts).
             if (state.options.team) return null;
             // Nor Work's: a context ring is coding chrome, and hidden it still carried its "Context: not reported yet" (Arun,
@@ -2664,7 +2676,10 @@ export function Activity({
             if (state.options.work) gauge = null;
             // Nor in the open-source build: the usage under the box is gone (Arun, 2026-11-16: "remove this usage limit thing"); the
             // thread card's foot and Usage still say it.
-            if (isLocal()) gauge = null;
+            // Except for Friday's agent on an own model (the local-models mock's 1D): its window is the one that runs out, so its ring
+            // shows, once a step has said how full it is (agent/window.ts).
+            const ownRing = !eng?.tool && !!events.findLast((e) => (e.lane ?? MAIN_LANE) === target && e.body.type === "agent.message" && !!e.body.context && !!e.body.window);
+            if (isLocal() && !ownRing) gauge = null;
             // The goal for the agent the box is aimed at, beside its context ring rather than in the box's own row of pills, where it
             // crowded the agent and model (Arun, 2026-11-04: "move the goal button somewhere else… properly placed and accessible").
             const goal: ReactNode = null;
@@ -4204,8 +4219,6 @@ function LiveAnswer({ text }: { text: string }) {
 const RunBlock = memo(function RunBlock({ item, ctx, active, latest, typing, folded = false, handed = false }: { item: RunItem; ctx: Ctx; active: boolean; latest: boolean; /** A crew mate has this lane's work now (handedOn): given, so the run's row redraws the moment it is handed or taken back. */ handed?: boolean; /** Null when the run isn't streaming. The words themselves are drawn by LiveStream, so this block doesn't redraw for each one. */ typing: Typing | null; /** An older finished run: one line until it is opened. */ folded?: boolean }) {
   const [unfolded, setUnfolded] = useState(false);
   /** The reason box under the answer, open after a thumb down. */
-  const [reasonOpen, setReasonOpen] = useState(false);
-  const [reason, setReason] = useState("");
   /** Who this run's work is being handed to, once one of the agents in the bar is picked. */
   const [handTo, setHandTo] = useState<string | null>(null);
   /** Retry was pressed on a turn that stopped with no reply (audit CODE-19 B). */
@@ -4257,9 +4270,15 @@ const RunBlock = memo(function RunBlock({ item, ctx, active, latest, typing, fol
   const last = msgs.at(-1);
   const finalMsg = last && !last.body.toolCalls.length && last.body.text && !typing ? last : null;
   // The tool's own "Not logged in · Please run /login" on a run that ended signed out: SignedOutNote says it once, plainly.
-  const loginLine = item.ended?.body.outcome === "error" && signedOut(item.ended.body.error) && finalMsg && /not logged in|please run \/login/i.test(finalMsg.body.text) ? finalMsg : null;
+  const signInLine = item.ended?.body.outcome === "error" && signedOut(item.ended.body.error) && finalMsg && /not logged in|please run \/login/i.test(finalMsg.body.text) ? finalMsg : null;
+  // The tool's own "5-hour limit reached · resets 5am" over the out-of-usage card (LimitNote), which says until when and which limit:
+  // said once, by the card (the polish audit, 2026-11-27). Only the latest run's, where the card shows.
+  const limitLine = latest && !signInLine && item.ended?.body.outcome === "error" && limitHit(item.ended.body.error) && finalMsg && finalMsg.body.text.length < 300 && /limit|usage|resets/i.test(finalMsg.body.text) ? finalMsg : null;
+  const loginLine = signInLine ?? limitLine;
   // Second opinion (Asides): another model asked about this turn, from the answer's strip; the form opens under the answer.
   const [opinion, setOpinion] = useState(false);
+  // The turn's Cost Waterfall, under the reply, from its token count.
+  const [fall, setFall] = useState(false);
   // A crew mate's steps fold under its one work line, closed until that line is pressed (Arun, 2026-11-18: "actually have the steps
   // closed by default"; before, 2026-11-17, they opened while it worked). They still fold away once it is done.
   const [stepsOpen, setStepsOpen] = useState(false);
@@ -4462,6 +4481,8 @@ const RunBlock = memo(function RunBlock({ item, ctx, active, latest, typing, fol
       };
       if (result && stepKind(d) === "test") step.fails = failingTests(output);
       for (const path of result?.body.pictures ?? []) pictures.push({ path, name: `${d.verb}${d.target ? ` ${d.target}` : ""}` });
+      // Its card in the turn's tool group: the call, what it printed, and the time between asking and the answer.
+      step.call = { name: call.name, args, output, startedAt: m.ts, ...(result ? { ms: Math.max(0, result.ts - m.ts) } : {}) };
       if (/^(edit|edit_file|write|write_file)$/.test(call.name)) step.preview = editPreview(args) ?? undefined;
       if (/^(read|read_file|edit|edit_file|write|write_file)$/.test(call.name)) step.file = (typeof args.file_path === "string" ? args.file_path : typeof args.path === "string" ? args.path : "") || undefined;
       if (/^(edit|edit_file|multiedit|write|write_file|create_file|str_replace|str_replace_based_edit_tool|notebookedit|apply_patch)$/i.test(call.name) && !failed) {
@@ -4979,7 +5000,11 @@ const RunBlock = memo(function RunBlock({ item, ctx, active, latest, typing, fol
         {/* Stopped to ask: it is waiting on a person, not thinking, and saying "Thinking" sent people looking for nothing. While it
             works the ring on its mark and the one live line under the reply say so; the head says only what needs you. A teammate's
             reply keeps its own words (its face is not a tool's mark). */}
-        {active && (!typing || typing === "waiting") && (waitsOnPerson(ctx.state, lane) ? (approving ? null : ((n) => <span className={cn("rsp-needs", !n.needsYou && "is-theirs")} role="status">{n.held ? n.word : "Waiting on a person"}</span>)(agentState(ctx.state, lane, ctx.me.id))) : chatty ? <WorkLine {...((p) => ({ step: p.words, title: p.full }))(plainStep(blocks))} {...(metaStart !== undefined ? { since: metaStart } : {})} {...(hasWork ? { open: stepsOpen, onOpen: () => setStepsOpen((o) => !o) } : {})} /> : mate && !hasWork ? <Working label="Thinking" /> : null)}
+        {/* No "Working" chip by the name (Arun, 2026-11-27: "get rid of the pill thing blue for in the sessions"): the live line
+            under the reply says what it is doing and keeps the clock. */}
+        {/* Asking before a command, "Waiting on you" in the head as a chip, and the card under it asks (it used to be nothing here
+            and an amber box over the steps). */}
+        {active && (!typing || typing === "waiting") && (waitsOnPerson(ctx.state, lane) ? ((n) => <span className={cn("rsp-needs", !n.needsYou && "is-theirs")} role="status">{approving ? (n.needsYou ? "Waiting on you" : "Waiting on a person") : n.held ? n.word : "Waiting on a person"}</span>)(agentState(ctx.state, lane, ctx.me.id)) : chatty ? <WorkLine {...((p) => ({ step: p.words, title: p.full }))(plainStep(blocks))} {...(metaStart !== undefined ? { since: metaStart } : {})} {...(hasWork ? { open: stepsOpen, onOpen: () => setStepsOpen((o) => !o) } : {})} /> : mate && !hasWork ? <Working label="Thinking" /> : null)}
         {status && <span className={cn("rsp-status", ended?.outcome === "error" && (limitHit(ended.error) || signedOut(ended.error) ? "limit" : "err"))}>{status}</span>}
         {msgs[0] && (
           <span className="rsp-time">
@@ -5015,7 +5040,7 @@ const RunBlock = memo(function RunBlock({ item, ctx, active, latest, typing, fol
           {...(forecast ? { forecast } : {})}
         />
       )}
-      {blocks.map((x) => (x.kind === "subs" ? <Subagents key={x.key} rows={x.rows} /> : null))}
+      {blocks.map((x) => (x.kind === "subs" ? <Subagents key={x.key} rows={x.rows} lead={{ name: agentNameFor(ctx.state, lane), tool: ctx.state.engines[lane]?.tool }} /> : null))}
 
       {/* While it works with no step yet to show (thinking), one live line under the reply says so: with no ring on its mark, the
           reply was its name over nothing until its first step (Arun, 2026-10-30: "there needs to be a visual thing in the chat to
@@ -5049,7 +5074,6 @@ const RunBlock = memo(function RunBlock({ item, ctx, active, latest, typing, fol
           events={ctx.events}
           canCheck={checkable}
           notify={ctx.notify}
-          onFix={latest && via && !ctx.replaying ? (text) => void ctx.send({ type: via, text, ...(lane !== MAIN_LANE ? { lane } : {}) }) : undefined}
         />
       )}
       {/* No closing words yet (a turn under way, waiting on a card): what it drew, here. */}
@@ -5084,40 +5108,26 @@ const RunBlock = memo(function RunBlock({ item, ctx, active, latest, typing, fol
             const r = ctx.state.reactions[finalMsg.seq]?.[ctx.me.id];
             return r ? (r.up ? "up" : "down") : null;
           })()}
-          onFeedbackChange={(v) => {
-            if (v === "down") setReasonOpen(true);
-            else setReasonOpen(false);
-            void ctx.send({ type: "react", seq: finalMsg.seq, up: v === "up" ? true : v === "down" ? false : null, quiet: true });
-          }}
+          onFeedbackChange={(v) => void ctx.send({ type: "react", seq: finalMsg.seq, up: v === "up" ? true : v === "down" ? false : null, quiet: true })}
+          // Why it fell short, picked in the bar's own row under a thumbs down: the agent remembers it for next time.
+          onFeedbackReason={(why) => void ctx.send({ type: "react", seq: finalMsg.seq, up: false, reason: why.slice(0, 300), quiet: true })}
           sources={[...sources]
             // Only the web reaches an href, checked again here where the links are made.
             .filter(([u]) => webUrl(u))
             .slice(0, 10)
             .map(([u, title]) => ({ id: u, title: title || hostOf(u), domain: hostOf(u), url: u }))}
           extraActions={nextActions || opinionBtn ? <>{nextActions}{opinionBtn}</> : undefined}
-          {...(usedApart ? { actionsEnd: <span className="rsp-act-used">{shortTokens(used)} tokens</span> } : {})}
+          {...(usedApart ? { actionsEnd: <button type="button" className="rsp-act-used" aria-expanded={fall} onClick={() => setFall(!fall)}><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 3h4M2 6h7M2 9h2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>{shortTokens(used)} tokens</button> } : {})}
         >
           {/* With the card under it asking, the options are said there only: the prose keeps its lead-in (audit CODE-10 A). */}
           {/* A run with nothing new answers NO_UPDATE (a check-in, an automation): said in words, not as the token. */}
           <MessageResponse {...LIVE}>{asking ? askProse(finalMsg.body.text) : saysNoUpdate(finalMsg.body.text) ? "_Nothing new since the last run._" : finalMsg.body.text}</MessageResponse>
         </StreamingResponse>
       )}
-      {finalMsg && reasonOpen && (
-        <form
-          className="react-reason"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!reason.trim()) return;
-            void ctx.send({ type: "react", seq: finalMsg.seq, up: false, reason: reason.trim(), quiet: true });
-            setReason("");
-            setReasonOpen(false);
-          }}
-        >
-          <input autoFocus value={reason} maxLength={300} placeholder="What was wrong? The agent remembers it for next time." aria-label="Why the answer fell short" onChange={(e) => setReason(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setReasonOpen(false)} />
-          <button type="submit" className="btn small" disabled={!reason.trim()}>
-            Send
-          </button>
-        </form>
+      {fall && usedApart && (
+        <Suspense fallback={<div className="cwf-wait" />}>
+          <TurnFall events={ctx.events} engines={ctx.state.engines} lane={lane} from={item.key} to={item.ended?.seq ?? msgs.at(-1)?.seq ?? item.key} ask={item.ask?.text} onClose={() => setFall(false)} />
+        </Suspense>
       )}
       {/* The coding tool ended this answer asking something: its choices, answered here, for whoever can steer it. Gone once
           the lane has its next instruction or starts again, which is when the projection drops the ask. */}
@@ -5155,7 +5165,7 @@ const RunBlock = memo(function RunBlock({ item, ctx, active, latest, typing, fol
       )}
       {ended?.outcome === "error" && !RESTART_CUT.test(ended.error ?? "") && !planLimitHit(ended.error) && !out && <ErrorLine name={name} error={ended.error ?? ""} />}
       {out && <SignedOutNote ctx={ctx} lane={lane} latest={latest} />}
-      {!active && limit && !onBackup && <LimitNote ctx={ctx} lane={lane} resetsAt={limit.resetsAt} canSteer={via === "instruct"} pass={passTo} />}
+      {!active && limit && !onBackup && <LimitNote ctx={ctx} lane={lane} resetsAt={limit.resetsAt} canSteer={via === "instruct"} pass={passTo} why={ended?.error} />}
       {!active && hit && !limit && (
         <div className="limit-note">
           <ClockIcon className="size-4" />
@@ -5789,6 +5799,132 @@ function ErrorLine({ error, name }: { error: string; /** Whose error: the line r
   );
 }
 
+/**
+ * An own model's older turns compacted into a summary (agent/compact.ts; the mock's 1A and 1B): how many, from how big to how big,
+ * with which model, and the summary one press away, with Undo (the full history sent again from the next turn) and its settings.
+ */
+function CompactLine({ ctx, ev, lane }: { ctx: Ctx; ev: SessionEvent; lane: string }) {
+  const b = ev.body as Extract<EventBody, { type: "context.compacted" }>;
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const undone = ctx.events.some((e) => e.body.type === "context.restored" && e.body.of === ev.seq);
+  const newer = ctx.events.some((e) => e.seq > ev.seq && (e.lane ?? MAIN_LANE) === lane && e.body.type === "context.compacted" && !!e.body.summary);
+  const sections = summarySections(b.summary ?? "");
+  const who = b.model ? ownModelName(b.model) : "";
+  const undo = async () => {
+    setBusy(true);
+    await fetch(`/api/sessions/${encodeURIComponent(ctx.sid)}/compact?invite=${encodeURIComponent(ctx.invite)}`, { method: "POST", headers: { "content-type": "application/json", "x-friday-local": "1" }, body: JSON.stringify({ lane, undo: ev.seq }) }).catch(() => null);
+    setBusy(false);
+  };
+  return (
+    <div className={`compact-line${open ? " open" : ""}${undone ? " undone" : ""}`} role="group" aria-label={`Compacted ${b.turns ?? 0} turns`}>
+      <div className="compact-line-row">
+        <Icon name="collapseAll" size={13} />
+        <span className="compact-line-what">
+          <b>Compacted {b.turns ?? 0} turn{b.turns === 1 ? "" : "s"}</b>
+          <span>
+            {kTokens(b.before)}
+            {b.after ? ` to ${kTokens(b.after)}` : ""} tokens{who ? `, with ${who}` : ""}
+            {undone ? " · undone" : ""}
+          </span>
+        </span>
+        <button type="button" className="link-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          {open ? "Hide summary" : "View summary"}
+        </button>
+      </div>
+      {open && (
+        <div className="compact-sum">
+          {sections.map((sct) => (
+            <div key={sct.title} className="compact-sum-sec">
+              <h4>{sct.title}</h4>
+              {sct.lines.length > 1 || /^(done|next)$/i.test(sct.title) ? (
+                <ul>
+                  {sct.lines.map((l, i) => (
+                    <li key={i}>{l}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>{sct.lines[0]}</p>
+              )}
+            </div>
+          ))}
+          <div className="compact-sum-acts">
+            {!undone && !newer && (
+              <button type="button" className="btn small" disabled={busy} onClick={() => void undo()}>
+                Undo compact
+              </button>
+            )}
+            <button type="button" className="btn small" onClick={() => openSettings("own-models")}>
+              Compact settings
+            </button>
+          </div>
+          <p className="compact-sum-note">Undo sends the full history again from the next turn, which only helps once its window is bigger. The turns themselves are never deleted from the thread.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** An own model's name from its id (own:<user>:<entry>): the name it was saved under, else its entry. */
+function ownModelName(id: string): string {
+  const entry = id.split(":").pop() ?? id;
+  return ownNames.get(entry) ?? (id.startsWith("own:") ? "your model" : id);
+}
+/** Own models' names by entry, filled once from Settings › Your models' list (runner own models). */
+const ownNames = new Map<string, string>();
+if (typeof fetch === "function" && typeof window !== "undefined" && isLocal())
+  void fetch("/api/runner/models.own.list", { method: "POST", headers: { "content-type": "application/json", "x-friday-local": "1" }, body: "{}" })
+    .then((r) => (r.ok ? (r.json() as Promise<{ models?: { id: string; name: string }[] }>) : null))
+    .then((j) => j?.models?.forEach((m) => ownNames.set(m.id, m.name)), () => {});
+
+/** An own model's "Out of room" end (agent/window.ts roomError): how many tokens were asked, and its window. */
+const ROOM = /^Out of room: ([\d,]+) tokens asked, and its window is ([\d,]+|smaller)/;
+const kTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1).replace(/\.0$/, "")}k` : String(n));
+
+/**
+ * Card 1C of the local-models mock (HANDOFF-local-models-2026-11-28): the model ran out of room even after Friday fitted the
+ * history to its window and sent the step once more. Says by how much, with a bar, and offers what would help: a bigger window
+ * (Settings, Your models). Hide folds it to its one line.
+ */
+function RoomCard({ ev, error, name }: { ev: SessionEvent; error: string; name: string }) {
+  const [hidden, setHidden] = useState(false);
+  const m = ROOM.exec(error);
+  const asked = m ? Number(m[1]!.replace(/,/g, "")) : 0;
+  const window = m && m[2] !== "smaller" ? Number(m[2]!.replace(/,/g, "")) : 0;
+  if (hidden)
+    return (
+      <Notice ev={ev} icon={XIcon} tone="danger">
+        {name} ran out of room · {kTokens(asked)} tokens asked{window ? `, its window is ${kTokens(window)}` : ""}
+      </Notice>
+    );
+  return (
+    <div className="room-card" role="group" aria-label={`${name} ran out of room`}>
+      <div className="room-card-head">
+        <XIcon className="size-3.5" aria-hidden />
+        <b>{name} ran out of room</b>
+      </div>
+      <div className="room-card-line">
+        {kTokens(asked)} tokens asked{window ? `, its window is ${kTokens(window)}` : ""}
+      </div>
+      {window > 0 && (
+        <div className="room-card-bar" aria-hidden>
+          <i style={{ width: `${Math.min(100, (window / Math.max(asked, window)) * 100)}%` }} />
+          <em style={{ left: `${Math.min(100, (window / Math.max(asked, window)) * 100)}%` }} />
+        </div>
+      )}
+      <p className="room-card-why">Friday fitted the conversation to its window and tried once more. What's left is still too big for it.</p>
+      <div className="room-card-acts">
+        <button type="button" className="btn small primary" onClick={() => openSettings("own-models")}>
+          Raise its window
+        </button>
+        <button type="button" className="btn small" onClick={() => setHidden(true)}>
+          Hide
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Who an agent out of usage can pass its work to now, and the press that does it (the turn's primary action). */
 type LimitPass = { name: string; mark: ReactNode; go: () => void };
 
@@ -5797,7 +5933,17 @@ type LimitPass = { name: string; mark: ReactNode; go: () => void };
  * the primary action (audit CODE-5 A, Arun 2026-11-04: it said "no other agent here could take it" while suggesting Codex, and
  * "carries on at 3:00 PM" twice).
  */
-function LimitNote({ ctx, lane, resetsAt, canSteer, pass = null }: { ctx: Ctx; lane: string; resetsAt: number | null; canSteer: boolean; pass?: LimitPass | null }) {
+/** Which allowance ran out, in the tool's own words ("5-hour limit reached"), for the card's second line; "" when it doesn't say. */
+export function limitKind(error: string | undefined): string {
+  const e = error ?? "";
+  if (/(?:5|five)[- ]hour limit/i.test(e)) return "5-hour limit";
+  if (/weekly limit/i.test(e)) return "Weekly limit";
+  if (/session limit/i.test(e)) return "Session limit";
+  if (/credit balance is too low|out of (?:credits|extra usage)/i.test(e)) return "Out of credits";
+  return "";
+}
+
+function LimitNote({ ctx, lane, resetsAt, canSteer, pass = null, why = "" }: { ctx: Ctx; lane: string; resetsAt: number | null; canSteer: boolean; pass?: LimitPass | null; /** The run's error, for which allowance it was. */ why?: string | undefined }) {
   const due = ctx.state.resumes?.[lane];
   const tool = ctx.state.engines[lane]?.tool;
   const who = tool ? ENGINE_NAMES[tool] : agentNameFor(ctx.state, lane);
@@ -5844,20 +5990,24 @@ function LimitNote({ ctx, lane, resetsAt, canSteer, pass = null }: { ctx: Ctx; l
     </button>
   );
   const until = due?.at ?? resetsAt;
+  // A small card (the redesign of 2026-11-27): until when on its first line, which allowance and what happens then on the second,
+  // and Don't carry on as a button of its own, where it was underlined text under the sentence.
+  const kind = limitKind(why);
   if (due)
     return (
-      <div className="limit-note limit-one" role="status">
-        <div className="limit-line">
-          <ClockIcon className="size-4" />
-          <span>
-            Out of usage until <b>{clockTime(until!)}</b>. Carries on by itself then
-            {due.by !== ctx.me.id ? `, as ${due.byName.split(/\s+/)[0]} set it` : ""}
+      <div className="limit-card" role="status">
+        <ClockIcon aria-hidden="true" />
+        <div className="limit-words">
+          <span className="limit-title">Out of usage until {clockTime(until!)}</span>
+          <span className="limit-why">
+            {kind ? `${kind} on ${who}. ` : ""}
+            {kind ? "It carries" : "Carries"} on by itself then{due.by !== ctx.me.id ? `, as ${due.byName.split(/\s+/)[0]} set it` : ""}
             {other ? <>, or continue on your {other.label} account now.</> : pass ? <>, or pass it to {pass.name} now.</> : "."}
           </span>
         </div>
         {canSteer && (
           <div className="limit-actions">
-            <button type="button" className="rsp-text-btn limit-dont" onClick={() => void send({ type: "resume.cancel", lane })}>
+            <button type="button" className="btn small limit-dont" onClick={() => void send({ type: "resume.cancel", lane })}>
               Don't carry on
             </button>
             {passBtn}
@@ -5869,29 +6019,23 @@ function LimitNote({ ctx, lane, resetsAt, canSteer, pass = null }: { ctx: Ctx; l
   const back = resetsAt !== null && resetsAt <= Date.now();
   // A crew mate whose switch to its fallback waits on you: the card at the foot of its chat asks it (TeammatePage.tsx MateSwitchAsk), once.
   if (ctx.state.options.team && ((a) => !!a && a.sid === ctx.state.id && a.lane === lane)(mateOn(lane)?.switchAsk)) return null;
+  const next = other ? `Continue on your ${other.label} account now${pass ? `, pass it to ${pass.name}` : ""}, or have it` : pass ? `Pass it to ${pass.name} now, or have it` : null;
   return (
-    <div className="limit-note limit-one">
-      <div className="limit-line">
-        <ClockIcon className="size-4" />
-        <span>
-          {back ? (
-            <>
-              {who} was out of usage until <b>{clockTime(resetsAt)}</b>, so it should be back.
-            </>
-          ) : resetsAt ? (
-            <>
-              Out of usage until <b>{clockTime(resetsAt)}</b>. {other ? `Continue on your ${other.label} account now${pass ? `, pass it to ${pass.name}` : ""}, or have it carry on then.` : pass ? `Pass it to ${pass.name} now, or have it carry on then.` : isLocal() ? "Hand the work to another agent, have it carry on here then, or sign it in as another account." : "Hand the work to another of your agents, have it carry on here then, or add extra usage or credits to its account."}
-            </>
-          ) : (
-            <>Out of usage on its account. {other ? `Continue on your ${other.label} account now${pass ? `, pass it to ${pass.name}` : ""}, or have it try again in an hour.` : pass ? `Pass it to ${pass.name} now, or have it try again in an hour.` : isLocal() ? "Hand the work to another agent, have it try again in an hour, or sign it in as another account." : "Hand the work to another of your agents, have it try again in an hour, or add extra usage or credits to its account."}</>
-          )}
+    <div className="limit-card">
+      <ClockIcon aria-hidden="true" />
+      <div className="limit-words">
+        <span className="limit-title">{back ? "It should be back" : resetsAt ? `Out of usage until ${clockTime(resetsAt)}` : "Out of usage on its account"}</span>
+        <span className="limit-why">
+          {back
+            ? `${who} was out of usage until ${clockTime(resetsAt)}.`
+            : `${kind ? `${kind} on ${who}. ` : ""}${next ? `${next} ${resetsAt ? "carry on then" : "try again in an hour"}.` : isLocal() ? `Hand the work to another agent, have it ${resetsAt ? "carry on here then" : "try again in an hour"}, or sign it in as another account.` : `Hand the work to another of your agents, have it ${resetsAt ? "carry on here then" : "try again in an hour"}, or add extra usage or credits to its account.`}`}
         </span>
       </div>
       {canSteer && (
         <div className="limit-actions">
           <button
             type="button"
-            className={(pass || other) && !back ? "rsp-text-btn limit-dont" : "btn small"}
+            className="btn small"
             onClick={() =>
               void send(back ? { type: "instruct", lane, text: "Carry on with the task where you left off; don't start over." } : { type: "resume.at", lane, at: resetsAt ?? Date.now() + 3_600_000 })
             }
@@ -6746,70 +6890,40 @@ export function answerRights(state: SessionState, me: { id: string; role: Member
 }
 
 /**
- * A permission request once answered: one quiet line where the card was, saying who said what to which command, and when
- * (Arun, 2026-11-03, after Orca's resolution receipts). The card used to go, so nothing in the chat said a command had been let
- * through, or by whom; in a session several people drive, that is the line people look for.
- */
-/**
  * Always allow on a permission card. What it adds follows from the command (command-allow.ts alwaysAllowEntry), and the allowlist
  * that works that out is 16 KB, loaded with the first card that offers it rather than with every session screen: a session link
  * waited on it (2026-11-13, the Teams port put the session's first load over its budget).
  */
 let allowRules: typeof import("../command-allow.js") | null = null;
 const loadAllowRules = () => import("../command-allow.js").then((m) => (allowRules = m));
-function AlwaysAllow({ items, allow, busy, send, ctx, answer }: { items: string[]; allow: string[] | undefined; busy: boolean; send: Send; ctx: Ctx; answer: (yes: boolean) => Promise<unknown> }) {
+function useAllowRules(on: boolean) {
   const [rules, setRules] = useState(allowRules);
   useEffect(() => {
-    if (!rules) void loadAllowRules().then(setRules);
-  }, [rules]);
-  const entries = rules ? items.map(rules.alwaysAllowEntry) : null;
-  const said = entries?.map((a) => (a.endsWith("*") ? `“${a.slice(0, -1).trim()} …”` : `“${a}”`)).join(", ");
-  return (
-    <button
-      type="button"
-      className="btn small"
-      disabled={busy || !entries}
-      title={said ? `Run it, and from now on run ${said} without asking` : "Run it, and from now on run commands like it without asking"}
-      onClick={() =>
-        entries &&
-        void send({ type: "settings.update", allow: [...new Set([...(allow ?? []), ...entries])] }).then((r) => {
-          if (!r.ok) return ctx.notify(r.error ?? "Couldn't add that to the allow list.");
-          // Nothing said over the chat after it (Arun, 2026-11-18: "i dont want this too appear after approving the command"): the
-          // button's tip says what it does, and the allow list is in Session settings.
-          return answer(true);
-        })
-      }
-    >
-      Always allow
-    </button>
-  );
+    if (on && !rules) void loadAllowRules().then(setRules);
+  }, [on, rules]);
+  return rules;
+}
+
+/** ⌘↵ on a Mac, Ctrl ↵ elsewhere: Run it's key, said the way the platform writes it. */
+const runKey = () => (typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘↵" : "Ctrl ↵");
+
+/**
+ * The riskiest kind among a card's commands, for its one chip: red for what deletes, amber for what installs, ships or can't be
+ * read, plain for the rest (the redesign of 2026-11-27: the colour does the warning a grey tag left to the words).
+ */
+const RISK_ORDER = ["destructive", "deploy", "publish", "other", "install", "git", "build", "checks", "read"] as const;
+function riskOf(items: readonly string[]): { label: string; tone: "bad" | "warn" | "" } | null {
+  const kinds = new Set(items.map((i) => headlineClass(i)));
+  const k = RISK_ORDER.find((x) => kinds.has(x));
+  if (!k) return null;
+  return { label: CLASS_LABEL[k].chip ?? CLASS_LABEL[k].label, tone: k === "destructive" ? "bad" : CLASS_LABEL[k].careful || k === "install" ? "warn" : "" };
 }
 
 /**
- * "Always in this project" on a go-ahead (Arun, 2026-11-18, as Codex and OpenBot offer it): run it, and from now on let commands like
- * it through in every session in this folder. Taken back from the thread card's Go-aheads.
+ * A permission request once answered: one quiet line where the card was, saying who said what to which command, and when
+ * (Arun, 2026-11-03, after Orca's resolution receipts). The card used to go, so nothing in the chat said a command had been let
+ * through, or by whom; in a session several people drive, that is the line people look for.
  */
-function ProjectAllow({ items, lane, busy, ctx, answer }: { items: string[]; lane: string; busy: boolean; ctx: Ctx; answer: (yes: boolean) => Promise<unknown> }) {
-  const engine = ctx.state.engines[lane];
-  const name = (engine?.copyOf ?? engine?.cwd ?? "").split(/[\\/]/).filter(Boolean).pop() ?? "this project";
-  return (
-    <button
-      type="button"
-      className="btn small"
-      disabled={busy}
-      title={`Run it, and from now on let commands like it through in every session in ${name}`}
-      onClick={() =>
-        void api(ctx.identity, "/api/project-allow", { method: "POST", body: JSON.stringify({ sid: ctx.sid, lane, items }) }).then(
-          () => answer(true),
-          (e: Error) => ctx.notify(e.message || "Couldn't allow that for the project."),
-        )
-      }
-    >
-      Always in this project
-    </button>
-  );
-}
-
 function ApprovalReceipt({ ask, said, ctx }: { ask: Ev<"engine.approval">; said: Ev<"instruction">; ctx: Ctx }) {
   const b = ask.body;
   const yes = !!said.body.approval?.approve;
@@ -6857,14 +6971,52 @@ function WaitedFor({ since }: { since: number }) {
   return <span className="apv-waited"> · {ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))}s` : ms < 3_600_000 ? `${Math.floor(ms / 60_000)}m` : `${Math.floor(ms / 3_600_000)}h`}</span>;
 }
 
+/**
+ * Esc and ⌘↵ answer a permission card while it is the latest one asking, not only while it has focus (the keys show on its
+ * buttons): from the feed, or from an empty message box, never while a menu or dialog is open or something is being typed. The
+ * handlers change every render; the listener reads the latest. The card's own key handler answers while focus is inside it.
+ */
+function useAskKeys(on: boolean): { card: React.RefObject<HTMLDivElement | null>; keys: React.MutableRefObject<{ yes: () => void; no: () => void } | null> } {
+  const card = useRef<HTMLDivElement>(null);
+  const keys = useRef<{ yes: () => void; no: () => void } | null>(null);
+  useEffect(() => {
+    if (!on) return;
+    const onKey = (e: KeyboardEvent) => {
+      const yes = e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey;
+      if ((e.key !== "Escape" && !yes) || e.defaultPrevented || e.isComposing) return;
+      const cards = document.querySelectorAll(".apv[data-needs], .mp[data-needs]");
+      if (cards[cards.length - 1] !== card.current || document.querySelector('[role="dialog"], [role="menu"], [role="listbox"]')) return;
+      const at = document.activeElement as HTMLElement | null;
+      if (at && card.current?.contains(at)) return;
+      if (at && (at.matches("input, select, [contenteditable='true']") || (at instanceof HTMLTextAreaElement && at.value.trim() !== ""))) return;
+      e.preventDefault();
+      if (yes) keys.current?.yes();
+      else keys.current?.no();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [on]);
+  return { card, keys };
+}
+
 function PermissionCard({ ev, ctx }: { ev: Ev<"engine.approval">; ctx: Ctx }) {
   const { state, me, send } = ctx;
   const b = ev.body;
   const lane = ev.lane ?? MAIN_LANE;
   const { waiting, mayDrive, allowedKinds, may, viaInstruct, hostWait } = answerRights(state, me, lane, b);
-  const careful = b.scope === "commands" && !!carefulClass(b.items);
   const who = agentNameFor(state, lane);
   const [busy, setBusy] = useState(false);
+  // Always allow is a box ticked on purpose, then Run it, not a button between the two answers that a quick click lands on
+  // (the redesign of 2026-11-27). Only an owner may change the allow list (the session's settings), so only they see it.
+  const offerAlways = waiting && may && b.scope === "commands" && mayDrive && me.role === "owner" && !hostWait;
+  // "Always in this project" on a go-ahead (Arun, 2026-11-18, as Codex and OpenBot offer it): from now on commands like it go
+  // through in every session in this folder. Offered on the asker's own computer alone.
+  const offerProject = offerAlways && !!b.guard && state.engines[lane]?.hostId === me.id;
+  const [always, setAlways] = useState(false);
+  const [inProject, setInProject] = useState(false);
+  const rules = useAllowRules(offerAlways);
+  // Esc and ⌘↵ from the feed or an empty box too (useAskKeys); a crew mate's card has its own (MatePermission).
+  const { card: cardEl, keys } = useAskKeys(waiting && may && !state.options.team);
   // Said yes to by Friday, its crew mate trusted with its kind (Teammate.trust): a receipt that says so, where the card was.
   const trusted = ctx.events.find((e) => e.body.type === "goahead.trusted" && e.body.id === b.id);
   if (trusted && trusted.body.type === "goahead.trusted")
@@ -6887,17 +7039,51 @@ function PermissionCard({ ev, ctx }: { ev: Ev<"engine.approval">; ctx: Ctx }) {
   // A teammate asks in plain words (Arun, 2026-11-11, option 3A of the Crew overhaul, after Oh My Hermes): what it wants to do,
   // what that means, the command, and Allow once, Allow for this task or Deny.
   if (state.options.team) return <MatePermission ev={ev} ctx={ctx} who={who} waiting={waiting} may={may} hostWait={hostWait} busy={busy} answer={answer} />;
+  const entries = always && rules ? b.items.map(rules.alwaysAllowEntry) : null;
+  const allowSaid = rules ? b.items.map(rules.alwaysAllowEntry).map((a) => (a.endsWith("*") ? `“${a.slice(0, -1).trim()} …”` : `“${a}”`)).join(", ") : "";
+  // Run it, with what was ticked first: the command is let through only once the allow list (or the project) has taken it, so a
+  // refusal of the list never runs it unasked. Nothing is said over the chat after it (Arun, 2026-11-18: "i dont want this too
+  // appear after approving the command"): the allow list is in Session settings.
+  const run = async () => {
+    if (busy) return;
+    if (always) {
+      if (!entries) return;
+      const r = await send({ type: "settings.update", allow: [...new Set([...(state.options.allow ?? []), ...entries])] });
+      if (!r.ok) return ctx.notify(r.error ?? "Couldn't add that to the allow list.");
+    }
+    if (inProject && offerProject) {
+      const okay = await api(ctx.identity, "/api/project-allow", { method: "POST", body: JSON.stringify({ sid: ctx.sid, lane, items: b.items }) }).then(
+        () => true,
+        (e: Error) => (ctx.notify(e.message || "Couldn't allow that for the project."), false),
+      );
+      if (!okay) return;
+    }
+    return answer(true);
+  };
+  keys.current = { yes: () => void (!hostWait && run()), no: () => void answer(false) };
+  // The box names the rule it adds, as the allow list will hold it ("Always allow rm -rf build", "Always allow npm install …").
+  const allowName = rules ? [...new Set(b.items.map(rules.alwaysAllowEntry))].map((a) => (a.endsWith("*") ? `${a.slice(0, -1).trim()} …` : a)).join(", ") : "";
+  const risk = b.scope === "commands" && !b.guard ? riskOf(b.items) : null;
+  // What it touches, under the command: the tool's own reason when it says more than the chip (audit CODE-21 A, Arun 2026-11-04:
+  // not a sentence that says the kind again), else what a careful command means for you ("can't be brought back from here").
+  const plain = b.scope === "commands" && !b.guard ? plainRisk(b.items) : null;
+  const note = b.why && !(b.scope === "commands" && !b.guard && restatesKind(b.why, b.items)) ? (b.guard ? b.why.replace(/^[^:]+:\s*/, "") : b.why) : plain?.careful ? plain.risk : "";
   return (
     <div
+      ref={cardEl}
       className={cn("apv", !waiting && "done")}
       data-needs={waiting && may ? lane : undefined}
       role="group"
       aria-label="Permission needed"
       tabIndex={waiting && may ? 0 : -1}
-      // While the card has focus, one key answers it: a for yes, d for no.
+      // With focus anywhere on the card (⌘J brings it up with its first button ready), Esc is Don't and ⌘↵ is Run it, as the
+      // buttons show; a and d still answer while the card itself has focus.
       onKeyDown={(e) => {
-        if (!waiting || !may || busy || e.target !== e.currentTarget) return;
-        if (e.key === "a" || e.key === "A") (e.preventDefault(), void answer(true));
+        if (!waiting || !may || busy) return;
+        if (e.key === "Escape") (e.preventDefault(), e.stopPropagation(), void answer(false));
+        else if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !hostWait) (e.preventDefault(), e.stopPropagation(), void run());
+        else if (e.target !== e.currentTarget) return;
+        else if (e.key === "a" || e.key === "A") (e.preventDefault(), void run());
         else if (e.key === "d" || e.key === "D") (e.preventDefault(), void answer(false));
       }}
     >
@@ -6915,48 +7101,61 @@ function PermissionCard({ ev, ctx }: { ev: Ev<"engine.approval">; ctx: Ctx }) {
             {waiting && <WaitedFor since={ev.ts} />}
           </span>
         )}
-        <span className="apv-stamp">
-          <Stamp ev={ev} />
-        </span>
+        {/* The riskiest kind among its commands, one chip at the end of the heading, coloured by the risk. */}
+        {risk && (
+          <span className="apv-risk" data-tone={risk.tone || undefined}>
+            {risk.label}
+          </span>
+        )}
+        {!waiting && (
+          <span className="apv-stamp">
+            <Stamp ev={ev} />
+          </span>
+        )}
       </div>
-      {/* Compact (Arun, 2026-11-03: "desing these more compact and better"): the command, its reason beside it and the answers
-          on one line, wrapping under it only where there isn't room. A go-ahead's tag already says what kind it is. */}
-      <div className="apv-body">
-        <div className="apv-main">
-          <ul className="apv-items">
-            {b.items.map((i) => (
-              <li key={i}>
-                <code>{i}</code>
-                {b.scope === "commands" && !b.guard && <span className="apv-kind">{CLASS_LABEL[headlineClass(i)].chip ?? CLASS_LABEL[headlineClass(i)].label}</span>}
-              </li>
-            ))}
-          </ul>
-          {/* Not a sentence that says again what the kind beside the command says ("This command deletes files" beside "Delete or
-              overwrite"; audit CODE-21 A, Arun 2026-11-04). */}
-          {b.why && !(b.scope === "commands" && !b.guard && restatesKind(b.why, b.items)) && <p className="apv-note">{b.guard ? b.why.replace(/^[^:]+:\s*/, "") : b.why}</p>}
-          {b.scope === "turn" && !b.live && <p className="apv-note">{b.tool ? ENGINE_NAMES[b.tool] : "This tool"} can't ask about one thing at a time, so a yes lets it try the whole turn again with permission to change files and run commands.</p>}
-        </div>
+      {/* What will run, as a terminal shows it, and what it touches under it. */}
+      <ul className="apv-items">
+        {b.items.map((i) => (
+          <li key={i}>
+            {b.scope === "commands" && (
+              <span className="apv-prompt" aria-hidden="true">
+                $
+              </span>
+            )}
+            <code>{i}</code>
+          </li>
+        ))}
+      </ul>
+      {note && <p className="apv-note">{note}</p>}
+      {b.scope === "turn" && !b.live && <p className="apv-note">{b.tool ? ENGINE_NAMES[b.tool] : "This tool"} can't ask about one thing at a time, so a yes lets it try the whole turn again with permission to change files and run commands.</p>}
       {waiting &&
         (may ? (
-          <div className="apv-actions" data-careful={careful ? "" : undefined}>
-            {/* A command to look at first (an rm, a deploy, a push): "Don't" is the main button, as Needs you suggests (2026-11-04 QA). */}
-            <button type="button" className={`btn small${careful ? " primary" : ""}`} disabled={busy} title="Don't run it (D while the card has focus)" aria-keyshortcuts="D" onClick={() => void answer(false)}>
-              Don't
+          <div className="apv-actions">
+            {offerAlways && (
+              <label className="apv-check" title={allowSaid ? `From now on run ${allowSaid} without asking` : "From now on run commands like it without asking"}>
+                <input type="checkbox" checked={always} disabled={busy} onChange={(e) => setAlways(e.target.checked)} />
+                <span className="apv-check-text">Always allow{allowName ? ` ${allowName}` : ""}</span>
+              </label>
+            )}
+            {offerProject && (
+              <label className="apv-check" title={`From now on let commands like it through in every session in ${(state.engines[lane]?.copyOf ?? state.engines[lane]?.cwd ?? "").split(/[\\/]/).filter(Boolean).pop() ?? "this project"}`}>
+                <input type="checkbox" checked={inProject} disabled={busy} onChange={(e) => setInProject(e.target.checked)} />
+                Always in this project
+              </label>
+            )}
+            {/* Run it is the main answer, at the end of the row, whatever the command: the chip's colour does the warning
+                (the redesign of 2026-11-27, which replaced "Don't" as the main button for careful commands, 2026-11-04 QA). */}
+            <button type="button" className="btn small ghost apv-no" disabled={busy} title="Don't run it" aria-keyshortcuts="Escape D" onClick={() => void answer(false)}>
+              Don't<kbd aria-hidden="true">Esc</kbd>
             </button>
-            {/* The allow list is the session's settings, which only an owner changes: offered to them alone, and the command is let
-                through only once the list has taken it (it used to be let through on a refusal too). */}
-            {/* One press, not a menu to choose from: what it allows follows from what the command is (alwaysAllowEntry), and the
-                tooltip and the note after say exactly that, with where to take it back. */}
-            {b.scope === "commands" && mayDrive && me.role === "owner" && !hostWait && <AlwaysAllow items={b.items} allow={state.options.allow} busy={busy} send={send} ctx={ctx} answer={answer} />}
-            {/* A go-ahead, on the asker's own computer: allowed for every session in this project, not only this one. */}
-            {b.guard && b.scope === "commands" && me.role === "owner" && !hostWait && state.engines[lane]?.hostId === me.id && <ProjectAllow items={b.items} lane={lane} busy={busy} ctx={ctx} answer={answer} />}
             {hostWait ? (
               <span className="apv-note" title={`${hostWait}'s computer is in Manual, so only ${hostWait} can say yes to commands on it. Ask ${hostWait}, or ${hostWait} can switch it to Auto.`}>
                 Waiting for {hostWait} to say yes: it's {hostWait}'s computer, in Manual.
               </span>
             ) : (
-              <button type="button" className={`btn small${careful ? "" : " primary"}`} disabled={busy} title={`${b.scope === "commands" ? "Run it once" : "Let it go ahead"} (A while the card has focus)`} aria-keyshortcuts="A" onClick={() => void answer(true)}>
+              <button type="button" className="btn small primary apv-yes" disabled={busy || (always && !rules)} title={b.scope === "commands" ? (always ? "Run it, and from now on without asking" : "Run it once") : "Let it go ahead"} aria-keyshortcuts="Meta+Enter Control+Enter A" onClick={() => void run()}>
                 {b.scope === "commands" ? "Run it" : "Let it"}
+                <kbd aria-hidden="true">{runKey()}</kbd>
               </button>
             )}
           </div>
@@ -6966,7 +7165,6 @@ function PermissionCard({ ev, ctx }: { ev: Ev<"engine.approval">; ctx: Ctx }) {
             {me.role === "editor" && allowedKinds.length > 0 && b.scope === "commands" && " You can answer commands of the kinds the owner allowed, but not this one."}
           </p>
         ))}
-      </div>
     </div>
   );
 }
@@ -6999,15 +7197,25 @@ function MatePermission({ ev, ctx, who, waiting, may, hostWait, busy, answer }: 
   const guardWhy = b.guard && b.why ? b.why.replace(/^[^:]+:\s*/, "") : "";
   const why = b.guard ? (words.named ? "" : guardWhy) : b.why && !words.named && !(b.scope === "commands" && restatesKind(b.why, b.items)) ? b.why : "";
   const careful = words.careful || !!b.guard;
+  // As the session's card and the Board ask (the redesign of 2026-11-27): the risk as a coloured chip, Deny quiet on the left with
+  // Esc, Allow once the main answer at the end of the row with ⌘↵, both keys working from the feed or an empty box (useAskKeys).
+  // A go-ahead (guardrails.ts) has its kind as the chip ("Publishing", "Deleting files"), red where it can't be undone.
+  const risk = b.guard ? { label: GO_AHEAD_WORDS[b.guard] ?? "Asks first", tone: (b.guard === "delete" || b.guard === "keys" || b.guard === "money" ? "bad" : "warn") as "bad" | "warn" } : b.scope === "commands" ? riskOf(b.items) : null;
+  const { card, keys } = useAskKeys(waiting && may && !hostWait);
+  keys.current = { yes: () => void answer(true), no: () => void answer(false) };
   return (
     <div
+      ref={card}
       className={cn("mp", careful && "careful", !waiting && "done")}
       data-needs={waiting && may ? lane : undefined}
       role="group"
       aria-label={`${who} wants to ${words.does}`}
       tabIndex={waiting && may ? 0 : -1}
       onKeyDown={(e) => {
-        if (!waiting || !may || busy || e.target !== e.currentTarget) return;
+        if (!waiting || !may || busy || hostWait) return;
+        if (e.key === "Escape") return void (e.preventDefault(), e.stopPropagation(), void answer(false));
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) return void (e.preventDefault(), e.stopPropagation(), void answer(true));
+        if (e.target !== e.currentTarget) return;
         if (e.key === "a" || e.key === "A") (e.preventDefault(), void answer(true));
         else if (e.key === "d" || e.key === "D") (e.preventDefault(), void answer(false));
       }}
@@ -7017,6 +7225,11 @@ function MatePermission({ ev, ctx, who, waiting, may, hostWait, busy, answer }: 
         <b>
           {who} wants to {words.does}
         </b>
+        {risk && (
+          <span className="apv-risk" data-tone={risk.tone || undefined}>
+            {risk.label}
+          </span>
+        )}
       </div>
       {(words.risk || why) && <p className="mp-risk">{b.guard && !words.named ? why : [words.risk, why].filter(Boolean).join(" ")}</p>}
       {b.items.length > 0 && (
@@ -7029,15 +7242,14 @@ function MatePermission({ ev, ctx, who, waiting, may, hostWait, busy, answer }: 
       {waiting &&
         (may && !hostWait ? (
           <div className="mp-acts">
-            <button type="button" className="mp-btn primary" disabled={busy} aria-keyshortcuts="A" title="Let it run this once (A)" onClick={() => void answer(true)}>
-              Allow once
+            <span className="mp-wait">
+              {who} waits here
+              <WaitedFor since={ev.ts} />
+            </span>
+            {/* Deny quiet on the left, the yeses after it, Allow once the main one at the end of the row. */}
+            <button type="button" className="mp-btn quiet" disabled={busy} title="Don't run it" aria-keyshortcuts="Escape D" onClick={() => void answer(false)}>
+              Deny<kbd aria-hidden="true">Esc</kbd>
             </button>
-            {/* Only where it does what it says (taskAllowApplies): the host of its computer, in a session they own. */}
-            {taskAllowApplies(ctx.state, lane, ctx.me.id) && (
-              <button type="button" className="mp-btn" disabled={busy} title={`Let ${who} run commands like this without asking until it next stops`} onClick={() => void answer(true, true)}>
-                Allow for this task
-              </button>
-            )}
             {/* Trust that grows (Arun, 2026-11-15): after three yeses in a row to this kind, it may take it on its own from now. */}
             {b.guard && b.guard !== "takeover" && trustOffer(ctx.events, lane, b.guard, ev.seq) && !mateOn(lane)?.trust?.includes(b.guard) && (
               <button
@@ -7055,13 +7267,15 @@ function MatePermission({ ev, ctx, who, waiting, may, hostWait, busy, answer }: 
                 Always allow
               </button>
             )}
-            <button type="button" className="mp-btn quiet" disabled={busy} aria-keyshortcuts="D" title="Don't run it (D)" onClick={() => void answer(false)}>
-              Deny
+            {/* Only where it does what it says (taskAllowApplies): the host of its computer, in a session they own. */}
+            {taskAllowApplies(ctx.state, lane, ctx.me.id) && (
+              <button type="button" className="mp-btn" disabled={busy} title={`Let ${who} run commands like this without asking until it next stops`} onClick={() => void answer(true, true)}>
+                Allow for this task
+              </button>
+            )}
+            <button type="button" className="mp-btn primary" disabled={busy} aria-keyshortcuts="Meta+Enter Control+Enter A" title="Let it run this once" onClick={() => void answer(true)}>
+              Allow once<kbd aria-hidden="true">{runKey()}</kbd>
             </button>
-            <span className="mp-wait">
-              {who} waits here
-              <WaitedFor since={ev.ts} />
-            </span>
           </div>
         ) : (
           <p className="mp-wait solo">Waiting for {hostWait ?? ctx.state.laneDrivers[lane]?.name ?? ctx.state.driver?.name ?? "whoever is driving"} to answer.</p>
@@ -7165,11 +7379,20 @@ const EventItem = memo(function EventItem({ ev, ctx }: { ev: SessionEvent; ctx: 
     case "mesh.posted":
       return <AgentUpdateCard ev={ev} state={state} stamp={<Stamp ev={ev} />} />;
     case "proof.clip":
-      return <ProofClipCard ev={ev} sid={ctx.sid} invite={ctx.invite} />;
-    case "proof.tests":
-      return <TestProofCard ev={ev} sid={ctx.sid} by={agentNameFor(state, ev.lane ?? MAIN_LANE)} />;
+      return <Suspense fallback={null}><ProofClipCard ev={ev} sid={ctx.sid} invite={ctx.invite} /></Suspense>;
+    case "proof.tests": {
+      // Fix it on the card of a failing check (Friday's run of the tests after the lane's latest run), for someone who may steer it,
+      // until a later run moves on: where the reply's badge offered it above the answer before (the redesign of 2026-11-27).
+      const lane = ev.lane ?? MAIN_LANE;
+      const via = b.by === "friday" && !b.runs.every((r) => r.ok) && !ctx.replaying ? reviewVia(state, me, lane) : null;
+      const onLane = (e: SessionEvent) => (e.lane ?? MAIN_LANE) === lane;
+      const current = !!via && ctx.events.findLast((e) => onLane(e) && e.body.type === "run.ended")?.seq === b.run && !ctx.events.some((e) => e.seq > ev.seq && onLane(e) && e.body.type === "run.started");
+      const st = current ? checkStateOf(ctx.events, lane, b.run) : null;
+      const onFix = st?.phase === "failed" && via ? () => void ctx.send({ type: via, text: fixFirstText(st), ...(lane !== MAIN_LANE ? { lane } : {}) }) : undefined;
+      return <Suspense fallback={null}><TestProofCard ev={ev} sid={ctx.sid} by={agentNameFor(state, lane)} onFix={onFix} /></Suspense>;
+    }
     case "proof.status":
-      return <ProofStatusCard ev={ev} events={ctx.events} sid={ctx.sid} invite={ctx.invite} onRetry={(lane) => void recordProofClip(ctx.sid, ctx.invite, lane).catch((e: Error) => ctx.notify(e.message))} />;
+      return <Suspense fallback={null}><ProofStatusCard ev={ev} events={ctx.events} sid={ctx.sid} invite={ctx.invite} onRetry={(lane) => void recordProofClip(ctx.sid, ctx.invite, lane).catch((e: Error) => ctx.notify(e.message))} /></Suspense>;
     case "ui.card": return <Suspense fallback={null}><GenCard ev={ev} state={state} events={ctx.events} send={ctx.send} sid={ctx.sid} invite={ctx.invite} /></Suspense>;
     case "teammate.folders":
       return <FoldersGiven ev={ev} stamp={<Stamp ev={ev} />} />;
@@ -7722,6 +7945,9 @@ const EventItem = memo(function EventItem({ ev, ctx }: { ev: SessionEvent; ctx: 
           </Notice>
         );
       }
+      // An own model's window too small for the step even after Friday fitted it and sent it again (agent/window.ts roomError):
+      // how big each was and what to do, never the server's raw text, and no Try again that would send the same request.
+      if (b.outcome === "error" && ROOM.test(b.error ?? "")) return <RoomCard ev={ev} error={b.error!} name={agentNameFor(state, lane)} />;
       return (
         <Notice ev={ev} icon={XIcon} tone="danger">
           {/* A tool's raw error (a stack trace) is said as what it means, the trace itself one click away (Arun, 2026-10-29:
@@ -7739,6 +7965,10 @@ const EventItem = memo(function EventItem({ ev, ctx }: { ev: SessionEvent; ctx: 
           {b.outcome === "error" && !planLimitHit(b.error) && <StoppedAgain ctx={ctx} lane={lane} seq={ev.seq} />}
         </Notice>
       );
+    }
+    case "context.compacted": {
+      if (!b.summary) return null;
+      return <CompactLine ctx={ctx} ev={ev} lane={ev.lane ?? MAIN_LANE} />;
     }
     case "model.routed": {
       // An Auto lane's coding tool: the model picked for this message, against the tool's other models as they were weighed.
@@ -8952,6 +9182,10 @@ function ReachPill({ ctx, lane }: { ctx: Ctx; lane: string }) {
       items={() => [
         { heading: "In your folder, it may" },
         ...REACH.map((r) => {
+          // A mode this tool can't be held to (Amp's Manual and Plan, Aider's and Crush's Manual): said beside it and not offered,
+          // rather than picked and then every turn refused (Arun, 2026-11-27: "fix uneven across tools").
+          const cannot = modeRefusal(engine.tool, r.id);
+          if (cannot) return isLocal() ? { label: r.label, icon: MODE_ICON[r.id], title: cannot, disabled: true, onSelect: () => {} } : { label: r.label, sub: cannot, disabled: true, onSelect: () => {} };
           let sub = r.id === "edits" && (engine.tool === "codex" || engine.tool === "cursor") ? "Asks before any turn that changes something." : r.hint;
           // In Work, what each means for pieces, not files and commands (QA, 2026-10-28; the home page already said it so).
           if (state.options.work) sub = WORK_MODE_BLURB[r.id];
@@ -9085,7 +9319,12 @@ function AccountDefaultNote({ ctx, lane }: { ctx: Ctx; lane: string }) {
   const got = useLaneAccounts(ctx, lane);
   const tool = got?.tool.tool;
   const preferred = usePreferredAccount(tool, got?.accounts);
-  const [changed, setChanged] = useState(false);
+  // The pick as this was first seen: one changed since (here, in another window, or on the phone, now that the computer keeps
+  // it) is the change this note is about, read from the computer's list as well as this window's own event.
+  const first = useRef<string | null>(null);
+  if (got && first.current === null) first.current = preferred;
+  const [changedHere, setChanged] = useState(false);
+  const changed = changedHere || (first.current !== null && preferred !== first.current);
   const [kept, setKept] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -9627,7 +9866,8 @@ function Composer({ ctx, lane = MAIN_LANE, locked = false, onLane, onPin, plan, 
         mark: <EngineMark tool={state.engines[id]?.tool ?? ""} size={15} />,
         after: <StateRing state={sendRing(state, id, me.id)} />,
         checked: !toPeople && id === lane,
-        ...(sub ? { sub } : {}),
+        // The ring says where it stands; the words are its tooltip, not a second line (Arun, 2026-11-28: "get rid of the secondary text").
+        ...(sub ? { title: sub } : {}),
         onSelect: () => (setToPeople(false), onLane?.(id)),
       };
     }),
@@ -9637,7 +9877,7 @@ function Composer({ ctx, lane = MAIN_LANE, locked = false, onLane, onPin, plan, 
       ? []
       : ctx.solo
         ? soloFriday
-        : [{ label: "Friday Code", mark: <EngineMark tool="" size={15} />, sub: "Opens beside it", onSelect: addFriday }]),
+        : [{ label: "Friday Code", mark: <EngineMark tool="" size={15} />, title: "Opens beside it", onSelect: addFriday }]),
     // Another agent, from where you pick who it goes to as well as from the header's + (Arun, 2026-11-03: "add the add agent part as well").
     // As the header's + lists them: your crew first, the tools on this computer not here yet, then the rest.
     ...(ctx.onConnect && me.role !== "viewer" ? crewRows() : []),
@@ -9652,7 +9892,7 @@ function Composer({ ctx, lane = MAIN_LANE, locked = false, onLane, onPin, plan, 
         ]
       : []),
     // Talking to the people here without steering anything: @name tells someone.
-    ...(others ? [{ heading: "Or" }, { label: "The people here", mark: <Icon name="users" size={15} />, checked: toPeople, sub: "No agent reads it", onSelect: () => setToPeople(true) }] : []),
+    ...(others ? [{ heading: "Or" }, { label: "The people here", mark: <Icon name="users" size={15} />, checked: toPeople, title: "No agent reads it", onSelect: () => setToPeople(true) }] : []),
   ];
 
   // Sending mid-run either waits for the step to end or cuts it short, and
@@ -9775,6 +10015,15 @@ function Composer({ ctx, lane = MAIN_LANE, locked = false, onLane, onPin, plan, 
     // The box empties as it sends: what draws its @names under it goes with it (put back with the words if it fails).
     setTyped("");
     let text = msg.text.trim();
+    // /compact to Friday's agent on an own model: its older turns compacted now (agent/compact.ts), not sent as a message. A coding
+    // tool's lane takes /compact itself.
+    if (text === "/compact" && !laneTool) {
+      const r = await fetch(`/api/sessions/${encodeURIComponent(sid)}/compact?invite=${encodeURIComponent(invite)}`, { method: "POST", headers: { "content-type": "application/json", "x-friday-local": "1" }, body: JSON.stringify({ lane }) })
+        .then((x) => x.json() as Promise<{ ok?: boolean; why?: string; error?: string }>)
+        .catch((e: Error): { ok?: boolean; why?: string; error?: string } => ({ error: e.message }));
+      if (!r.ok) notify(r.why ?? r.error ?? "It couldn't compact just now.");
+      return;
+    }
     // A team's own "/" command does what it says here, or becomes the words it stands for (team-commands.ts).
     if (state.options.team && text.startsWith("/")) { const said = await runTeamCommand(text, { identity: ctx.identity, notify, sid }); if (said === null) return; text = said; }
     // The quotes held over the box go first, as Markdown, one blank line after each (team-room.ts withQuotes). They come off the box
@@ -10150,6 +10399,8 @@ function Composer({ ctx, lane = MAIN_LANE, locked = false, onLane, onPin, plan, 
                   </span>
                 )}
                 {mode !== "view" && !toPeople && !onePill && <span className="send-bar" aria-hidden="true" />}
+            {/* The tool and model at the box's left, never at the right by the mic (Arun, 2026-11-27: "move the model picker thing
+                to the left again"). */}
             {mode !== "view" && !toPeople && toolPick && (
               <AgentSwitch
                 modelOnly={!onePill}
@@ -10312,7 +10563,7 @@ function compactedBefore(events: SessionEvent[], lane: string, item: { key: numb
 function FlowBoard({ ev, ctx, fallback }: { ev: SessionEvent; ctx: Ctx; fallback: ReactNode }) {
   const runs = useRoomRuns(ctx.sid);
   const run = runs.find((r) => r.seq0 === ev.seq);
-  if (run) return <WorkflowRunCard run={run} identity={ctx.identity ?? null} />;
+  if (run) return <WorkflowRunCard run={run} identity={ctx.identity ?? null} events={ctx.events} engines={ctx.state.engines} />;
   if (runs.some((r) => r.seq0 < ev.seq && r.at <= ev.ts && (!r.ended || ev.ts <= r.ended + 60_000))) return null;
   return <>{fallback}</>;
 }

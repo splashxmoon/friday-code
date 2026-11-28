@@ -11,7 +11,7 @@ import path from "node:path";
 import { createInterface } from "node:readline";
 import WebSocket from "ws";
 import { clock, closingSaid, keepAlive } from "../heartbeat.js";
-import { CLI_ID, ENGINE_NAMES, isEngineEffort, type Attachment, type EngineMode, type EngineTool, type ToolCommand, type DiffFile } from "../types.js";
+import { CLI_ID, ENGINE_NAMES, isEngineEffort, modeRefusal, type Attachment, type EngineMode, type EngineTool, type ToolCommand, type DiffFile } from "../types.js";
 import { ADAPTERS, DECIDE_YOURSELF, PLAN_REFUSES, askedItem, childEnv, claudeMcpServers, claudePictures, imageType, codexExec, findBin, launcher, loginStatusCached, loginStatusQuick, tooLongForArgv, withDirs, type Adapter, type AdapterOut, type Launch, type TurnSpec } from "./adapters.js";
 import { folderVars } from "./environment.js";
 import { applyCopy, baseAfterCommit, checkpoint, diffSince, diffTrees, dropShadow, reposInside, fetchBranch, repoInfo, sameTree, sessionBase, setSessionBase, shadowSnapshot, switchBranch, trackBranch, warmSnapshot, type RepoInfo, type Shadow } from "./git.js";
@@ -21,7 +21,7 @@ import { dialOptions, getBytes } from "./dial.js";
 import { readRepo, type RepoRequest } from "./repo-read.js";
 import { noteClaudeStarting, readLimits } from "./limits.js";
 import { act, canShowBar, computerUseOn, onStopAsked, OS_NAME, sayUsing, type ComputerAct, type Screen } from "./computer.js";
-import { accountEnv, DEFAULT_ACCOUNT, getAccount, hasAccounts, isOut, listAccounts, markBack, markOut, nextAccount, prepareAccountDir, type ToolAccount } from "./accounts.js";
+import { accountEnv, DEFAULT_ACCOUNT, getAccount, hasAccounts, isOut, listAccounts, markBack, markOut, nextAccount, preferredAccount, prepareAccountDir, type ToolAccount } from "./accounts.js";
 import { usesApiKey } from "./api-key.js";
 import { limitHit } from "../limit-reset.js";
 import { shellName } from "./background.js";
@@ -30,14 +30,15 @@ import { CODEX_BUILTINS, expandCommand, skillCommands, toolCommandsIn } from "./
 import { skillsNote } from "./shared-skills.js";
 import { rulesNoteFor } from "./repo-rules.js";
 import { parseContextReport, type ToolContext } from "./context-report.js";
-import { projectMcpServers, type AcpMcpServer } from "./mcp-servers.js";
+import { askFacts, type AskFacts } from "./ask-facts.js";
+import { MCP_ASK, decideMcp, projectMcp, type AcpMcpServer, type McpEntry } from "./mcp-servers.js";
 import { acpMount, claudeMountFile, codexMount, mountedServers } from "./connections.js";
 import { nodeForScripts, refusedFlag } from "./adapters.js";
 // Kept here too, where it was first.
 export { refusedFlag } from "./adapters.js";
 import { AUTO_MODE, autoModeRefused } from "./adapters.js";
 import { acpEntry, ensureCursorEntry, openFridayMcp, type FridayMcp, type MeshAnswer } from "./friday-mcp.js";
-import { canScreenshot, screenshot } from "./screenshot.js";
+import { canScreenshot, holdOffOwnApp, screenshot } from "./screenshot.js";
 import { keepPictures } from "./tool-pictures.js";
 import { firstWordMs, hungMs, isHung, neverStarted, quietMs, Silence, sleepWatch, treeCpu } from "./hung.js";
 import { localEdition } from "../local-edition.js";
@@ -121,8 +122,9 @@ export interface RunnerOptions {
   /** One of that CLI's own models; its default when omitted. */
   model?: string;
   /**
-   * Which of the tool's accounts on this computer it runs as (accounts.ts): Claude Code and Codex can have more than one. Its own
-   * sign-in when omitted, unless that is out of usage and another isn't.
+   * Which of the tool's accounts on this computer it runs as (accounts.ts): Claude Code and Codex can have more than one. When
+   * omitted, a new conversation starts on the account the person picked for new sessions (preferredAccount), and one being
+   * carried on stays on the tool's own sign-in, as it always did.
    */
   account?: string;
   /** Permission to act as this person in this session, minted by the server. */
@@ -520,6 +522,10 @@ export class Runner {
   private resumeId: string | null = null;
   /** The account its tool runs as, for a tool with more than one (accounts.ts); null for the others. */
   private account: ToolAccount | null = null;
+  /** The account this lane runs as, once it has started: null for a tool with one, or before then. */
+  get accountId(): string | null {
+    return this.account?.id ?? null;
+  }
   /** Its tool runs on an API key or a cloud provider, not on its host's own plan (api-key.ts). */
   private apiKey = false;
   /** The picked conversation couldn't be found, so this lane's CLI carries on in a fresh one, which has none of its memory. */
@@ -635,6 +641,8 @@ export class Runner {
     // The skills on this computer looked at now, beside connecting: Claude Code started ahead waits on them, not on a read after.
     void this.loadSkills();
     const o = this.opts;
+    // A Friday on this computer is never the page a screenshot or a proof clip is taken of (screenshot.ts).
+    holdOffOwnApp(o.server);
     // Whether this machine has the conversation a hand-off continues, looked up by its file's name beside the checks below:
     // it decides what the server is told (see where it is awaited). A look that fails is "don't know", not "not here".
     const resumeFrom = o.resumeTool ?? o.tool;
@@ -648,8 +656,11 @@ export class Runner {
     // second or more of every start. A copy made a moment ago says its repository itself (addWorktree).
     const tool = o.tool;
     const checks = async (tool: EngineTool): Promise<void> => {
-      if (hasAccounts(tool)) this.account = await this.startAccount(tool, o.account);
-      const acct = this.account && this.account.id !== DEFAULT_ACCOUNT ? this.account.id : undefined;
+      // Not named: the account the person picked for new sessions, for a new conversation (nothing is moved: one carried on
+      // keeps the tool's own sign-in, and a lane opened again says the account it ran as).
+      const byPick = hasAccounts(tool) && !o.account && !o.resumeId;
+      if (hasAccounts(tool)) this.account = await this.startAccount(tool, o.account ?? (byPick ? await preferredAccount(tool) : undefined));
+      let acct = this.account && this.account.id !== DEFAULT_ACCOUNT ? this.account.id : undefined;
       // On a key its owner pays for by use, or on a person's own plan: the server keeps a personal plan to its owner's work
       // (api-key.ts, own-plan.ts). Read from the settings it starts with, never from a key or a token.
       this.apiKey = await usesApiKey(tool, { ...childEnv(), ...accountEnv(tool, this.account?.id) }).catch(() => false);
@@ -662,10 +673,17 @@ export class Runner {
       // a terminal is never turned away on an old "no".
       // How to start it is resolved beside that, so an unlaunchable wrapper is reported here rather than as a failed turn
       // after someone sends an instruction. Not being signed in is said first, as it always was.
-      const [signedIn, launch] = await Promise.all([
-        o.bin ? true : startChecks.loginStatusQuick(tool, bin, 0, acct).then(async (q) => q === true || (await startChecks.loginStatusCached(tool, bin, acct)) !== false),
-        startChecks.launcher(bin).then((l) => ({ l }), (e: Error) => ({ e })),
-      ]);
+      const signedInAs = (a: string | undefined) => (o.bin ? Promise.resolve(true) : startChecks.loginStatusQuick(tool, bin, 0, a).then(async (q) => q === true || (await startChecks.loginStatusCached(tool, bin, a)) !== false));
+      let [signedIn, launch] = await Promise.all([signedInAs(acct), startChecks.launcher(bin).then((l) => ({ l }), (e: Error) => ({ e }))]);
+      // The account picked for new sessions signed out since: the tool's own sign-in, rather than an automation or a Captain's
+      // session failing on it. One named for this lane is never swapped (own-plan.ts).
+      if (!signedIn && acct && byPick) {
+        this.log(`${this.label}'s ${this.account!.label} account, the one for new sessions, isn't signed in here, so this starts on its own sign-in`);
+        this.account = (await listAccounts(tool as "claude" | "codex"))[0]!;
+        acct = undefined;
+        this.apiKey = await usesApiKey(tool, childEnv()).catch(() => false);
+        signedIn = await signedInAs(undefined);
+      }
       if (!signedIn && acct) throw new RunnerError(`${this.label}'s ${this.account!.label} account isn't signed in on this machine. Sign in to it from Friday's tool settings, then connect again.`);
       if (!signedIn) throw new RunnerError(`${this.label} isn't logged in on this machine. Run \`${[ADAPTERS[tool].bins[0], ...ADAPTERS[tool].login].join(" ")}\` once, then connect again.`);
       if ("e" in launch) throw new RunnerError(launch.e.message);
@@ -1072,7 +1090,53 @@ export class Runner {
   private async readAcpMcp(): Promise<void> {
     const tool = this.opts.tool;
     if (!tool || !ADAPTERS[tool].interactive || ADAPTERS[tool].dialect) return;
-    this.acpMcp = await projectMcpServers(this.opts.cwd).catch(() => []);
+    const { servers, pending } = await projectMcp(this.opts.cwd, process.env, this.mcpFolder).catch(() => ({ servers: [], pending: [] }));
+    this.acpMcp = servers;
+    this.mcpPending = pending;
+  }
+
+  /** Where the answers for this folder's .mcp.json are kept under: the project itself, for a copy of it. */
+  private get mcpFolder(): string {
+    return this.opts.copyOf ?? this.opts.cwd;
+  }
+  /** The project's servers nobody has answered for yet (mcp-servers.ts): not passed to the tool until its host says yes. */
+  private mcpPending: McpEntry[] = [];
+  /** The cards put for them in this runner's life, by the card's id: which entries a yes or no to it answers. */
+  private readonly mcpAsked = new Map<string, string[]>();
+
+  /**
+   * Ask this computer's owner about the project's servers they haven't answered for, as one card in the session, once for each
+   * set of them. A repository's .mcp.json is a command run as them, or an address sent their keys: until their yes, the tool is
+   * handed none of it (Security H3). Only they can say yes (hostsOwn), and the turn doesn't wait: the servers count from the
+   * next turn after the answer, as one added to the file does.
+   */
+  private askMcp(): void {
+    const hashes = this.mcpPending.map((e) => e.hash);
+    if (!hashes.length || [...this.mcpAsked.values()].some((h) => h.join() === hashes.join())) return;
+    const n = hashes.length;
+    const ask = {
+      scope: "turn" as const,
+      item: this.mcpItem(),
+      why: `This folder's .mcp.json names ${n === 1 ? "a server" : `${n} servers`} that ${this.label} would start on your computer as you, with your keys filled in wherever ${n === 1 ? "it says" : "they say"} \${NAME}. Yes hands ${n === 1 ? "it" : "them"} to ${this.label} from the next turn. You're asked again only when an entry changes.`,
+      hostsOwn: true,
+      requestId: randomUUID(),
+      input: {},
+      reply: (yes: boolean) => void this.answerMcp(hashes, yes),
+    };
+    const id = this.live.size ? null : this.putAsk(ask);
+    if (id) this.mcpAsked.set(id, hashes);
+    // Behind another card: asked at the next turn instead, rather than held in a queue the turn's end empties.
+  }
+
+  /** The card's one line for the servers not yet answered for: each as the file writes it, a `${KEY}` by its name. */
+  private mcpItem(): string {
+    const shown = this.mcpPending.map((e) => e.shown).join("; ");
+    return `${MCP_ASK}: ${shown.length > 600 ? `${shown.slice(0, 599)}…` : shown}`;
+  }
+
+  private async answerMcp(hashes: string[], yes: boolean): Promise<void> {
+    await decideMcp(this.mcpFolder, hashes, yes).catch((e) => this.log(`couldn't keep the answer for .mcp.json: ${(e as Error).message}`));
+    this.log(yes ? "allowed the project's MCP servers" : "refused the project's MCP servers");
   }
 
   /**
@@ -1674,7 +1738,9 @@ export class Runner {
       return;
     }
     if (adapter.modes && !adapter.modes.includes(mode)) {
-      this.send({ kind: "turn.end", id: m.id, outcome: "error", error: `${this.label} can't ask before it acts, so it only runs in Auto. Switch this lane to Auto to use it.` });
+      // Said as the mode picker says it (types.ts TOOL_MODES): "only runs in Auto" was wrong for Aider and Crush, which run in Plan too.
+      const why = modeRefusal(adapter.tool, mode) ?? `${this.label} can't ask before it acts, so it only runs in Auto.`;
+      this.send({ kind: "turn.end", id: m.id, outcome: "error", error: `${why} Switch this lane to ${adapter.modes.includes("plan") ? "Auto or Plan" : "Auto"} to use it.` });
       return;
     }
     // The run's checkpoint, taken while the turn gets ready (its command, its files, its MCP servers, its note's file) and in
@@ -1694,6 +1760,20 @@ export class Runner {
     let prompt = own ?? m.prompt;
     const files = retry ?? (await this.download(m.attachments ?? []));
     const [mcp] = await Promise.all([this.mcpServers(), this.readAcpMcp(), this.readConnections()]);
+    // An answer about the project's .mcp.json that came after the turn that asked had ended: kept, and the file read again, so a
+    // yes counts in this very turn. A runner started since has no memory of the card: it is the same one when it reads the same.
+    let mcpAnswered = false;
+    if (m.approval) {
+      const hashes = this.mcpAsked.get(m.approval.id) ?? (this.mcpPending.length && m.approval.items?.[0] === this.mcpItem() ? this.mcpPending.map((e) => e.hash) : null);
+      if (hashes) {
+        this.mcpAsked.delete(m.approval.id);
+        await this.answerMcp(hashes, m.approval.approve);
+        await this.readAcpMcp();
+        mcpAnswered = true;
+      }
+      // The answer is to Friday's question, not the tool's: it is told what was decided rather than handed a bare "yes".
+      if ((mcpAnswered || m.approval.items?.[0]?.startsWith(MCP_ASK)) && !asTyped) prompt = `[Friday] The computer's owner ${m.approval.approve ? "allowed" : "said no to"} this project's MCP servers (its .mcp.json)${m.approval.approve ? ", so their tools are yours to use from here" : ""}. That answered a question of Friday's, not one of yours: nothing new is asked of you. If you had work under way, carry on with it; otherwise say in a line that you're ready.`;
+    }
     if (files.length && !asTyped) prompt += `\n\nFiles attached to the session, saved on this machine:\n${files.map((f) => `- ${f}`).join("\n")}`;
     // Pictures, said to be looked at: a tool handed them as images sees them already, and one that isn't (Cursor, Amp, an ACP
     // tool that takes none) opens them itself, as it would a screenshot named to it at its own prompt.
@@ -1733,7 +1813,9 @@ export class Runner {
     const mine = this.asked;
     this.asked = null;
     const what = a?.scope && a.items?.length ? { scope: a.scope, items: a.items } : a && mine?.id === a.id ? mine : null;
-    if (a?.approve && what && this.mode === "edits" && !asTyped) {
+    // A yes to the project's MCP servers is to those and nothing else: never write access for a turn in Manual.
+    const aboutMcp = mcpAnswered || !!what?.items[0]?.startsWith(MCP_ASK);
+    if (a?.approve && what && this.mode === "edits" && !asTyped && !aboutMcp) {
       grant = { scope: what.scope === "commands" ? "commands" : "turn", items: what.items.slice(0, 6).map(String) };
       prompt = `[Friday] You have been given permission for what you were blocked on (${grant.items.join("; ")}). Go ahead with it now.
 
@@ -1760,6 +1842,7 @@ ${prompt}`;
     this.waitingAsks.length = 0;
     this.askedLive.clear();
     this.computerTurnStarts();
+    this.askMcp();
     this.log(`turn ${m.id}: ${m.prompt.split("\n")[0]!.slice(0, 100)}`);
     const argv = [...this.launch.prefix, ...adapter.args(spec)];
     // An ACP tool kept from the last turn, or started as the lane opened, takes it once it is ready: a first instruction sent the
@@ -2043,7 +2126,7 @@ ${prompt}`;
       error = `${this.label} still couldn't do this after you said yes: ${blocked.items.join("; ")}. It wasn't Friday holding it back, so another yes won't help: its steps above show what went wrong.`;
     } else if (outcome === "done" && blocked && this.mode !== "full") {
       this.asked = { id: randomUUID().slice(0, 8), scope: blocked.scope, items: blocked.items };
-      this.send({ kind: "event", body: { type: "engine.approval", ...this.asked } });
+      this.send({ kind: "event", body: { type: "engine.approval", ...this.asked, ...(blocked.scope === "commands" ? this.factsOf(blocked.items) : {}) } });
     }
     this.send({ kind: "turn.end", id: m.id, outcome, ...(error ? { error } : {}) });
     // One line: the tool's whole report (a stack trace) is in the session's feed; app.log had it in full for every failed turn.
@@ -2161,12 +2244,22 @@ ${prompt}`;
     return { own: mine ? [cwd] : [], given: [...(mine ? [] : [cwd]), ...(this.opts.copyOf ? [this.opts.copyOf] : []), ...(this.opts.dirs ?? [])], home: homedir(), cwd };
   }
 
+  /** What this computer knows of commands it asks about that their text doesn't say (ask-facts.ts): none when it can't be read. */
+  private factsOf(commands: string[]): AskFacts {
+    try {
+      return askFacts(commands, this.opts.cwd, this.opts.dirs ?? []);
+    } catch {
+      return {};
+    }
+  }
+
   /** Put an ask to the session as its card. */
-  private putAsk(a: (typeof this.waitingAsks)[number]): void {
+  private putAsk(a: (typeof this.waitingAsks)[number]): string {
     const id = randomUUID().slice(0, 8);
     this.live.set(id, { requestId: a.requestId, input: a.input, ...(a.reply ? { reply: a.reply } : {}) });
     this.askedLive.add(a.item);
-    this.send({ kind: "event", body: { type: "engine.approval", id, scope: a.scope, items: [a.item], live: true, ...(a.why ? { why: a.why } : {}), ...(a.guard ? { guard: a.guard } : {}), ...(a.hostsOwn ? { hostsOwn: true } : {}) } });
+    this.send({ kind: "event", body: { type: "engine.approval", id, scope: a.scope, items: [a.item], live: true, ...(a.why ? { why: a.why } : {}), ...(a.guard ? { guard: a.guard } : {}), ...(a.hostsOwn ? { hostsOwn: true } : {}), ...(a.scope === "commands" ? this.factsOf([a.item]) : {}) } });
+    return id;
   }
   /** How the turn now running is stopped, for a tool that has a way of its own (see Parser.cancel). */
   private cancelTurn: (() => void) | null = null;

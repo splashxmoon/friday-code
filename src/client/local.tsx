@@ -30,7 +30,7 @@ export interface LocalTool {
   /** Its look on that computer failed or ran out of time (runner/tool-probe.ts): not known to be there or not. */
   unknown?: true;
   /** Its accounts on that computer, when it has more than one (Claude Code, Codex: runner/accounts.ts). */
-  accounts?: { id: string; label: string; loggedIn: boolean | null; out?: boolean; outUntil?: number | null }[];
+  accounts?: { id: string; label: string; loggedIn: boolean | null; out?: boolean; outUntil?: number | null; /** The one new sessions start on (accounts.ts preferredAccount). */ preferred?: true; /** Who it is signed in as. */ email?: string }[];
 }
 
 export interface LinkStatus {
@@ -52,6 +52,8 @@ export interface MachineState {
   link?: { connected: boolean; machine?: MachineInfo };
   /** Friday is running on this computer, so it could be used instead. */
   hereAvailable?: boolean;
+  /** This Friday is a host, looked at from another computer through a tunnel to its port alone (local/hosts.ts). */
+  remote?: boolean;
 }
 
 const LINK_KEY = "mpa.link";
@@ -299,7 +301,7 @@ function remember(id: string, state: MachineState | null): void {
   }
 }
 
-type ToolsAnswer = { tools: LocalTool[]; home: string; machine?: MachineInfo; where?: "local" | "linked" };
+type ToolsAnswer = { tools: LocalTool[]; home: string; machine?: MachineInfo; where?: "local" | "linked"; /** A host, looked at from another computer (local/hosts.ts). */ remote?: boolean };
 /** One look at the computer: what answered, the link, and (for a linked one) whether this computer could also run things. */
 /** `slow`: nothing answered because the server didn't in time (twice), not because it refused or isn't there. */
 type Probe = { answer: ToolsAnswer | null; link: LinkStatus | null; here: Promise<boolean> | null; slow?: boolean };
@@ -418,7 +420,7 @@ export function useMachine(identity: Identity): { state: MachineState; refresh: 
       // Say what is known now rather than holding the whole answer back for a
       // question nobody has asked yet: whether *this* machine is also an
       // option matters when switching, not when finding out if anything works.
-      const found: MachineState = { mode, tools: answer.tools, home: answer.home, machine: answer.machine, link: linkInfo };
+      const found: MachineState = { mode, tools: answer.tools, home: answer.home, machine: answer.machine, link: linkInfo, ...(answer.remote ? { remote: true } : {}) };
       setState(found);
       remember(identity.id, found);
       // A sign-in check slower than the server waits (Claude Code's takes two or three seconds on Windows) comes back unknown,

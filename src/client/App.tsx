@@ -1,6 +1,6 @@
 import "./awake.js";
+import { setNeedSids } from "./need-sids.js";
 import { MANAGER_STARTED } from "./manager-events.js";
-import { PageTabs } from "@/components/dass/page-bits";
 import { leaving, leavingByHistory } from "./leave-guard.js";
 import { AgentImport } from "./AgentImport.js";
 import { askPage } from "./intent.js";
@@ -34,7 +34,9 @@ const pages = {
   session: () => import("./SessionView.js").then((m) => (sessionCode = m)),
   automations: () => import("./Automations.js"),
   board: () => import("./Board.js"),
+  overview: () => import("./ProjectOverview.js"),
   deepdive: () => import("./DeepDive.js"),
+  captain: () => import("./CaptainPage.js"),
   mcp: () => import("./McpServers.js"),
   skills: () => import("./Skills.js"),
   review: () => import("./CodeReview.js"),
@@ -54,6 +56,8 @@ function SessionView(p: ComponentProps<typeof LazySessionView>) {
 }
 // Only for someone opening a recording link, who has no account and needs nothing else here.
 const Board = lazy(() => pages.board().then((m) => ({ default: m.Board })));
+const ProjectOverview = lazy(() => pages.overview());
+const CaptainPage = lazy(() => pages.captain());
 const DeepDivePage = lazy(() => pages.deepdive().then((m) => ({ default: m.DeepDivePage })));
 const McpServersPage = lazy(() => pages.mcp().then((m) => ({ default: m.McpServersPage })));
 const SkillsPage = lazy(() => pages.skills().then((m) => ({ default: m.SkillsPage })));
@@ -67,6 +71,14 @@ const TeamWorkflowsPage = lazy(() => import("./TeamWorkflows.js").then((m) => ({
 const CodeReview = lazy(() => pages.review().then((m) => ({ default: m.CodeReview })));
 const NeedsYouPage = lazy(() => pages.needs().then((m) => ({ default: m.NeedsYou })));
 import { WindowNav } from "./WindowNav.js";
+/**
+ * When the app was last looked at, for the board's "While you were away" (seen.ts, BoardAway.tsx): loaded after the first screen.
+ * It rode in with the window bar's Running now chip, taken out (Arun, 2026-11-28: "get rid of this in the header").
+ */
+function Seen() {
+  useEffect(() => void import("./seen.js"), []);
+  return null;
+}
 import { folderOf, foldersOf, getMode, ideKey, IdeChatContext, restoredIdeRoot, setIdeRoot, setMode as setViewMode, swapMode, toggleMode, useIdeRoot, useMode, wantReview, type IdeChat } from "./ide/mode.js";
 import { addCodeChat, codeChatFor, codeChatSids, dropLinkedChat, isCodeChat, linkCodeChat, loadCodeChats, onCodeChatsChange, showCodeChat, updateCodeChat } from "./ide/code-chats.js";
 import { toolName } from "../ready.js";
@@ -137,8 +149,12 @@ type Route =
   | { kind: "people" }
   | { kind: "library" }
   | { kind: "board" }
+  /** A project's threads and their agents as a map (ProjectOverview.tsx): the project of the session `sid`. */
+  | { kind: "overview"; sid: string }
   /** Deep Dive: the repos explained, and questions about their code (DeepDive.tsx). */
   | { kind: "deepdive" }
+  /** A project's Captain as a page (CaptainPage.tsx; docs/plans/captain-v2.md), by its id. */
+  | { kind: "captain"; id: string }
   /** MCP servers set up once for every coding tool on this computer (McpServers.tsx, runner/connections.ts). */
   | { kind: "mcp" }
   /** Skills every coding tool and crew mate can use: the person's own, each tool's, and GitHub's (Skills.tsx, runner/skill-library.ts). */
@@ -162,7 +178,7 @@ function readRoute(): Route {
  */
 const needsPage = (): Route => (isLocal() ? { kind: "board" } : { kind: "needs" });
 
-/** Customize's tab last open (MCP servers or Skills), where its rail button goes back to. */
+/** Customize's tab last open (Plugins or Skills), where its rail button goes back to; customize-switch.tsx writes it. */
 const CUSTOMIZE_TAB = "friday.customize.tab";
 const customizeTab = (): "mcp" | "skills" => {
   try {
@@ -184,7 +200,9 @@ function parseRoute(search: string): Route {
   if (p.get("view") === "people") return isLocal() ? { kind: "home" } : { kind: "people" };
   if (p.get("view") === "library") return isLocal() ? { kind: "home" } : { kind: "library" };
   if (p.get("view") === "board") return { kind: "board" };
+  if (p.get("view") === "overview" && p.get("of")) return { kind: "overview", sid: p.get("of")! };
   if (p.get("view") === "deepdive") return { kind: "deepdive" };
+  if (p.get("view") === "captain" && p.get("id")) return { kind: "captain", id: p.get("id")! };
   if (p.get("view") === "mcp") return { kind: "mcp" };
   if (p.get("view") === "skills") return { kind: "skills" };
   if (p.get("view") === "review") return { kind: "review" };
@@ -223,8 +241,10 @@ function routeUrl(r: Route): string {
   if (r.kind === "people") return "/?view=people";
   if (r.kind === "library") return "/?view=library";
   if (r.kind === "board") return "/?view=board";
+  if (r.kind === "overview") return `/?view=overview&of=${encodeURIComponent(r.sid)}`;
   // The repo open in it is the page's own to keep in the address (DeepDive.tsx), so a reload lands on it.
   if (r.kind === "deepdive") return "/?view=deepdive";
+  if (r.kind === "captain") return `/?view=captain&id=${encodeURIComponent(r.id)}`;
   if (r.kind === "mcp") return "/?view=mcp";
   if (r.kind === "skills") return "/?view=skills";
   if (r.kind === "review") return "/?view=review";
@@ -264,10 +284,12 @@ export function App() {
   // goes there first, and asks again once it has (2026-10-27 audit: the button did nothing from Settings).
   useEffect(() => {
     const setup = (e: Event) => {
-      if ((e as CustomEvent).detail === "again" || parseRoute(location.search).kind === "home") return;
+      const detail = (e as CustomEvent).detail;
+      if (detail === "again" || detail === "again-intro" || parseRoute(location.search).kind === "home") return;
       history.pushState(null, "", routeUrl({ kind: "home" }));
       setRoute({ kind: "home" });
-      setTimeout(() => dispatchEvent(new CustomEvent("friday:setup", { detail: "again" })), 300);
+      // Asked for with the first launch played first (Settings › Help & feedback, Play the intro): still asked for, once there.
+      setTimeout(() => dispatchEvent(new CustomEvent("friday:setup", { detail: detail === "intro" ? "again-intro" : "again" })), 300);
     };
     addEventListener("friday:setup", setup);
     return () => removeEventListener("friday:setup", setup);
@@ -404,6 +426,8 @@ export function App() {
   // Where you are the thing that is missing, across every session you know of.
   // On Solo the sessions list says what each one is doing (which tool, and what it is at), not the last thing you typed.
   const attention = useAttention(identity, recents, planLimits(planNow(workspace)).fridayAgent === "none", true);
+  // Shared with the project overview's header button (need-sids.ts), which lights when a thread of its project needs you.
+  useEffect(() => setNeedSids(attention.needSids), [attention.needSids]);
   const unreadAll = useUnread();
   // Asked the first time there is something worth being told about, rather
   // than on launch: a permission prompt before the product has done anything
@@ -438,7 +462,7 @@ export function App() {
   const [skills, setSkills] = useState<SkillView[]>([]);
   const [collections, setCollections] = useState<CollectionView[]>([]);
   /** What a skill picked on the Skills page hands to the next new session. */
-  const [preset, setPreset] = useState<{ brief?: string; grants?: SkillTemplate["grants"]; shepherd?: boolean; repo?: string; tool?: EngineTool; folder?: string } | null>(null);
+  const [preset, setPreset] = useState<{ brief?: string; grants?: SkillTemplate["grants"]; shepherd?: boolean; repo?: string; tool?: EngineTool; folder?: string; fromLink?: boolean } | null>(null);
   // A prompt link (prompt-link.ts): its task goes in the box, its repo and tool with it, and the address is tidied so a reload
   // doesn't fill the box again over what was typed since.
   // Signed out, the link waits: kept for this tab through the sign-in round trip (which comes back to a bare address), and the
@@ -463,7 +487,7 @@ export function App() {
     }
     if (!link || route.kind !== "home") return;
     const { prompt, repo, tool } = link;
-    setPreset({ brief: prompt, ...(repo ? { repo } : {}), ...(tool ? { tool } : {}) });
+    setPreset({ brief: prompt, fromLink: true, ...(repo ? { repo } : {}), ...(tool ? { tool } : {}) });
     const tidy: Route = { kind: "home", ...(route.projectId ? { projectId: route.projectId } : {}), ...(route.agentId ? { agentId: route.agentId } : {}) };
     history.replaceState(null, "", routeUrl(tidy));
     setRoute(tidy);
@@ -1015,12 +1039,16 @@ export function App() {
     // The Usage page, from anywhere (the home page's "tokens saved" line).
     const usage = () => navigate({ kind: "usage" });
     addEventListener("friday:usage", usage);
+    // A Captain's page, from a Captain anywhere in the sidebar (Managers.tsx ManagerPopover).
+    const captain = (e: Event) => navigate({ kind: "captain", id: (e as CustomEvent<string>).detail });
+    addEventListener("friday:captain", captain);
     // The New teammate page, from anywhere (the Crew's New teammate, Getting started's Add): with the Crew in the sidebar.
     const mate = () => (setTeamTab(true, { stay: true }), navigate({ kind: "new-teammate" }));
     addEventListener("friday:new-teammate", mate);
     return () => {
       removeEventListener("friday:settings", on);
       removeEventListener("friday:usage", usage);
+      removeEventListener("friday:captain", captain);
       removeEventListener("friday:new-teammate", mate);
     };
   }, [navigate]);
@@ -1279,10 +1307,16 @@ export function App() {
       navigate({ kind: "session", sid: r.sid, invite: r.invite });
     };
     window.addEventListener("friday:open-session", on);
+    // The project overview's page, from a session's header button, ⌘⇧O or ⌘K (ProjectOverview.tsx).
+    const overview = (e: Event) => {
+      const sid = (e as CustomEvent<{ sid?: string }>).detail?.sid;
+      if (sid) navigate({ kind: "overview", sid });
+    };
+    window.addEventListener("friday:project-overview", overview);
     // Something waiting on you that isn't a session of the list (Home's row for a workflow at its Your OK): where it is answered.
     const needs = () => navigate(needsPage());
     window.addEventListener("friday:open-needs", needs);
-    return () => (window.removeEventListener("friday:open-session", on), window.removeEventListener("friday:open-needs", needs));
+    return () => (window.removeEventListener("friday:open-session", on), window.removeEventListener("friday:open-needs", needs), window.removeEventListener("friday:project-overview", overview));
   }, [navigate]);
   // A Code chat sent to Agents (ide/send-to-agents.tsx): filed in Agents' recents now it isn't Code's, and opened there when asked.
   useEffect(() => {
@@ -1822,6 +1856,7 @@ export function App() {
           <Icon name="sidebar" size={16} />
         </button>
       )}
+      {identity.id && <Seen />}
       <div id="band-left" style={{ position: "fixed" }} />
       <div id="band-slot" style={{ position: "fixed" }} />
       {/* Always drawn: putting the sidebar away only puts the chat list away.
@@ -1855,7 +1890,8 @@ export function App() {
           agentMenu={agentMenu}
           activeSid={activeSid}
           // The New teammate page is the Crew's: the sidebar stays as it is on the Crew's home.
-          view={route.kind === "new-teammate" ? "home" : route.kind}
+          // The project overview is a session's own page: the sidebar stays on the sessions list.
+          view={route.kind === "new-teammate" ? "home" : route.kind === "overview" || route.kind === "captain" ? "session" : route.kind}
           draftProject={route.kind === "home" ? route.projectId : undefined}
           onNew={(projectId) => navigate({ kind: "home", projectId })}
           onOpen={(r) => navigate({ kind: "session", sid: r.sid, invite: r.invite })}
@@ -1984,6 +2020,19 @@ export function App() {
           </ThreadsCtx.Provider>
         ) : route.kind === "automations" ? (
           automations()
+        ) : route.kind === "overview" ? (
+          <ProjectOverview
+            identity={identity}
+            sid={route.sid}
+            recents={recents}
+            projects={projects}
+            onNew={(projectId) => navigate({ kind: "home", ...(projectId ? { projectId } : {}) })}
+            onBack={() => {
+              const r = recents.find((x) => x.sid === route.sid);
+              if (r) navigate({ kind: "session", sid: r.sid, invite: r.invite });
+              else navigate({ kind: "home" });
+            }}
+          />
         ) : route.kind === "board" ? (
           <Board
             solo={planLimits(planNow(workspace)).fridayAgent === "none"}
@@ -2001,12 +2050,18 @@ export function App() {
             onNew={() => toNewSession()}
             onReview={() => navigate({ kind: "review" })}
           />
+        ) : route.kind === "captain" ? (
+          <CaptainPage
+            identity={identity}
+            id={route.id}
+            onBack={() => navigate({ kind: "home" })}
+          />
         ) : route.kind === "deepdive" ? (
           <DeepDivePage identity={identity} />
         ) : route.kind === "mcp" ? (
-          <McpServersPage identity={identity} tabs={isLocal() ? <CustomizeTabs tab="mcp" onTab={(tab) => navigate({ kind: tab })} /> : undefined} />
+          <McpServersPage identity={identity} onTab={isLocal() ? (tab) => navigate({ kind: tab }) : undefined} />
         ) : route.kind === "skills" ? (
-          <SkillsPage identity={identity} tabs={isLocal() ? <CustomizeTabs tab="skills" onTab={(tab) => navigate({ kind: tab })} /> : undefined} onUse={(brief) => (setPreset({ brief }), toNewSession({ kind: "home" }, true))} />
+          <SkillsPage identity={identity} onTab={isLocal() ? (tab) => navigate({ kind: tab }) : undefined} onUse={(brief) => (setPreset({ brief }), toNewSession({ kind: "home" }, true))} />
         ) : route.kind === "review" ? (
           <CodeReview
             identity={identity}
@@ -2167,30 +2222,3 @@ function LibraryGate({ state, what, retry, children }: { state: string; what: st
   );
 }
 
-/**
- * Customize's two tabs, MCP servers and Skills, at the left of whichever is open's own toolbar (Arun, 2026-11-20: "add a button
- * called customize, this will house the MCPS and Skills"). Each is still its own page and address; the tab picked is remembered
- * for the rail's button.
- */
-function CustomizeTabs({ tab, onTab }: { tab: "mcp" | "skills"; onTab: (tab: "mcp" | "skills") => void }) {
-  useEffect(() => {
-    try {
-      localStorage.setItem(CUSTOMIZE_TAB, tab);
-    } catch {
-      /* Remembered for this window only. */
-    }
-  }, [tab]);
-  return (
-    <PageTabs<"mcp" | "skills">
-      label="Customize"
-      value={tab}
-      onChange={onTab}
-      className="customize-tabs"
-      size="lg"
-      options={[
-        { value: "mcp", label: (<><Icon name="plug" size={15} /> Plugins</>) },
-        { value: "skills", label: (<><Icon name="book" size={15} /> Skills</>) },
-      ]}
-    />
-  );
-}

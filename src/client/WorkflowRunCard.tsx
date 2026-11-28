@@ -7,7 +7,7 @@
  * what it came to. Its chatter is left out of the room (team-room.ts workflowChatter). The data is the team's (`flowRuns`,
  * team-workflow-model.ts roomRunOf), read as the team is polled.
  */
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { AlertTriangleIcon, CheckIcon, CornerUpLeftIcon, HandIcon, RotateCcwIcon, ShieldCheckIcon, ShieldXIcon, WorkflowIcon, XIcon } from "lucide-react";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
@@ -15,11 +15,21 @@ import { Textarea } from "@/components/ui/textarea";
 import type { RoomRun, RoomRunStep } from "../team-workflow-model.js";
 import { ANSWER, mediaText } from "./AnswerParts.js";
 import { api } from "./api.js";
+import { Icon } from "./icons.js";
 import type { Identity } from "./storage.js";
 import { Face, useTeamNow, type Team } from "./Teammates.js";
 import { listOf } from "./team-workflow-view.js";
 import { relTime } from "./ui.js";
+import { jumpTo } from "./Subagents.js";
+import { subTasksIn } from "./Tasks.js";
+import type { SessionEvent } from "../types.js";
+import type { SessionState } from "../session/projection.js";
 import "./workflows.css";
+
+/** The workflow's runs in this room as a relay of its crew mates (agent-viz/places.tsx, Agent Handoff): loaded when picked. */
+const Relay = lazy(() => import("./components/agent-viz/places.js").then((m) => ({ default: m.WorkflowRelay })));
+/** Where the run's tokens went, by crew mate (CostWaterfall.tsx): loaded when its button is pressed. */
+const CrewFall = lazy(() => import("./CostWaterfall.js").then((m) => ({ default: m.CrewFall })));
 
 /** The room's runs, from the team as it is polled. */
 export function useRoomRuns(sid: string): RoomRun[] {
@@ -39,11 +49,14 @@ const STATUS: Record<RoomRun["status"], { word: string; tone: string }> = {
 
 const took = (ms: number) => (ms < 60_000 ? "under a minute" : ms < 3_600_000 ? `${Math.round(ms / 60_000)} min` : `${Math.round(ms / 360_000) / 10} h`);
 
-export function WorkflowRunCard({ run, identity }: { run: RoomRun; identity: Identity | null }) {
+export function WorkflowRunCard({ run, identity, events, engines }: { run: RoomRun; identity: Identity | null; /** The room's log and agents, for where the run's tokens went. */ events?: readonly SessionEvent[]; engines?: SessionState["engines"] }) {
   const s = STATUS[run.status];
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState("");
   const [whole, setWhole] = useState(false);
+  const [relay, setRelay] = useState(false);
+  const [fall, setFall] = useState(false);
+  const runs = useRoomRuns(run.sid);
   const ended = run.status === "done" || run.status === "stopped" || run.status === "failed" || run.status === "skipped";
   const retry = async () => {
     if (!identity) return;
@@ -71,8 +84,33 @@ export function WorkflowRunCard({ run, identity }: { run: RoomRun; identity: Ide
         <span className="wfr-time" title={new Date(run.at).toLocaleString()}>
           {ended && run.ended ? took(run.ended - run.at) : relTime(run.at) === "now" ? "just now" : `${relTime(run.at)} ago`}
         </span>
+        {/* Beside the hand-ons, as an icon like it: the head has no room for a count, and the session screen none for counting it. */}
+        {events && (
+          <button type="button" className="wfr-view" aria-pressed={fall} aria-label="Where the tokens went" title="Where the tokens went, by crew mate" onClick={() => setFall(!fall)}>
+            <svg viewBox="0 0 12 12" width="14" height="14" aria-hidden="true">
+              <path d="M2 3h4M2 6h7M2 9h2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+        <button type="button" className="wfr-view" aria-pressed={relay} aria-label={relay ? "Show the steps" : "Show the hand-ons"} title={relay ? "The steps" : "The hand-ons: what each crew mate passed on, and what was lost"} onClick={() => setRelay(!relay)}>
+          <Icon name={relay ? "list" : "handoff"} size={14} />
+        </button>
       </header>
-      <ol className="wfr-steps">
+      {fall && events && (
+        <div className="wfr-fall">
+          <Suspense fallback={<div className="cwf-wait" />}>
+            <CrewFall run={run} events={events} engines={engines ?? {}} subs={subTasksIn(events as SessionEvent[])} go={jumpTo} onClose={() => setFall(false)} />
+          </Suspense>
+        </div>
+      )}
+      {relay && (
+        <div className="wfr-relay">
+          <Suspense fallback={null}>
+            <Relay run={run} runs={runs} />
+          </Suspense>
+        </div>
+      )}
+      <ol className="wfr-steps" hidden={relay}>
         {run.steps.map((st, i) => (
           <Step key={st.step} st={st} run={run} last={i === run.steps.length - 1} identity={identity} />
         ))}

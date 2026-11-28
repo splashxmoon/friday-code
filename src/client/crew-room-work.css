@@ -21,3 +21,15 @@
 
 /* A row with nothing drawn in it takes no room. */
 .feed-item.agent-lane:empty { display: none; }
+
+/* ── The handed task on the shared kit's Agent Crew card (affect-pro SPEC.md, 2026-11-27): radius 10 with a ring for an edge, padding
+   10 10 9 10, gap 6; who and what 13/500 over the faint task; where it stands an 18px chip at radius 5, 11/500 in its colour on its
+   tint; a 3px bar at radius 2 that grows on the SHEET curve; the foot 12/400/16. A card that needs you keeps an amber ring. */
+.tcard { gap: 6px; padding: 10px 10px 9px; border: 0; border-radius: 10px; box-shadow: var(--aui-shadow-card, 0 0 0 1px var(--border)), 0 1px 2px rgb(0 0 0 / .05); transition: box-shadow .2s ease; }
+.tcard:hover { box-shadow: 0 0 0 1px var(--border-strong), 0 2px 6px -2px rgb(0 0 0 / .12); }
+.tcard[data-how="needs"] { box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 45%, var(--border)), 0 1px 2px rgb(0 0 0 / .05); }
+.tcard-head { line-height: 20px; }
+.tcard-pill { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 5px; font-size: 11px; font-weight: 500; line-height: 16px; }
+.tcard-bar > b { transition: width .6s cubic-bezier(.32, .72, .24, 1); }
+.tcard-foot { line-height: 16px; color: var(--faint, var(--text-muted)); }
+html.glass .tcard { background: var(--glass-float, var(--card)); }

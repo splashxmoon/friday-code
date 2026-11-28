@@ -6,7 +6,7 @@ import https from "node:https";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { ReachHome, type ReachState } from "./reach.js";
+import { ReachHome, relayedPorts, type ReachState } from "./reach.js";
 
 /**
  * Your phone, connected to the Friday on this computer (Arun, 2026-10-30: phone access so people stay with Friday, paired over
@@ -191,7 +191,7 @@ export const PHONE_ROUTES: [string, RegExp][] = [
 export const phoneAllowed = (method: string, pathname: string): boolean => PHONE_ROUTES.some(([m, re]) => m === method && re.test(pathname));
 
 /** The headers a phone's request is passed on with: its own, less anything that is about who it is or where it came from. */
-export function passedHeaders(h: http.IncomingHttpHeaders, appPort: number, device?: Device, from?: string): http.OutgoingHttpHeaders {
+export function passedHeaders(h: http.IncomingHttpHeaders, appPort: number, device?: Device, from?: string, key?: string): http.OutgoingHttpHeaders {
   const out: http.OutgoingHttpHeaders = {};
   for (const [k, v] of Object.entries(h)) {
     if (v === undefined) continue;
@@ -201,6 +201,9 @@ export function passedHeaders(h: http.IncomingHttpHeaders, appPort: number, devi
   out.host = `127.0.0.1:${appPort}`;
   // As this computer's own page asks: what the phone may do is the list above, so only that is ever asked this way.
   out["x-friday-local"] = "1";
+  // With this install's key, which Friday asks of everything (local-key.ts): this listener has checked the phone's own token, and
+  // the phone's x-friday-* headers are dropped above, so a phone never holds the key or passes one of its own.
+  if (key) out["x-friday-key"] = key;
   // And that it is the phone asking: Friday then refuses it what a phone mustn't do (app.ts PHONE_COMMANDS). The phone's own
   // x-friday-* headers are dropped above, so only this listener can set it, and it only ever takes rights away.
   out["x-friday-via"] = "phone";
@@ -231,6 +234,7 @@ const CODE_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_TTL_MS = 10 * 60_000;
 /** Wrong codes before the one on screen stops working, and pairings tried a minute from anywhere. */
 const CODE_TRIES = 5;
+const sameCode = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const PAIRS_PER_MINUTE = 10;
 /** Tries at the port paired computers know, at a start, before saying it is taken: the last Friday may still be letting go of it. */
 const PORT_TRIES = 5;
@@ -341,6 +345,8 @@ export class PhoneAccess {
       kv: PhoneKV;
       home: string;
       appPort: number;
+      /** This install's key (local-key.ts), sent with what is handed on to Friday. */
+      key?: string;
       computer: string;
       addresses?: () => { address: string; via: "wifi" | "tailscale" }[];
       /** This computer's names on the network (its .local name, Tailscale's MagicDNS name): a link works when its address changes. */
@@ -543,16 +549,22 @@ export class PhoneAccess {
   }
 
   /** A phone (or a computer) giving the code it scanned or was given: its token, once, or nothing. */
-  private async pair(code: string, name: string, from: string, kind: "phone" | "computer" = "phone", machine = "", push: PhonePush | null = null): Promise<{ token: string; id: string } | null> {
+  private async pair(code: string, name: string, from: string, kind: "phone" | "computer" = "phone", machine = "", push: PhonePush | null = null, relayed = false): Promise<{ token: string; id: string } | null> {
     const now = Date.now();
-    const tries = (this.recent.get(from) ?? []).filter((t) => now - t < 60_000);
+    // Through the relay every attempt arrives from 127.0.0.1, whoever is at the far end: counted apart from this computer's own.
+    const bucket = relayed ? "relay" : from;
+    const tries = (this.recent.get(bucket) ?? []).filter((t) => now - t < 60_000);
     if (tries.length >= PAIRS_PER_MINUTE) return null;
-    this.recent.set(from, [...tries, now]);
+    this.recent.set(bucket, [...tries, now]);
     if (this.recent.size > 1000) this.recent.clear();
     const c = this.codes[kind];
     if (!c || now > c.until) return null;
-    if (code.trim().toUpperCase().replace(/[\s-]/g, "") !== c.code) {
-      if (++c.tries >= CODE_TRIES) this.codes[kind] = null;
+    if (!sameCode(code.trim().toUpperCase().replace(/[\s-]/g, ""), c.code)) {
+      // A relayed wrong code never voids the code on screen: a relay id is in every pairing QR, and anyone who knew one could
+      // keep its person from pairing (2026-11-27 security review). Ten a minute for the ten minutes a code lasts is a hundred
+      // guesses at 39 bits, so the relay's share needs no cap of its own.
+      // ponytail: relayed attempts still share that one bucket of ten a minute; apart needs the relay to pass the far address.
+      if (!relayed && ++c.tries >= CODE_TRIES) this.codes[kind] = null;
       return null;
     }
     // Used once: a second phone needs a new code.
@@ -693,7 +705,7 @@ export class PhoneAccess {
     if (req.method === "POST" && url.pathname === "/phone/pair") {
       const body = await readBody(req, 4096).catch(() => null);
       const b = (body ? safeJson(body) : null) as { code?: unknown; name?: unknown; kind?: unknown; machine?: unknown; push?: unknown } | null;
-      const got = typeof b?.code === "string" ? await this.pair(b.code, typeof b.name === "string" ? b.name : "", req.socket.remoteAddress ?? "", b.kind === "computer" ? "computer" : "phone", typeof b.machine === "string" ? b.machine : "", pushOf(b.push)) : null;
+      const got = typeof b?.code === "string" ? await this.pair(b.code, typeof b.name === "string" ? b.name : "", req.socket.remoteAddress ?? "", b.kind === "computer" ? "computer" : "phone", typeof b.machine === "string" ? b.machine : "", pushOf(b.push), relayedPorts.has(req.socket.remotePort ?? 0) && /^(::ffff:)?127\.|^::1$/.test(req.socket.remoteAddress ?? "")) : null;
       if (!got) return end(res, 401, { error: "That code didn't work. Make a new one in Friday on your computer." });
       return end(res, 200, { token: got.token, device: got.id, computer: this.o.computer });
     }
@@ -738,7 +750,7 @@ export class PhoneAccess {
       return end(res, 200, { ok: true });
     }
     if (!(device.kind === "computer" ? computerAllowed(req.method ?? "GET", url.pathname) : phoneAllowed(req.method ?? "GET", url.pathname))) return end(res, 404, { error: device.kind === "computer" ? "Not something another computer can do here." : "Not something the phone can do." });
-    const fwd = http.request({ host: "127.0.0.1", port: this.o.appPort, method: req.method, path: url.pathname + url.search, headers: passedHeaders(req.headers, this.o.appPort, device) }, (r) => {
+    const fwd = http.request({ host: "127.0.0.1", port: this.o.appPort, method: req.method, path: url.pathname + url.search, headers: passedHeaders(req.headers, this.o.appPort, device, undefined, this.o.key) }, (r) => {
       res.writeHead(r.statusCode ?? 502, r.headers);
       r.pipe(res);
     });
@@ -760,7 +772,7 @@ export class PhoneAccess {
     this.sockets.set(device.id, mine.add(socket));
     socket.on("close", () => mine.delete(socket));
     const up = net.connect(this.o.appPort, "127.0.0.1", () => {
-      const headers = passedHeaders(req.headers, this.o.appPort, device, req.socket.remoteAddress);
+      const headers = passedHeaders(req.headers, this.o.appPort, device, req.socket.remoteAddress, this.o.key);
       const lines = [`GET ${url.pathname}${url.search} HTTP/1.1`, ...Object.entries(headers).flatMap(([k, v]) => (Array.isArray(v) ? v : [v]).map((x) => `${k}: ${x}`)), "", ""];
       up.write(lines.join("\r\n"));
       if (head.length) up.write(head);

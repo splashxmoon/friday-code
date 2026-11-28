@@ -8,7 +8,7 @@
 .pcc-media video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
 .pcc-frame.is-phone .pcc-media video { object-fit: contain; object-position: center; background: #000; }
 .pcc-media:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
-.pcc-chip { position: absolute; bottom: 8px; display: inline-flex; align-items: center; gap: 4px; max-width: 60%; height: 20px; padding: 0 7px; overflow: hidden; border-radius: 999px; background: rgb(12 12 14 / .66); color: #fff; font-size: 11px; font-variant-numeric: tabular-nums; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; backdrop-filter: blur(6px); }
+.pcc-chip { position: absolute; bottom: 8px; display: inline-flex; align-items: center; gap: 4px; max-width: 60%; height: 20px; padding: 0 7px; overflow: hidden; border-radius: var(--r-sm, 6px); background: rgb(12 12 14 / .66); color: #fff; font-size: 11px; font-variant-numeric: tabular-nums; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; backdrop-filter: blur(6px); }
 .pcc-page { left: 8px; }
 .pcc-len { right: 8px; }
 .pcc-expand { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: rgb(12 12 14 / .58); color: #fff; opacity: 0; transition: opacity .15s ease; }
@@ -41,12 +41,12 @@
 .pcc-at { color: var(--text-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 
 .pcc-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
-.pcc-btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 999px; background: none; color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; }
+.pcc-btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--r-md, 8px); background: none; color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; }
 .pcc-btn:hover { background: var(--hover); }
 .pcc-btn.primary { border-color: var(--ink); background: var(--ink); color: var(--bg); }
 .pcc-btn.primary:hover { background: color-mix(in srgb, var(--ink) 86%, var(--bg)); }
-.pcc-seg { display: inline-flex; padding: 2px; border-radius: 999px; background: var(--hover); }
-.pcc-seg button { height: 24px; padding: 0 10px; border: 0; border-radius: 999px; background: none; color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.pcc-seg { display: inline-flex; padding: 2px; border-radius: var(--r-md, 8px); background: var(--hover); }
+.pcc-seg button { height: 24px; padding: 0 10px; border: 0; border-radius: var(--r-sm, 6px); background: none; color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer; }
 .pcc-seg button.on { background: var(--card); color: var(--ink); box-shadow: 0 0 0 1px var(--border); }
 
 @media (max-width: 560px) { .pcc { max-width: none; } }
@@ -71,7 +71,7 @@
 
 /* Test proof (TestProofCard.tsx): the clip card's body, its badge green or red, each command with its counts, failures, its output. */
 /* Test proof (TestProofCard.tsx): one slim line, a line per command under it when there are several. */
-.tpc { width: 100%; max-width: 540px; margin: 8px 0 4px; padding: 6px 6px 6px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.tpc { width: 100%; max-width: 540px; margin: 8px 0 4px; padding: 6px 6px 6px 10px; border: 1px solid var(--border); border-radius: calc(var(--r-md) + 2px); background: var(--card); }
 .tpc-head { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 24px; }
 /* At a phone's width the head keeps to one line inside the card (spec 13 polish: it ran past it at 420): "by Friday", Output's chevron
    alone, then the counts go, a failure's first ("1 test failing" says it). The command gives way first, cut with an ellipsis. */
@@ -81,16 +81,19 @@
   .tpc-head .tpc-long { display: none; }
   .tpc-tog { width: 24px; padding: 0; justify-content: center; }
 }
-@container tpc (max-width: 400px) { .tpc.is-bad .tpc-head > .tpc-counts { display: none; } }
+@container tpc (max-width: 400px) { .tpc.is-bad .tpc-head > :is(.tpc-counts, .tpc-tag) { display: none; } }
 @container tpc (max-width: 330px) { .tpc-head > .tpc-counts { display: none; } }
 .tpc-badge { display: grid; flex: none; place-items: center; width: 16px; height: 16px; border-radius: 50%; color: #fff; }
 .tpc.is-ok .tpc-badge { background: var(--green); }
 .tpc.is-bad .tpc-badge { background: var(--red); }
-.tpc-title { flex: none; color: var(--ink); font-size: 13px; font-weight: 600; line-height: 18px; }
+.tpc-title { flex: none; color: var(--ink); font: 500 13px/20px var(--font); }
 .tpc-cmd { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--ink-2, var(--ink)); font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
 .tpc-counts { flex: none; color: var(--text-muted); font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tpc.is-bad .tpc-head .tpc-counts, .tpc-runs > li.bad .tpc-counts { color: var(--red); }
-.tpc-tag { flex: none; padding: 0 6px; border-radius: 6px; background: var(--hover); color: var(--text-muted); font-size: 11.5px; line-height: 18px; white-space: nowrap; }
+/* Who ran it, as quiet words after the command, not a grey tag (the redesign of 2026-11-27). */
+.tpc-tag { flex: none; color: var(--faint); font-size: 12px; line-height: 18px; white-space: nowrap; }
+/* Fix it on the card itself, ending its row: the one place a failing check is fixed from. */
+.tpc-head .btn.small.tpc-fix { flex: none; height: 28px; padding: 0 10px 0 8px; gap: 6px; margin-left: 2px; border-radius: var(--r-sm); font: 500 13px/20px var(--font); }
 .tpc-sp { flex: 1; min-width: 4px; }
 .tpc-tog { display: inline-flex; flex: none; align-items: center; gap: 3px; height: 24px; padding: 0 6px 0 8px; border: 0; border-radius: 7px; background: none; color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer; }
 .tpc-tog:hover, .tpc-tog[aria-expanded="true"] { background: var(--hover); color: var(--ink); }
@@ -101,14 +104,27 @@
 .tpc-run { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .tpc-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
 .tpc-runs > li.bad .tpc-dot { background: var(--red); }
-.tpc-failing { display: flex; flex-direction: column; margin: 1px 0 0; padding: 0; list-style: none; }
-.tpc-failing li { overflow: hidden; color: var(--red); font-family: var(--font-mono, ui-monospace, monospace); font-size: 11.5px; line-height: 17px; text-overflow: ellipsis; white-space: nowrap; }
-.tpc-failing li::before { content: "✕ "; }
+/* A failing test: a red mark, its name in the card's ink, and under the first what it expected and got, in red mono. */
+.tpc-failing { display: flex; flex-direction: column; gap: 2px; margin: 1px 0 0; padding: 0; list-style: none; }
+.tpc-failing li { display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 10px; align-items: center; min-height: 30px; padding: 5px 0; font: 400 13px/20px var(--font); }
+/* The failing test's mark: the red status icon, a 12px disc with an exclamation cut out of it (the kit's status icons). */
+.tpc-fail-mark { display: grid; place-items: center; width: 12px; height: 12px; border-radius: 50%; background: var(--red); }
+.tpc-fail-mark::after {
+  content: ""; width: 8px; height: 8px; background: var(--card);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M6 2.8v4M6 9.2v.01' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M6 2.8v4M6 9.2v.01' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.tpc-time { flex: none; color: var(--faint); font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@container tpc (max-width: 400px) { .tpc-head > .tpc-time { display: none; } }
+/* Narrowest, a failure keeps its title and Fix it whole: the command gives way (it is in the output and the tip). */
+@container tpc (max-width: 330px) { .tpc.is-bad .tpc-head > .tpc-cmd { display: none; } }
+.tpc-fail-name { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }
+.tpc-why { grid-column: 2; overflow: hidden; color: var(--red); font: 400 12px/16px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .tpc-out { max-height: 240px; margin: 6px 4px 2px 0; padding: 8px 10px; overflow: auto; border-radius: 8px; background: var(--hover); color: var(--ink-2, var(--ink)); font-family: var(--font-mono, ui-monospace, monospace); font-size: 11.5px; line-height: 17px; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) { .tpc-chev { transition: none; } }
 
 /* Test it (Activity.tsx): the offer under finished work, as Devin's "Test the app" (Arun, 2026-11-22: "Devin's way, in chat"). */
-.test-it { display: inline-flex; align-items: center; gap: 5px; height: 26px; margin-right: 4px; padding: 0 10px 0 8px; border: 1px solid var(--border-strong); border-radius: 999px; background: none; color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 500; white-space: nowrap; cursor: pointer; }
+.test-it { display: inline-flex; align-items: center; gap: 5px; height: 26px; margin-right: 4px; padding: 0 10px 0 8px; border: 1px solid var(--border-strong); border-radius: var(--r-md, 8px); background: none; color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 500; white-space: nowrap; cursor: pointer; }
 .test-it:hover { background: var(--hover); }
 .test-it:disabled { color: var(--ink-3, var(--muted-foreground)); cursor: default; }
 .test-it:disabled:hover { background: none; }

@@ -173,6 +173,9 @@ const ROUTABLE: Partial<Record<EngineTool, string[]>> = {
   codex: ["gpt-6.2-sol", "gpt-6.1-sol", "gpt-6.2-astra", "gpt-6-luna"],
 };
 
+/** Whether a model is one this tool can be routed to: one routed on another tool is never carried over to it (hub.ts autoRoute). */
+export const routable = (tool: EngineTool, model: string | null | undefined): boolean => !!model && !!ROUTABLE[tool]?.includes(model);
+
 /**
  * What runs here have shown for a model and tier: for the workspace, for the repo when one is known, and for the repo's runs of
  * this kind of task (tests, docs, a bug fix: route-learning.ts learnedFrom).

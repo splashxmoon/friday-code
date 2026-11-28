@@ -1,24 +1,67 @@
-/* An agent finished elsewhere (DoneToasts.tsx): small, quiet, in the bottom corner; gone by itself. The "Needs you" toasts are the
-   loud ones (Attention.tsx); these are a note. */
-.done-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none; }
-/* One width for every toast, so a stack reads as one column: each as wide as its title, they stepped (audit e2e, Arun 2026-11-04). */
-.done-toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; box-sizing: border-box; width: min(320px, calc(100vw - 32px)); padding: 9px 14px 9px 12px; border: 1px solid var(--line, var(--border)); border-radius: 12px; background: var(--surface, var(--raised)); box-shadow: 0 12px 32px rgb(0 0 0 / .18); color: var(--ink); font: inherit; text-align: left; cursor: pointer; animation: done-toast-in var(--t-open, 180ms) var(--ease-out, ease-out); transition: background-color var(--t-hover, 120ms) var(--ease-out, ease-out); }
-.done-toast:hover { background: var(--hover); }
-.done-toast:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.done-toast-dot { width: 8px; height: 8px; flex-shrink: 0; border-radius: 999px; background: var(--ready, #3fb67b); }
-.done-toast-text { display: flex; min-width: 0; flex-direction: column; gap: 1px; }
-.done-toast-title { overflow: hidden; font-size: 13px; line-height: 18px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.done-toast-what { overflow: hidden; font-size: 12px; line-height: 16px; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
-@keyframes done-toast-in { from { opacity: 0; transform: translateY(4px); } }
-@media (prefers-reduced-motion: reduce) { .done-toast { animation: none; } }
+/* An agent finished elsewhere (DoneToasts.tsx): the kit's toaster, in the bottom corner, gone by itself. The "Needs you" toasts are
+   the loud ones (Attention.tsx); these are a note.
 
-/* The star, asked once (DoneToasts.tsx): a toast of the same width, not a link to press as a whole; Star and × on its right. */
-.done-toast.star-ask { cursor: default; padding-right: 8px; }
-.done-toast.star-ask:hover { background: var(--surface, var(--raised)); }
-.star-ask-mark { display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0; border-radius: 8px; background: color-mix(in srgb, #e3b341 18%, transparent); color: #c9951a; }
-.star-ask .done-toast-text { flex: 1; }
-.star-ask-go { flex-shrink: 0; height: 26px; padding: 0 11px; font-size: 12.5px; }
-.star-ask-x { display: grid; place-items: center; width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px; color: var(--text-muted); }
-.star-ask-x:hover { background: var(--hover); color: var(--ink); }
-.star-ask-x:focus-visible, .star-ask-go:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.star-ask .done-toast-what { white-space: normal; }
+   One column in the corner for the toasts and the star's notice under them. The toasts stack: the newest in front at the foot,
+   each one behind it a step back (8px up, 5% smaller, its words hidden) so it peeks out above; the pointer on the stack, or the
+   keyboard in it, fans them into a list 8px apart. Each is 64px: a 16px check, the title 13/500/20 over what finished 13/400/20,
+   radius 10 on the toast's ring and drop. They lift in from the edge on the SHEET curve; × shows on hover, at the corner. */
+.done-corner { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; width: min(340px, calc(100vw - 32px)); pointer-events: none; }
+.done-corner > * { pointer-events: auto; }
+.done-toasts {
+  --h: 64px; --gap: 8px; --peek: 8px;
+  position: relative; width: 100%; height: calc(var(--h) + min(var(--n) - 1, 2) * var(--peek));
+  transition: height .4s var(--ch-sheet, cubic-bezier(.32, .72, .24, 1));
+}
+.done-toasts:is(:hover, :focus-within) { height: calc(var(--n) * var(--h) + (var(--n) - 1) * var(--gap)); }
+.done-toast {
+  position: absolute; right: 0; bottom: 0; left: 0; z-index: calc(10 - var(--i)); box-sizing: border-box; height: var(--h);
+  border-radius: 10px; background: var(--ch-pop, var(--card)); color: var(--ink);
+  box-shadow: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .4), 0 12px 28px -10px rgb(0 0 0 / .6);
+  transform-origin: 50% 0; transform: translateY(calc(var(--i) * var(--peek) * -1)) scale(calc(1 - min(var(--i), 3) * .05));
+  opacity: calc(1 - max(var(--i) - 2, 0)); animation: done-toast-in .42s var(--ch-sheet, cubic-bezier(.32, .72, .24, 1));
+  transition: transform .4s var(--ch-sheet, cubic-bezier(.32, .72, .24, 1)), opacity .26s ease;
+}
+:root:not(.dark) .done-toast { box-shadow: 0 0 0 .5px rgb(0 0 0 / .08), 0 1px 1px -1px rgb(0 0 0 / .1), 0 1px 2px rgb(0 0 0 / .05), 0 10px 24px -10px rgb(0 0 0 / .14); }
+html.glass .done-toast { -webkit-backdrop-filter: blur(28px) saturate(1.6); backdrop-filter: blur(28px) saturate(1.6); box-shadow: var(--ch-sh-pop); }
+.done-toasts:is(:hover, :focus-within) .done-toast { transform: translateY(calc(var(--i) * (var(--h) + var(--gap)) * -1)); opacity: 1; }
+@keyframes done-toast-in { from { opacity: 0; transform: translateY(calc(100% + 16px)); } }
+
+.done-toast-main {
+  display: flex; align-items: flex-start; gap: 8px; width: 100%; height: 100%; box-sizing: border-box; padding: 12px 14px 12px 12px;
+  border: 0; border-radius: inherit; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+  transition: opacity .26s ease, background-color .14s ease;
+}
+.done-toast-main:hover { background: var(--ch-f3, var(--hover)); }
+.done-toast-main:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+/* Behind the front one, its words are hidden until the stack fans out. */
+.done-toast:not([data-front]) .done-toast-main { opacity: 0; }
+.done-toasts:is(:hover, :focus-within) .done-toast .done-toast-main { opacity: 1; }
+.done-toast-icon { display: grid; place-items: center; width: 16px; height: 20px; flex: none; color: var(--green); }
+.done-toast-icon svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; animation: done-toast-pop .46s cubic-bezier(.34, 1.56, .64, 1) both; }
+.done-toast-tick { stroke-dasharray: 1; animation: done-toast-draw .34s .12s var(--ch-expo, ease-out) both; }
+@keyframes done-toast-pop { from { transform: scale(.6); opacity: 0; } }
+@keyframes done-toast-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.done-toast-text { display: flex; min-width: 0; flex-direction: column; }
+.done-toast-title { overflow: hidden; font-size: 13px; line-height: 20px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.done-toast-what { overflow: hidden; font-size: 13px; line-height: 20px; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+
+/* Close: a 16px round button on the toast's top-left corner, grown in from 80% on hover or focus. */
+.done-toast-x {
+  position: absolute; top: -5px; left: -5px; display: grid; place-items: center; width: 16px; height: 16px; padding: 0;
+  border: 0; border-radius: 50%; background: var(--ch-pop, var(--card)); color: var(--text-muted); cursor: pointer;
+  box-shadow: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .12);
+  opacity: 0; transform: scale(.8); transition: opacity .16s ease, transform .2s var(--ch-expo, ease-out), color .14s ease;
+}
+.done-toast:is(:hover, :focus-within) .done-toast-x, .done-toast-x:focus-visible { opacity: 1; transform: scale(1); }
+.done-toast:not([data-front]) .done-toast-x { display: none; }
+.done-toasts:is(:hover, :focus-within) .done-toast .done-toast-x { display: grid; }
+.done-toast-x:hover { color: var(--ink); }
+.done-toast-x:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+
+/* The star's notice (the kit's NotificationStack) in the same column, the toasts' width. */
+html .done-corner .ui-nsc.star-ask { width: 100%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .done-toasts, .done-toast, .done-toast-main, .done-toast-x { transition: none; }
+  .done-toast, .done-toast-icon svg, .done-toast-tick { animation: none; }
+}

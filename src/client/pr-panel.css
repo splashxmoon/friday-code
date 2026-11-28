@@ -7,7 +7,7 @@
 /* Which one. */
 .prp-head { display: flex; flex-direction: column; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
 .prp-head-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.prp-pill { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px 0 7px; border-radius: 11px; font-size: 12px; font-weight: 600; }
+.prp-pill { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px 0 7px; border-radius: var(--r-sm, 6px); font-size: 12px; font-weight: 600; }
 .prp-pill.open { background: color-mix(in srgb, var(--green) 16%, transparent); color: color-mix(in srgb, var(--green) 82%, var(--ink)); }
 .prp-pill.draft { background: var(--hover-strong); color: var(--ink-2); }
 .prp-pill.merged { background: color-mix(in srgb, #a855f7 18%, transparent); color: color-mix(in srgb, #a855f7 82%, var(--ink)); }
@@ -63,7 +63,7 @@
 .prp-see-head { display: flex; align-items: center; gap: 12px; }
 .prp-see-btn { gap: 6px; }
 .prp-see-does { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 0 42px; padding: 0; list-style: none; }
-.prp-see-does > li { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: var(--r-pill, 999px); background: var(--hover); color: var(--ink-2); font-size: 11.5px; }
+.prp-see-does > li { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: var(--r-sm, 6px); background: var(--hover); color: var(--ink-2); font-size: 11.5px; }
 .prp-see-does > li > svg { color: var(--text-muted); }
 .prp-see-last { margin: 0 0 0 42px; color: var(--ink-2); font-size: 12px; line-height: 1.45; }
 .prp-see-last.warn b { color: var(--amber); }
@@ -228,3 +228,105 @@ a.prp-closes:hover { background: color-mix(in srgb, #a855f7 22%, transparent); }
 .prp-see-now-text.bad { color: color-mix(in srgb, var(--red) 80%, var(--ink)); }
 .prp-see-meters { margin: 0; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .prp-see-log li { grid-template-columns: minmax(0, 1fr) auto; }
+
+/* ── The kit's measurements (affect-pro SPEC.md §1 and "review-center", 2026-11-27) ─────────────────────────────────────────────
+   The title 15/500/24 over 12/400/16 facts; chips 18 tall at radius 5 (4 with an icon), 11/500, coloured text on its own tint; the
+   status card and the lists are cards at radius 10 drawn by a ring, not a border, their header 13/500/20 with the state in its dot
+   rather than a tinted band; rows of 36 between hairlines; section heads 13/500/20 with a flat 16px count; buttons 28 tall at radius
+   6, small ones 24 at 12/500; nothing heavier than 500. The Git panel's grammar (git-panel.css) stays as it is outside this panel. */
+.prp {
+  --prp-ring: 0 0 0 .5px var(--border-strong), 0 1px 1px -1px rgb(0 0 0 / .1), 0 1px 2px rgb(0 0 0 / .05);
+  --prp-sheet: cubic-bezier(.32, .72, .24, 1);
+  font-variant-numeric: tabular-nums;
+}
+html.dark .prp { --prp-ring: 0 0 0 .5px rgb(255 255 255 / .1), 0 1px 2px rgb(0 0 0 / .4); }
+/* Which one. */
+.prp .gx-head.prp-head { gap: 6px; padding: 12px 12px 14px 16px; }
+.prp .prp-title-text { font-size: 15px; font-weight: 500; line-height: 24px; letter-spacing: 0; }
+.prp-by { font-size: 12px; line-height: 16px; }
+.prp-by b { font-weight: 500; }
+.prp-num { font-size: 12px; line-height: 16px; }
+.prp-num b { font-weight: 500; }
+.prp-pill { height: 20px; gap: 4px; padding: 0 6px 0 4px; border-radius: 4px; font-size: 12px; font-weight: 500; line-height: 16px; }
+.prp-pill svg { width: 12px; height: 12px; }
+.prp-pill.small { height: 18px; padding: 0 6px 0 4px; font-size: 11px; line-height: 18px; }
+.prp .gx-chip { height: 18px; gap: 3px; padding: 0 6px; border-radius: 5px; background: color-mix(in srgb, var(--ink) 6%, transparent); font-size: 11px; font-weight: 500; line-height: 18px; }
+.prp .gx-chip:has(> svg:first-child) { padding-left: 4px; border-radius: 4px; }
+.prp .gx-chip svg { width: 12px; height: 12px; }
+.prp-lines .add, .prp-add, .prp-lines .del, .prp-del { font-weight: 500; }
+/* Where it stands: a card; the verdict a 44px head whose dot carries the state. */
+.prp-card { border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--prp-ring); }
+.prp-verdict, .prp-verdict.ok, .prp-verdict.bad, .prp-verdict.wait, .prp-verdict.merged { min-height: 44px; box-sizing: border-box; gap: 8px; padding: 10px 12px 10px 16px; background: none; font-size: 13px; font-weight: 500; line-height: 20px; }
+.prp-src { font-size: 11px; line-height: 16px; }
+.prp-step { gap: 10px; padding: 10px 16px; }
+.prp-step:not(:last-child)::after { left: 25.25px; top: 32px; bottom: -8px; }
+.prp-step-name { font-size: 12px; line-height: 20px; }
+.prp-step-word { font-weight: 500; }
+.prp-step-sub { font-size: 12px; line-height: 16px; }
+.prp-fails { border: 0; border-radius: 8px; background: color-mix(in srgb, var(--ink) 3%, transparent); box-shadow: inset 0 0 0 .5px var(--border-strong); }
+.prp-fails li { min-height: 32px; box-sizing: border-box; padding: 4px 6px 4px 10px; }
+.prp-fail-name { font-size: 12.5px; line-height: 18px; }
+.prp-fail-link { height: 22px; padding: 0 6px; border-radius: 5px; font-size: 12px; transition: background-color .14s ease, color .14s ease; }
+/* See it through: a card, its title 13/500/20 over a 13/400/20 line; lit by a green ring while it is on. */
+.prp-see { gap: 12px; padding: 12px 12px 14px 16px; border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--prp-ring); }
+.prp-see.on { background: var(--card); box-shadow: 0 0 0 .5px color-mix(in srgb, var(--green) 55%, transparent), 0 1px 2px rgb(0 0 0 / .05); }
+.prp-see-text h4 { font-size: 13px; font-weight: 500; line-height: 20px; letter-spacing: 0; }
+.prp-see-text p { font-size: 13px; line-height: 20px; }
+.prp-see-now { padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--ink) 3%, transparent); box-shadow: inset 0 0 0 .5px var(--border); }
+.prp-see-now-text { font-size: 13px; line-height: 20px; }
+.prp-see-meters { font-size: 12px; line-height: 16px; }
+.prp-see-log li { min-height: 32px; box-sizing: border-box; align-items: center; padding: 6px 0; font-size: 12.5px; line-height: 18px; }
+.prp-see-log time { font-size: 12px; }
+.prp-see-log-text code { height: 18px; padding: 0 5px; border-radius: 5px; background: color-mix(in srgb, var(--ink) 6%, transparent); line-height: 18px; }
+/* Buttons: 28 tall at radius 6, 13/500, padding 0 10; small 24, 12/500, padding 0 8; the secondary white on a ring. */
+.prp-btn { height: 28px; gap: 6px; padding: 0 10px; border: 0; border-radius: 6px; background: var(--card); box-shadow: var(--prp-ring); font: 500 13px/20px var(--font); transition: background-color .14s ease, color .14s ease, box-shadow .2s ease, transform .14s cubic-bezier(.22, 1, .36, 1); }
+.prp-btn:has(> svg:first-child) { padding-left: 8px; }
+.prp-btn:hover:not(:disabled) { border: 0; background: var(--hover); }
+.prp-btn:active:not(:disabled) { transform: scale(.98); }
+.prp-btn.small, .prp-gh, .prp-ide { height: 24px; padding: 0 8px; font-size: 12px; line-height: 20px; }
+.prp-btn.primary { background: var(--accent); color: var(--on-accent); box-shadow: 0 1px 2px rgb(0 0 0 / .16); }
+.prp-btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+.prp-btn svg { width: 16px; height: 16px; }
+.prp-btn.small svg, .prp-gh svg, .prp-ide svg { width: 14px; height: 14px; }
+/* Sections: a 13/500/20 head with a flat count, the rows in a card of 36px rows between hairlines. */
+.prp .gx-body { gap: 20px; padding: 14px 14px 24px; }
+.prp .gx-sec-head { min-height: 28px; }
+.prp .gx-sec-head h3 { font-size: 13px; font-weight: 500; line-height: 20px; }
+.prp .gx-count { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--text-muted); font-size: 10.5px; font-weight: 500; line-height: 16px; }
+.prp .gx-hint, .prp .gx-quiet { font-size: 12px; line-height: 16px; }
+.prp .gx-list { gap: 0; padding: 4px; border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--prp-ring); }
+.prp .gx-list > li + li { box-shadow: 0 -1px 0 var(--border); }
+.prp .gx-main { height: 36px; gap: 8px; padding: 0 8px 0 12px; border-radius: 6px; font-size: 13px; line-height: 20px; transition: background-color .14s ease; }
+.prp .gx-main:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.prp .gx-name { font-weight: 500; }
+.prp .gx-dir { font-size: 12px; line-height: 16px; }
+.prp-check-mark { width: 16px; height: 16px; }
+.prp-check-mark svg { width: 10px; height: 10px; }
+.prp-took, .prp-file-lines { font-size: 12px; line-height: 16px; }
+.prp-review { height: 18px; padding: 0 6px; border-radius: 5px; font-size: 11px; font-weight: 500; line-height: 18px; }
+.prp .gx-commit-main { padding: 6px 8px; border-radius: 6px; }
+.prp .gx-subject { font-size: 13px; font-weight: 500; line-height: 20px; }
+.prp .gx-commit-meta { font-size: 12px; line-height: 16px; }
+.prp .gx-commit-meta code { font-size: 11.5px; }
+/* Every pull request of the session: cards of their own at radius 10, the open one raised a shade (no bar down its side). */
+.prp-list { gap: 8px; }
+.prp-list-row { gap: 4px; padding: 10px 12px 10px 14px; border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--prp-ring); transition: background-color .16s ease, box-shadow .2s ease; }
+.prp-list-row:hover { background: color-mix(in srgb, var(--ink) 3%, var(--card)); }
+.prp-list-row[aria-current="true"] { border: 0; box-shadow: 0 0 0 .5px var(--border-hover), 0 1px 2px rgb(0 0 0 / .08); }
+.prp-list-title { font-size: 13px; font-weight: 500; line-height: 20px; }
+.prp-list-meta { font-size: 12px; line-height: 16px; }
+.prp-list-meta b { font-weight: 500; }
+@keyframes prp-rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  .prp-list > li { animation: prp-rise .46s var(--prp-sheet) both; }
+  .prp-list > li:nth-child(2) { animation-delay: 50ms; }
+  .prp-list > li:nth-child(n+3) { animation-delay: 100ms; }
+}
+/* None yet: the kit's empty state, a 42px tile at radius 11, the title 13/500 under it, a 13/400/20 line, the button 18 below. */
+.prp-empty { gap: 0; padding: 48px 24px 52px; }
+.prp-empty-mark { width: 42px; height: 42px; border-radius: 11px; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.prp-empty-mark svg { width: 18px; height: 18px; }
+.prp-empty h3 { margin: 16px 0 0; font-size: 13px; font-weight: 500; line-height: 20px; }
+.prp-empty p { max-width: 300px; margin: 4px 0 0; font-size: 13px; line-height: 20px; text-wrap: balance; }
+.prp-empty .prp-btn { margin-top: 18px; }
+.prp .prp-desc :is(h1, h2, h3, h4, h5, h6) { font-weight: 500; }

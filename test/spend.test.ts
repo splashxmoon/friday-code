@@ -65,3 +65,15 @@ test("a lane on Auto is priced at the model Auto picked for each turn, never at 
   assert.equal(Math.round(s.usd * 100) / 100, 1.25 + 0.05);
   assert.equal(s.unpriced, 500, "Auto with nothing picked yet is the tool's own pick, unpriced");
 });
+
+test("Codex's GPT-6 models and Gemini's are priced, each at its own cached rate; Gemini's later prices from their dates (Arun, 2026-11-28)", () => {
+  assert.deepEqual(priceFor("codex", "gpt-6.1-sol"), { in: 2, out: 10, read: 0.1, write: 2 });
+  assert.deepEqual(priceFor("codex", "gpt-6.2-astra"), { in: 8, out: 40, read: 0.4, write: 8 });
+  assert.deepEqual(priceFor("codex", "openai/gpt-6-luna"), { in: 0.1, out: 0.5, read: 0.01, write: 0.1 });
+  assert.equal(priceFor("gemini", "gemini-3.1-pro-preview", Date.UTC(2026, 10, 28))?.out, 12);
+  assert.equal(priceFor("gemini", "gemini-4-carbon", Date.UTC(2026, 10, 28))?.in, 2);
+  assert.equal(priceFor("gemini", "gemini-4-carbon", Date.UTC(2026, 11, 2))?.in, 4);
+  assert.equal(priceFor("codex", "auto"), null);
+  // A million fresh in and a million out on GPT-6.1 Sol: $12.
+  assert.equal(usdOf({ input: 1e6, cacheWrite: 0, cacheRead: 0, output: 1e6, reasoning: 0 }, priceFor("codex", "gpt-6.1-sol")!), 12);
+});

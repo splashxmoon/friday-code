@@ -81,11 +81,18 @@ function bindToWindow(w: BrowserWindow): void {
   });
 }
 
-/** `fromApp`: whether a request comes from Friday's own page (main.ts), never another site the window was sent to. */
-export function registerTerminal(fromApp: (e: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) => boolean = () => false): void {
-  ipcMain.handle("friday:pty-start", (e, opts: { id?: unknown; cols?: unknown; rows?: unknown; cwd?: unknown }) => {
+/**
+ * `fromApp`: whether a request comes from Friday's own page (main.ts), never another site the window was sent to.
+ * `allow`: where the page is a website (the product app), the person's own yes to a shell, asked in a dialog of the app's
+ * (desktop/consent.ts): a script on the page that isn't Friday's can ask for a shell too.
+ */
+export function registerTerminal(fromApp: (e: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) => boolean = () => false, allow?: (e: Electron.IpcMainInvokeEvent) => Promise<boolean>): void {
+  ipcMain.handle("friday:pty-start", async (e, opts: { id?: unknown; cols?: unknown; rows?: unknown; cwd?: unknown }) => {
     const w = BrowserWindow.fromWebContents(e.sender);
     if (!w || !fromApp(e)) return { ok: false as const, error: "No window." };
+    // Before anything is looked up, so nothing below runs in two halves: two asks for one id can't both start a shell.
+    if (allow && !(await allow(e))) return { ok: false as const, error: "You said no to a terminal here. Open it again to be asked." };
+    if (w.isDestroyed()) return { ok: false as const, error: "No window." };
     const id = String(opts?.id ?? "");
     if (!id) return { ok: false as const, error: "That terminal has no id." };
     const { file, args } = defaultShell();

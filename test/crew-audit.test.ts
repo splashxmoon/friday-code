@@ -93,13 +93,13 @@ test("CREW-12: a board's report reads from the board's record: titles, not ids, 
   const rows: [ActorRef, EventBody, string?][] = [
     [human, { type: "session.created", title: "Crew", ownerId: "u", ownerName: "Arun" } as EventBody],
     [tool, { type: "board.posted", fromLane: "nova", fromName: "Nova", tasks: [{ id: "s1", title: 'Board task "Test sweep": Run the tests and fix what fails', after: [] }] } as unknown as EventBody, "nova"],
-    [tool, { type: "board.claimed", id: "s1", lane: "kit", name: "arundass's Codex" } as EventBody, "kit"],
-    [tool, { type: "board.finished", id: "s1", lane: "kit", name: "arundass's Codex", status: "done", report: "All green." } as EventBody, "kit"],
+    [tool, { type: "board.claimed", id: "s1", lane: "kit", name: "Ada's Codex" } as EventBody, "kit"],
+    [tool, { type: "board.finished", id: "s1", lane: "kit", name: "Ada's Codex", status: "done", report: "All green." } as EventBody, "kit"],
     [tool, { type: "board.reviewed", id: "s1", lane: "ada", name: "Rex", ok: true, note: "Fine." } as EventBody, "ada"],
   ];
   const e = log(rows);
   const names: Record<string, string> = { kit: "Kit", ada: "Ada" };
-  const said = boardReportText("## s1: Run the tests and fix what fails (done by arundass's Codex, approved by Rex)\nAll green.", e, 99, (l) => names[l]);
+  const said = boardReportText("## s1: Run the tests and fix what fails (done by Ada's Codex, approved by Rex)\nAll green.", e, 99, (l) => names[l]);
   assert.equal(said, "## Run the tests and fix what fails (done by Kit, approved by Ada)\nAll green.");
   assert.doesNotMatch(plainLine(said), /s1:/);
 });

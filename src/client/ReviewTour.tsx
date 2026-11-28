@@ -11,9 +11,12 @@ import { IdeLink } from "./ide/IdeLink.js";
 import { reviews, useReviews } from "./prWatch.js";
 import type { Identity } from "./storage.js";
 import { isTyping } from "./ui.js";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CompassIcon, ExternalLinkIcon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CompassIcon, ExternalLinkIcon, TriangleAlertIcon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+// The kit's pieces: the tour only opens inside Code Review, which loads on its own.
+import { Button as KitButton } from "@/components/affect/button";
+import { Kbd } from "@/components/affect/kbd";
 
 /**
  * A guided tour of a pull request (Arun, 2026-10-25, tier 2: "a PR review page with an AI-guided tour"): its files one at a time,
@@ -141,154 +144,143 @@ export function ReviewTour({ identity, pr, files, onClose }: { identity: Identit
           : `A small change: ${size} line${size === 1 ? "" : "s"}.`;
 
   return (
-    <section ref={root} className="rt @container flex min-w-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]" aria-label="Guided tour of the changes">
-      {/* Where you are: the tour, how far through, and the way out. */}
-      <header className="flex min-w-0 items-center gap-2.5 border-b border-[var(--border)] px-3.5 py-2.5">
-        <CompassIcon className="size-4 shrink-0 text-[var(--ink-2)]" aria-hidden />
-        <span className="text-[13px] font-semibold text-[var(--ink)]">Guided tour</span>
-        <span className="text-[12px] text-[var(--text-muted)] tabular-nums">
-          {at + 1} of {steps.length}
+    <section ref={root} className="rt @container" aria-label="Guided tour of the changes">
+      {/* Where you are: the tour, how far through (review-center's header: a 6px track and "3 of 8 read"), and the way out. */}
+      <header className="rt-head">
+        <CompassIcon className="size-4 shrink-0 text-[var(--text-muted)]" aria-hidden />
+        <span className="rt-title">Guided tour</span>
+        <span className="rt-track" aria-hidden>
+          <span style={{ width: `${(seen.size / steps.length) * 100}%` }} />
         </span>
-        <span className="h-1 min-w-12 max-w-48 flex-1 overflow-hidden rounded-full bg-[var(--hover)]" aria-hidden>
-          <span className="block h-full rounded-full bg-[var(--ink)] transition-[width] duration-[var(--dass-med)]" style={{ width: `${(seen.size / steps.length) * 100}%` }} />
+        <span className="rt-count">
+          <b>{seen.size}</b> of {steps.length} read
         </span>
-        <span className="ml-auto hidden text-[12px] text-[var(--text-muted)] @min-[560px]:inline" aria-hidden>
-          <kbd>←</kbd> <kbd>→</kbd> to move
-        </span>
-        <Button variant="ghost" size="icon-xs" aria-label="End the tour" title="End the tour (Esc)" className="text-[var(--text-muted)] hover:text-[var(--ink)]" onClick={onClose}>
+        <Button variant="ghost" size="icon-xs" aria-label="End the tour" title="End the tour (Esc)" className="rt-x ml-auto" onClick={onClose}>
           <XIcon />
         </Button>
       </header>
 
-      <div className="grid min-w-0 grid-cols-1 @min-[620px]:grid-cols-[200px_minmax(0,1fr)]">
-        {/* The reading plan: every file in the order to read it, what is seen ticked, the one in front of you marked. */}
-        <ol className="m-0 hidden max-h-[520px] list-none flex-col gap-px overflow-y-auto border-r border-[var(--border)] p-1.5 @min-[620px]:flex" aria-label="Reading order">
+      <div className="rt-body">
+        {/* The reading plan: every file in the order to read it, what is seen ticked, the one in front of you raised. */}
+        <ol className="rt-plan" aria-label="Reading order">
           {steps.map((s, i) => (
             <li key={s.file.path}>
-              <button
-                type="button"
-                aria-current={i === at || undefined}
-                onClick={() => go(i)}
-                title={s.file.path}
-                className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] text-[var(--ink-2)] hover:bg-[var(--hover)] aria-[current=true]:bg-[var(--hover)] aria-[current=true]:text-[var(--ink)]"
-              >
+              <button type="button" aria-current={i === at || undefined} onClick={() => go(i)} title={s.file.path} className="rt-step">
                 <span className="grid size-3.5 shrink-0 place-items-center">
                   {seen.has(s.file.path) && i !== at ? <CheckIcon className="size-3 text-[var(--text-muted)]" /> : <span className={cn("size-1.5 rounded-full", s.risks.length ? "bg-[var(--dass-needs)]" : "bg-[var(--border-strong)]")} />}
                 </span>
-                <span className="min-w-0 flex-1 truncate font-mono">{base(s.file.path)}</span>
+                <span className="min-w-0 flex-1 truncate">{base(s.file.path)}</span>
                 {found.some((x) => x.path && sameFile(x.path, s.file.path)) && <span className="shrink-0 text-[11px] font-medium text-[var(--red)]" title="The agents found something here">!</span>}
               </button>
             </li>
           ))}
         </ol>
 
-        <div className="flex min-w-0 flex-col gap-3 p-3.5">
-          {/* The file in front of you, and why it comes here. */}
-          <div className="flex min-w-0 flex-col gap-1">
-            <div className="flex min-w-0 items-center gap-2">
-              <FileIcon path={f.path} size={15} />
-              <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-[var(--ink)]" title={f.path}>
-                <span className="text-[var(--text-muted)]">{dir(f.path)}</span>
-                {base(f.path)}
-              </span>
-              {/* In the IDE (Arun, 2026-11-20: "Every file mention opens in the IDE"): the pull request checked out in a copy, this file open there. */}
-              {isLocal() && diffs?.get(f.path)?.status !== "removed" && <IdeLink className="link-btn shrink-0 text-[12px]" prFile={{ identity, url: pr.url, title: pr.title, path: f.path }} />}
-              <span className="shrink-0 font-mono text-[12px] tabular-nums">
-                <span className="text-[var(--green)]">+{f.additions}</span> <span className="text-[var(--red)]">−{f.deletions}</span>
-              </span>
-            </div>
-            <p className={cn("m-0 pl-[23px] text-[13px]", step.risks.length ? "text-[var(--ink)]" : "text-[var(--text-muted)]")}>{why}</p>
-          </div>
+        <div className="rt-detail">
+          {/* Why it comes here, then the file as a diff card: its row of 36 (folder quiet, name in ink, the lines changed), its lines. */}
+          <p className={cn("rt-why", step.risks.length && "rt-why-risk")}>
+            <b>Why</b> {why}
+          </p>
 
-          {/* What your agents found in it, each pointing at its line below. */}
+          {/* What your agents found in it, as the agent's note: each pointing at its line below. */}
           {here.length > 0 ? (
-            <ul className="m-0 flex list-none flex-col gap-1.5 p-0" aria-label="Found in this file">
+            <ul className="rt-notes" aria-label="Found in this file">
               {here.slice(0, 5).map((x, i) => (
-                <li key={i} className="flex min-w-0 items-start gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[13px]">
-                  <span className={cn("mt-[3px] shrink-0 rounded px-1.5 text-[11px] font-medium", x.severity === "high" ? "bg-[color-mix(in_srgb,var(--red)_14%,transparent)] text-[var(--red)]" : "bg-[var(--hover)] text-[var(--ink-2)]")}>
-                    {x.severity === "high" ? "High" : x.severity === "medium" ? "Medium" : "Low"}
+                <li key={i} className="rt-note">
+                  <span className="rt-note-l">
+                    <TriangleAlertIcon aria-hidden />
+                    {x.severity === "high" ? "High" : x.severity === "medium" ? "Medium" : "Low"} · {byWord(x)}
                   </span>
-                  <span className="min-w-0 flex-1">
+                  <span className="rt-note-t">
                     <span className="font-medium text-[var(--ink)]">{x.title}</span>
-                    {x.detail && <span className="text-[var(--ink-2)]"> {x.detail}</span>}
-                    <span className="text-[12px] text-[var(--text-muted)]"> · {byWord(x)}</span>
+                    {x.detail && <span> {x.detail}</span>}
                   </span>
                   {x.line && lines?.some((l) => l.n === x.line && l.kind !== "del") && (
-                    <button type="button" className="link-btn shrink-0 text-[12px]" onClick={() => toLine(x.line!)}>
-                      Line {x.line}
+                    <button type="button" className="rt-note-chip" onClick={() => toLine(x.line!)}>
+                      {base(f.path)}:{x.line}
                     </button>
                   )}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="m-0 text-[12px] text-[var(--text-muted)]">{run?.results.length ? "Your agents found nothing in this file." : "Run Agent review above the files and what it finds shows here, file by file."}</p>
+            <p className="rt-quiet">{run?.results.length ? "Your agents found nothing in this file." : "Run Agent review above the files and what it finds shows here, file by file."}</p>
           )}
 
-          {/* The change itself. */}
-          <div ref={diffBox} className="max-h-[420px] min-w-0 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--bg)]" aria-label={`Diff of ${f.path}`}>
-            {diffs === null ? (
-              <p className="m-0 px-3 py-6 text-center text-[12px] text-[var(--text-muted)]">Reading the changes from GitHub…</p>
-            ) : !lines ? (
-              <p className="m-0 px-3 py-6 text-center text-[12px] text-[var(--text-muted)]">
-                {diffError ? `Couldn't read the changes: ${diffError}` : "GitHub doesn't show this file's changes (a binary file, or too big)."}{" "}
-                <button type="button" className="link-btn" onClick={() => openOutside(`${pr.url}/files`)}>
-                  See it on GitHub
-                </button>
-              </p>
-            ) : (
-              <table className="w-full border-collapse font-mono text-[12px] leading-[18px]">
-                <tbody>
-                  {lines.map((l, i) =>
-                    l.kind === "hunk" ? (
-                      <tr key={i} className="bg-[var(--hover)] text-[var(--text-muted)]">
-                        <td className="w-10 px-2 py-0.5 text-right select-none">⋯</td>
-                        <td className="truncate px-2 py-0.5">{l.text}</td>
-                      </tr>
-                    ) : (
-                      <tr
-                        key={i}
-                        data-line={l.kind !== "del" ? l.n : undefined}
-                        className={cn(
-                          l.kind === "add" && "bg-[color-mix(in_srgb,var(--green)_9%,transparent)]",
-                          l.kind === "del" && "bg-[color-mix(in_srgb,var(--red)_8%,transparent)]",
-                          l.kind !== "del" && l.n !== undefined && flagged.has(l.n) && "shadow-[inset_3px_0_0_var(--red)]",
-                        )}
-                      >
-                        <td className="w-10 px-2 text-right align-top text-[var(--text-muted)] tabular-nums select-none">{l.n}</td>
-                        <td className="px-2 align-top whitespace-pre-wrap [overflow-wrap:anywhere] text-[var(--ink)]">
-                          <span className={cn("mr-1.5 select-none", l.kind === "add" ? "text-[var(--green)]" : l.kind === "del" ? "text-[var(--red)]" : "text-transparent")}>{l.kind === "add" ? "+" : l.kind === "del" ? "−" : " "}</span>
-                          {l.text}
-                        </td>
-                      </tr>
-                    ),
-                  )}
-                </tbody>
-              </table>
-            )}
+          <div className="rt-diff">
+            <div className="rt-file">
+              <FileIcon path={f.path} size={14} />
+              <span className="min-w-0 flex-1 truncate" title={f.path}>
+                <span className="text-[var(--text-muted)]">{dir(f.path)}</span>
+                {base(f.path)}
+              </span>
+              {/* In the IDE (Arun, 2026-11-20: "Every file mention opens in the IDE"): the pull request checked out in a copy, this file open there. */}
+              {isLocal() && diffs?.get(f.path)?.status !== "removed" && <IdeLink className="link-btn shrink-0 text-[12px]" prFile={{ identity, url: pr.url, title: pr.title, path: f.path }} />}
+              <span className="rt-n">
+                <span className="text-[var(--green)]">+{f.additions}</span> <span className="text-[var(--red)]">−{f.deletions}</span>
+              </span>
+            </div>
+            <div ref={diffBox} className="rt-lines" aria-label={`Diff of ${f.path}`}>
+              {diffs === null ? (
+                <p className="rt-quiet rt-center">Reading the changes from GitHub…</p>
+              ) : !lines ? (
+                <p className="rt-quiet rt-center">
+                  {diffError ? `Couldn't read the changes: ${diffError}` : "GitHub doesn't show this file's changes (a binary file, or too big)."}{" "}
+                  <button type="button" className="link-btn" onClick={() => openOutside(`${pr.url}/files`)}>
+                    See it on GitHub
+                  </button>
+                </p>
+              ) : (
+                <table>
+                  <tbody>
+                    {lines.map((l, i) =>
+                      l.kind === "hunk" ? (
+                        <tr key={i} className="rt-hunk">
+                          <td>⋯</td>
+                          <td className="truncate">{l.text}</td>
+                        </tr>
+                      ) : (
+                        <tr key={i} data-line={l.kind !== "del" ? l.n : undefined} data-kind={l.kind}>
+                          <td>{l.n}</td>
+                          <td>
+                            <span className="rt-sign">{l.kind === "add" ? "+" : l.kind === "del" ? "−" : " "}</span>
+                            {/* A line a finding points at: its text marked amber, as the reference marks what the agent is unsure of. */}
+                            {l.kind !== "del" && l.n !== undefined && flagged.has(l.n) ? (
+                              <>
+                                {/^\s*/.exec(l.text)![0]}
+                                <mark>{l.text.trimStart()}</mark>
+                              </>
+                            ) : (
+                              l.text
+                            )}
+                          </td>
+                        </tr>
+                      ),
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* How far, and on. */}
-      <footer className="flex min-w-0 items-center gap-1.5 border-t border-[var(--border)] px-3.5 py-2.5">
-        <span className="text-[12px] text-[var(--text-muted)] tabular-nums">
-          {seen.size} of {steps.length} read
-        </span>
-        <Button variant="ghost" size="sm" className="ml-auto h-7 text-[12px] text-[var(--ink-2)]" onClick={() => openOutside(`${pr.url}/files`)}>
-          <ExternalLinkIcon /> On GitHub
-        </Button>
-        <Button variant="outline" size="sm" className="h-7 border-[var(--border)] bg-[var(--bg)] text-[12px] shadow-none" disabled={at === 0} onClick={() => go(at - 1)}>
-          <ChevronLeftIcon /> Back
-        </Button>
+      {/* On: the action bar, each move with its key. */}
+      <footer className="rt-foot">
+        <KitButton variant="ghost" icon={<ExternalLinkIcon />} onClick={() => openOutside(`${pr.url}/files`)}>
+          On GitHub
+        </KitButton>
+        <KitButton variant="secondary" className="ml-auto" disabled={at === 0} icon={<ChevronLeftIcon />} onClick={() => go(at - 1)}>
+          Back <Kbd keys="left" aria-hidden />
+        </KitButton>
         {last ? (
-          <Button size="sm" className="h-7 text-[12px]" onClick={onClose}>
-            <CheckIcon /> Done
-          </Button>
+          <KitButton icon={<CheckIcon />} onClick={onClose}>
+            Done
+          </KitButton>
         ) : (
-          <Button size="sm" className="h-7 text-[12px]" onClick={() => go(at + 1)}>
-            Next <ChevronRightIcon />
-          </Button>
+          <KitButton className="rv-key" iconRight={<ChevronRightIcon />} onClick={() => go(at + 1)}>
+            Next <Kbd keys="right" aria-hidden />
+          </KitButton>
         )}
       </footer>
     </section>

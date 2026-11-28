@@ -44,6 +44,26 @@ export class OwnModelLLM implements LLM {
   }
 
   /**
+   * An own model's context window, asked of its server through its owner's computer (runner/own-models.ts ownWindow): a few
+   * seconds at most, and null for Friday's models, a hosted key, a server that doesn't say, or an older runner.
+   */
+  async contextWindow(model?: string): Promise<{ window: number | null; whenFull?: "compact" | "ask" | "drop"; reply?: number; summarizer?: string } | null> {
+    const own = isOwnModel(model) ? ownModelParts(model!) : null;
+    if (!own) return null;
+    const asked = this.via(own.owner, "models.own.window", { id: own.entry }, () => {}).catch(() => null);
+    const r = (await Promise.race([asked, new Promise((resolve) => setTimeout(resolve, 5_000).unref?.())])) as { window?: unknown; whenFull?: unknown; reply?: unknown; summarizer?: unknown } | null | undefined;
+    if (!r) return null;
+    // The summary model, set on the computer by its entry id: made into the session's own-model id for the same person.
+    const summarizer = typeof r.summarizer === "string" && /^[\w-]{1,20}$/.test(r.summarizer) ? `own:${own.owner}:${r.summarizer}` : "";
+    return {
+      window: typeof r.window === "number" && r.window > 0 ? r.window : null,
+      ...(r.whenFull === "compact" || r.whenFull === "ask" || r.whenFull === "drop" ? { whenFull: r.whenFull } : {}),
+      ...(typeof r.reply === "number" && r.reply >= 512 && r.reply <= 32_768 ? { reply: r.reply } : {}),
+      ...(summarizer ? { summarizer } : {}),
+    };
+  }
+
+  /**
    * An own model is sent pictures only when its owner's computer says it sees them (set by them, or guessed from its name: see
    * seesImages): most local ones can't, and a picture sent to one that can't fails the whole step. Asked only for a step that has
    * pictures; a computer that can't be asked (an older runner, gone offline) is a no.
@@ -62,5 +82,5 @@ export class OwnModelLLM implements LLM {
 /** A model fixed for every call made through it: Friday's helpers (review, commit messages, skills) on somebody's own model. */
 export function withModel(llm: LLM, model: string | undefined): LLM {
   if (!model) return llm;
-  return { complete: (req) => llm.complete({ ...req, model }), search: (q, s) => llm.search(q, s), supportsImages: (m) => llm.supportsImages?.(m ?? model) ?? Promise.resolve(false) };
+  return { complete: (req) => llm.complete({ ...req, model }), search: (q, s) => llm.search(q, s), supportsImages: (m) => llm.supportsImages?.(m ?? model) ?? Promise.resolve(false), contextWindow: (m) => llm.contextWindow?.(m ?? model) ?? Promise.resolve(null) };
 }

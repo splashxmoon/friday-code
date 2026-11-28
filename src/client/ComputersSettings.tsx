@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Picker, relTime, Segmented } from "./ui.js";
+import { Picker, relTime } from "./ui.js";
 import { CopyMark } from "./SettingsOutside.js";
 import { SettingsGroup, SettingsRow } from "@/components/dass";
-import { Button } from "@/components/ui/button";
+import { Button, Choice } from "./settings-kit.js";
 import { call, versions, type LinkedComputer, type State } from "./Computers.js";
 import { MachinesMap } from "./MachinesMap.js";
 import { NearbyLink } from "./NearbyLink.js";
+import { useHosts, type HostView } from "./hosts.js";
+import { HostAdd, HostRow, useHostSetup } from "./HostsSettings.js";
 
 // Settings › Computer › Your computers, apart from Computers.tsx: the new session's Runs on line and the Crew draw RunsOn and
 // useComputers with the first screen, and this page (about 15 KB) only loads with Settings, or when Runs on › Add a computer… opens.
@@ -20,6 +22,34 @@ const ADD_HOW: [AddHow, string][] = [
   ["app", "Link"],
 ];
 
+/** This computer, in a sentence: "this Mac", "this PC". */
+const thisOne = (): string => (/Mac/i.test(navigator.platform) ? "this Mac" : /Win/i.test(navigator.platform) ? "this PC" : "this computer");
+
+/**
+ * The first thing Add a computer asks (Arun, 2026-11-26: "what is the difference between like the host and other computers??? can
+ * we somehow combine them"): what the machine is for, said by what happens when this one sleeps. Help it lends its coding tools
+ * to sessions started here (a linked computer); Run on its own is a Friday of its own there (a host, local/hosts.ts).
+ */
+function AddChoice({ value, onPick }: { value: "help" | "own" | null; onPick: (v: "help" | "own") => void }) {
+  const me = thisOne();
+  const card = (v: "help" | "own", title: string, hint: string, foot: string) => (
+    <button type="button" role="radio" aria-checked={value === v} className={`computers-choice${value === v ? " on" : ""}`} onClick={() => onPick(v)}>
+      <span className="computers-choice-mark" aria-hidden />
+      <span className="computers-choice-text">
+        <span className="computers-choice-title">{title}</span>
+        <span className="computers-choice-hint">{hint}</span>
+        <span className="computers-choice-foot">{foot}</span>
+      </span>
+    </button>
+  );
+  return (
+    <div className="computers-choices" role="radiogroup" aria-label="What it's for">
+      {card("help", `Help ${me}`, `Agents you start here run on its coding tools. Your sessions stay on ${me}.`, `Pauses when ${me} sleeps`)}
+      {card("own", "Run on its own", "A Friday of its own runs there as a service. You open it here over SSH.", `Keeps going when ${me} sleeps`)}
+    </div>
+  );
+}
+
 export function ComputersSettings({ adding = false, onDone }: { /** Opened from Runs on › Add a computer: only the adding, started at once. */ adding?: boolean; onDone?: () => void } = {}) {
   const [state, setState] = useState<State | null>(null);
   const [link, setLink] = useState<{ link: string; until: number; unix?: string; windows?: string } | null>(null);
@@ -33,6 +63,13 @@ export function ComputersSettings({ adding = false, onDone }: { /** Opened from 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [typing, setTyping] = useState(false);
+  /** The machines that run on their own (hosts), and the one being set up there. */
+  const hostsNow = useHosts(5_000);
+  const setup = useHostSetup(hostsNow.reload);
+  /** Add a computer in Settings asks what it's for first (AddChoice), when hosts can be added here; the dialog only links. */
+  const [choosing, setChoosing] = useState(false);
+  const [pick, setPick] = useState<"help" | "own" | null>(null);
+  const [hostSaid, setHostSaid] = useState<{ text: string; bad?: boolean } | null>(null);
   const read = () => void call<State>("/api/computers").then(setState, () => {});
   useEffect(() => {
     read();
@@ -112,7 +149,30 @@ export function ComputersSettings({ adding = false, onDone }: { /** Opened from 
     setLink(null);
     setLinked("");
     setSetting({ busy: false });
+    setChoosing(false);
+    setPick(null);
+    setup.clear();
     onDone?.();
+  };
+  const startAdding = () => {
+    setHostSaid(null);
+    if (!hostsNow.canAdd) return void add("nearby");
+    setChoosing(true);
+    setPick(null);
+  };
+  const choose = (v: "help" | "own") => {
+    setPick(v);
+    if (v === "help") return void add("nearby");
+    // Run on its own sets itself up over SSH: a code made for linking stops working now.
+    if (how && how !== "ssh") void call("/api/computers/code", { method: "DELETE" }).catch(() => {});
+    setHow(null);
+    setLink(null);
+  };
+  const updateHost = (h: HostView) => {
+    setChoosing(true);
+    setPick("own");
+    setHow(null);
+    void setup.start(h);
   };
   // Removed at once when nothing runs there; otherwise what does is said first, with its teammates offered a move to this one.
   const remove = async (c: LinkedComputer, move?: boolean) => {
@@ -159,25 +219,36 @@ export function ComputersSettings({ adding = false, onDone }: { /** Opened from 
   return (
     // One group of Settings › Computer: your others, and this one used from another's (Arun, 2026-11-04: "design this better").
     <Group adding={adding}>
-      {!adding && (
-        <SettingsRow label="Your computers" hint="Run agents on your other computers over Wi-Fi or Tailscale.">
+      {!adding && !choosing && (
+        <SettingsRow label="Other machines" hint={hostsNow.canAdd ? `Lend ${thisOne()} their coding tools, or keep a Friday running on one.` : "Run agents on your other computers over Wi-Fi or Tailscale."}>
           {!how && (
-            <Button type="button" variant="outline" size="sm" onClick={() => void add("nearby")}>
+            <Button type="button" variant="outline" size="sm" onClick={startAdding}>
               Add a computer
             </Button>
           )}
         </SettingsRow>
       )}
-      {/* The map of them: what each has now and how it links to this one (spec 09 step 1). */}
-      {!adding && !how && <MachinesMap state={state} />}
-      {/* Three ways in (add-computer.ts): a machine Friday reaches over SSH is set up from here; any other takes one command, or
-          the link in its own Friday app. */}
+      {/* The map of them: what each has now and how it links to this one (spec 09 step 1), the ones on their own too. */}
+      {!adding && !how && !choosing && <MachinesMap state={state} hosts={hostsNow.canAdd ? hostsNow.hosts : []} />}
+      {/* What it's for first, then how: Help this Mac links it (three ways, add-computer.ts), Run on its own sets up a host. */}
+      {choosing && (
+        <div className="computers-add">
+          <div className="computers-add-head">
+            <span className="computers-add-title">Add a computer</span>
+            <button type="button" className="link-btn small" onClick={done}>
+              {finished || setup.job?.done ? "Done" : "Cancel"}
+            </button>
+          </div>
+          <AddChoice value={pick} onPick={choose} />
+          {pick === "own" && <HostAdd setup={setup} ssh={hostsNow.ssh} hosts={hostsNow.hosts} onDone={done} />}
+        </div>
+      )}
       {how && (
         <div className="computers-add">
           <div className="computers-add-head">
-            <Segmented value={how} options={ADD_HOW} onChange={(w) => void add(w)} className="computers-add-how" />
-            {/* In the dialog its close button is the way out (Computers.tsx AddComputer); in Settings, this. */}
-            {!adding && (
+            <Choice label="How it links" value={how} options={ADD_HOW} onChange={(w) => void add(w)} className="computers-add-how" full={adding} />
+            {/* In the dialog its close button is the way out (Computers.tsx AddComputer); in Settings, this, or the choice's above. */}
+            {!adding && !choosing && (
               <button type="button" className="link-btn small" onClick={done}>
                 {finished ? "Done" : "Cancel"}
               </button>
@@ -202,7 +273,7 @@ export function ComputersSettings({ adding = false, onDone }: { /** Opened from 
             <div className="computers-add-body">
               <p className="muted small">Paste this in a terminal on the other machine. It runs Friday there with nothing to open, and stays linked while it runs. It needs Node.js 22.</p>
               <div className="computers-link-row">
-                <Segmented value={shell} options={[["unix", "Mac or Linux"], ["windows", "Windows"]]} onChange={setShell} className="computers-shell" />
+                <Choice label="The other machine's system" value={shell} options={[["unix", "Mac or Linux"], ["windows", "Windows"]]} onChange={setShell} className="computers-shell" />
               </div>
               <div className="computers-link-row">
                 <code className="computers-link-text" title={shell === "unix" ? link.unix : link.windows}>
@@ -227,7 +298,8 @@ export function ComputersSettings({ adding = false, onDone }: { /** Opened from 
           )}
         </div>
       )}
-      {!adding && state.computers.length > 0 && (
+      {hostSaid && !adding && <p className={`small computers-said${hostSaid.bad ? " bad" : " ok"}`}>{hostSaid.text}</p>}
+      {!adding && !choosing && (state.computers.length > 0 || (hostsNow.canAdd && hostsNow.hosts.length > 0)) && (
         <ul className="computers-list" aria-label="Your other computers">
           {state.computers.map((c) => (
             <li key={c.id}>
@@ -249,6 +321,7 @@ export function ComputersSettings({ adding = false, onDone }: { /** Opened from 
               <span className={`small computers-tools${c.problem ? " bad" : " muted"}`} title={c.problem ?? ""}>
                 {c.connected ? "" : (c.problem ?? "Not connected")}
               </span>
+              {hostsNow.canAdd && <span className="computers-kind">{`Helps ${thisOne()}`}</span>}
               <button type="button" className="link-btn small" onClick={() => setNaming({ id: c.id, name: c.name })} aria-label={`Rename ${c.name}`}>
                 Rename
               </button>
@@ -257,6 +330,7 @@ export function ComputersSettings({ adding = false, onDone }: { /** Opened from 
               </button>
             </li>
           ))}
+          {hostsNow.canAdd && hostsNow.hosts.map((h) => <HostRow key={h.id} h={h} reload={hostsNow.reload} onUpdate={updateHost} onSaid={(text, bad) => setHostSaid({ text, bad })} />)}
         </ul>
       )}
       {/* What runs there, said before it goes: its teammates moved here, or left offline as its, back if it is added again. */}
@@ -281,7 +355,7 @@ export function ComputersSettings({ adding = false, onDone }: { /** Opened from 
           </div>
         </div>
       )}
-      {!adding && <div className="computers-join">
+      {!adding && !choosing && <div className="computers-join">
         <SettingsRow
           label={hub ? `Used from ${hub.name}` : "Use this computer from another Friday"}
           hint={
@@ -328,5 +402,5 @@ export function ComputersSettings({ adding = false, onDone }: { /** Opened from 
 
 /** Settings' group, or, adding from Runs on, just its contents inside the dialog that has its own title. */
 function Group({ adding, children }: { adding: boolean; children: ReactNode }) {
-  return adding ? <div className="computers-set computers-adding">{children}</div> : <SettingsGroup title="Other computers" className="computers-set">{children}</SettingsGroup>;
+  return adding ? <div className="computers-set computers-adding">{children}</div> : <SettingsGroup title="Your computers" className="computers-set">{children}</SettingsGroup>;
 }

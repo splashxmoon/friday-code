@@ -17,7 +17,7 @@ test("a Crush turn: the instruction on stdin, its answer as text, and the next t
   assert.equal(said(outs), "main.go starts the server.\n");
   assert.deepEqual(outs.slice(-2), [{ kind: "session", id: CRUSH_LAST }, { kind: "done" }]);
   assert.deepEqual(crush.args({ ...turn, resumeId: CRUSH_LAST, model: undefined }), ["run", "--quiet", "--continue"]);
-  assert.deepEqual(crush.modes, ["full"]);
+  assert.deepEqual(crush.modes, ["full", "plan"]);
   assert.deepEqual(crush.login, ["login"]);
   assert.match(crush.explain("no providers configured"), /crush login/);
 });

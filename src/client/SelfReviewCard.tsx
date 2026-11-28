@@ -124,18 +124,19 @@ export function SelfReviewCard({ findings, files = 0 }: { findings: Finding[]; f
         </>
       )}
       <div className="sfr-acts">
-        <button type="button" className="sfr-btn on" onClick={() => send(OPEN_PR_ASK, "Asked for the pull request")} title={open ? `${open} still open: said in the pull request` : undefined}>
-          Open the pull request
+        {/* Quietest first, the main one ending the row on the right (the kit's footers). */}
+        {asked && <span className="sfr-said" role="status">{asked}</span>}
+        <button type="button" className="sfr-btn plain" onClick={() => send(SELF_REVIEW_ASK, "Reviewing again")}>
+          Review again
         </button>
         {inIde && (
           <button type="button" className="sfr-btn" onClick={() => window.dispatchEvent(new CustomEvent("friday:vsc-command", { detail: "reviewChanges" }))}>
             See each fix
           </button>
         )}
-        <button type="button" className="sfr-btn plain" onClick={() => send(SELF_REVIEW_ASK, "Reviewing again")}>
-          Review again
+        <button type="button" className="sfr-btn on" onClick={() => send(OPEN_PR_ASK, "Asked for the pull request")} title={open ? `${open} still open: said in the pull request` : undefined}>
+          Open the pull request
         </button>
-        {asked && <span className="sfr-said" role="status">{asked}</span>}
       </div>
     </div>
   );

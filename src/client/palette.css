@@ -1,0 +1,99 @@
+/* ⌘K (Palette.tsx) and the search window (⌘⇧F, SearchModal.tsx .search), as the kit's command menu draws it: a 600px panel at
+   radius 12 on the popover's ring and shadow, a 48px field over a hairline, uppercase section labels, 36px rows with one highlight
+   that moves to the chosen one in a short step, keys as their own small squares, and a 40px foot. style.css loads after this file,
+   so each rule carries the panel's classes. */
+html .quick.srch:is(.palette, .search) {
+  width: min(600px, calc(100vw - 32px)); max-height: min(560px, 72vh);
+  border: 0; border-radius: 12px; background: var(--ch-pop, var(--card));
+  box-shadow: var(--ch-sh-pop) !important;
+  animation: pal-in .22s var(--ch-expo) both;
+}
+@keyframes pal-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+
+html .quick.srch:is(.palette, .search) .srch-find { height: 48px; flex: none; gap: 12px; padding: 0 12px 0 14px; border-bottom: 1px solid var(--border); }
+html .quick.srch:is(.palette, .search) .srch-find > svg { width: 16px; height: 16px; color: var(--text-muted); }
+html .quick.srch:is(.palette, .search) .srch-find input { font: 400 13px/20px var(--font); letter-spacing: 0; min-height: 20px; }
+html .quick.srch:is(.palette, .search) .srch-find input::placeholder { color: var(--faint); opacity: .8; }
+
+/* The list glides to the height of what matches (Palette.tsx sets it); it scrolls inside the panel past its cap. */
+html .quick.srch:is(.palette, .search) .srch-body { position: relative; flex: 0 1 auto; min-height: 0; padding: 0 4px 4px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; transition: height .32s var(--ch-expo); }
+html .quick.srch:is(.palette, .search) .pal-inner { position: relative; }
+html .quick.srch:is(.palette, .search) .pal-glow {
+  position: absolute; top: 0; left: 4px; right: 4px; height: 36px; border-radius: 6px; background: var(--ch-f6);
+  pointer-events: none; opacity: 0; transition: transform .09s ease-out, height .09s ease-out, opacity .14s ease;
+}
+
+html .quick.srch:is(.palette, .search) .srch-group + .srch-group { margin-top: 0; padding-top: 0; border-top: 0; }
+html .quick.srch:is(.palette, .search) .srch-group h3 {
+  display: flex; align-items: flex-end; height: 30px; margin: 0; padding: 10px 8px 4px; box-sizing: border-box;
+  font: 500 10px/16px var(--font); letter-spacing: .5px; text-transform: uppercase; color: var(--text-muted);
+}
+
+html .quick.srch:is(.palette, .search) .srch-row {
+  position: relative; height: 36px; min-height: 36px; gap: 10px; padding: 0 8px; border-radius: 6px;
+  background: none !important; color: var(--ink); transition: color .14s ease;
+}
+html .quick.srch:is(.palette, .search) .srch-row > svg { width: 16px; height: 16px; color: var(--text-muted); transition: color .14s ease; }
+html .quick.srch:is(.palette, .search) .srch-row.on > svg { color: var(--ink); }
+html .quick.srch:is(.palette, .search) .pal-label { display: flex; flex: 1 1 auto; align-items: baseline; gap: 8px; min-width: 0; }
+html .quick.srch:is(.palette, .search) .srch-title { flex: 0 1 auto; font-size: 13px; line-height: 20px; font-weight: 400; color: var(--ink); }
+html .quick.srch:is(.palette, .search) .pal-context { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 20px; color: var(--text-muted); }
+html .quick.srch:is(.palette, .search) .srch-row mark { padding: 0; border-radius: 2px; background: none; color: var(--ink); font-weight: 500; }
+html .quick.srch:is(.palette, .search) .pal-state { gap: 6px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+html .quick.srch:is(.palette, .search) .pal-state + .pal-keys { margin-left: 8px; }
+
+/* Keys: a 20px square each, radius 5, an inset half-pixel ring, quiet; a step darker on the chosen row. */
+html .quick.srch:is(.palette, .search) .pal-keys { display: inline-flex; flex: none; gap: 2px; margin-left: auto; }
+html .quick.srch:is(.palette, .search) .pal-kbd {
+  display: inline-grid; place-items: center; box-sizing: border-box; min-width: 20px; height: 20px; padding: 0 5px; margin: 0;
+  border: 0; border-radius: 5px; background: none; box-shadow: inset 0 0 0 .5px var(--border-hover);
+  font: 500 11px/16px var(--font); font-variant-numeric: tabular-nums; color: var(--text-muted); transition: color .14s ease;
+}
+html .quick.srch:is(.palette, .search) .srch-row.on .pal-kbd { color: var(--ink-2); }
+
+html .quick.srch:is(.palette, .search) .srch-empty { gap: 4px; padding: 28px 16px 26px; }
+html .quick.srch:is(.palette, .search) .srch-empty-title { font: 500 13px/20px var(--font); color: var(--ink); }
+html .quick.srch:is(.palette, .search) .srch-note { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+
+html .quick.srch:is(.palette, .search) .srch-foot { flex: none; height: 40px; gap: 12px; padding: 0 12px; border-top: 1px solid var(--border); font-size: 12px; line-height: 16px; color: var(--text-muted); }
+html .quick.srch:is(.palette, .search) .srch-foot > span { display: inline-flex; align-items: center; gap: 6px; }
+html .quick.srch:is(.palette, .search) .srch-foot .pal-keys { margin-left: 0; }
+html .quick.srch:is(.palette, .search) .srch-foot .pal-foot-end { margin-left: auto; }
+
+/* ── The search window's own parts, in the same language. */
+html .quick.srch.search { width: min(600px, calc(100vw - 32px)); max-height: min(640px, 76vh); }
+html .quick.srch.search .srch-spin { width: 14px; height: 14px; border-width: 1.5px; animation-duration: .9s; }
+/* Its filters: a 44px row of the kit's filter buttons, 28px at radius 6, quiet until one is set. */
+html .quick.srch.search .srch-filters { flex: none; min-height: 44px; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+html .quick.srch.search .srch-filters .srch-chip {
+  height: 28px; gap: 6px; padding: 0 8px; border: 0; border-radius: 6px; background: none; box-shadow: inset 0 0 0 .5px var(--border-strong);
+  font: 500 12px/16px var(--font); color: var(--ink-2); transition: background-color .14s ease, color .14s ease, box-shadow .14s ease;
+}
+html .quick.srch.search .srch-filters .srch-chip:hover, html .quick.srch.search .srch-filters .srch-chip.on { background: var(--ch-glow, var(--hover)); color: var(--ink); }
+html .quick.srch.search .srch-filters .srch-chip.set { background: var(--ch-f6, var(--hover)); color: var(--ink); box-shadow: inset 0 0 0 .5px var(--border-hover); }
+html .quick.srch.search .srch-filters .srch-chip.quiet { box-shadow: none; }
+html .quick.srch.search .srch-filters .srch-chip svg { width: 14px; height: 14px; color: var(--text-muted); }
+html .quick.srch.search .srch-clear { font: 500 12px/16px var(--font); color: var(--text-muted); }
+html .quick.srch.search .srch-clear:hover { color: var(--ink); text-decoration: none; }
+/* A count beside a section's label: the label's own size, a step quieter. */
+html .quick.srch.search .srch-group h3 { gap: 6px; }
+html .quick.srch.search .srch-count { font-size: 10px; line-height: 16px; letter-spacing: 0; color: var(--faint); }
+/* When, at the row's end: meta, tabular. */
+html .quick.srch.search .srch-when { flex: none; margin-left: auto; font-size: 12px; line-height: 16px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+html .quick.srch.search .srch-session + .srch-session { margin-top: 0; }
+/* What was said: a row under its session, indented past the session's icon, as many lines as its snippet takes (two at most). */
+html .quick.srch.search .srch-row.srch-hit { height: auto; min-height: 36px; align-items: flex-start; gap: 10px; padding: 8px 8px 8px 34px; }
+html .quick.srch.search .srch-row.srch-hit > svg { flex: none; width: 14px; height: 14px; margin-top: 3px; }
+html .quick.srch.search .srch-row.srch-hit > .srch-when { margin-top: 2px; }
+html .quick.srch.search .srch-snip { font-size: 13px; line-height: 20px; color: var(--text-muted); }
+html .quick.srch.search .srch-who { font-weight: 500; color: var(--ink); }
+html .quick.srch.search .srch-row.srch-hit mark { color: var(--ink); }
+html .quick.srch.search .srch-note { margin: 10px 8px; }
+html .quick.srch.search .srch-empty .btn.small { height: 28px; margin-top: 10px; padding: 0 10px; border: 0; border-radius: 6px; background: var(--ch-btn, var(--card)); box-shadow: var(--ch-sh-card); font-size: 13px; font-weight: 500; }
+
+@media (prefers-reduced-motion: reduce) {
+  html .quick.srch:is(.palette, .search), html .quick.srch:is(.palette, .search) .srch-body, html .quick.srch:is(.palette, .search) .pal-glow { animation: none; transition: none; }
+}
+@media (forced-colors: active) {
+  html .quick.srch:is(.palette, .search) .pal-glow { display: none; }
+}

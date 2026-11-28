@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SECTIONS } from "./settings-sections.js";
 import { Avatar, Icon, type IconName } from "./icons.js";
 import type { RecentSession } from "./storage.js";
-import { shortcut } from "./Shortcuts.js";
+import { keyLabel, shortcut } from "./Shortcuts.js";
 import { useDismiss } from "./ui.js";
 import { openWorkflows } from "./team-workflow-view.js";
 import { choosePlace } from "./WorkMode.js";
 import { byState } from "./presence.js";
 import { isLocal } from "./edition.js";
+import "./palette.css";
 
 export interface Action {
   id: string;
@@ -52,127 +53,6 @@ export function paletteGroups(actions: Action[], q: string): { group: string; it
 }
 
 /**
- * Everything the app can do, from the keyboard.
- *
- * A product grows places faster than it grows room for buttons, and the answer
- * everywhere else is the same one: one key, type what you want. It is worth
- * more than a menu because it takes what you already call the thing — the name
- * of the session, of the person — rather than where somebody filed it.
- *
- * Matching is the same forgiving kind the file opener uses: the letters in
- * order, not necessarily together, so "revch" finds "Review a change".
- */
-export function Palette({ actions, onClose, onNew }: { actions: Action[]; onClose: () => void; /** Start a session with what was typed: offered under the matches once a few words are in, and alone when nothing matches. */ onNew?: (q: string) => void }) {
-  const [q, setQ] = useState("");
-  const [at, setAt] = useState(0);
-
-  const groups = useMemo(() => {
-    const g = paletteGroups(actions, q);
-    // ⌘K used to go straight to a new session: a task typed here still gets one, as the last row (the first when nothing else matches).
-    if (onNew && q.trim().length >= 2) g.push({ group: "Start", items: [{ id: "new-with", label: `${isLocal() ? "New thread" : "New session"}: “${q.trim()}”`, icon: "plus", group: "Start", run: () => onNew(q.trim()) }] });
-    return g;
-  }, [actions, q, onNew]);
-  const flat = groups.flatMap((g) => g.items);
-
-  useEffect(() => setAt(0), [q]);
-  const chosen = flat[Math.min(at, flat.length - 1)];
-  const optionId = (a: Action) => `pal-${a.id}`;
-  useEffect(() => {
-    if (chosen) document.getElementById(optionId(chosen))?.scrollIntoView({ block: "nearest" });
-  }, [chosen]);
-  const run = (a: Action) => {
-    onClose();
-    a.run();
-  };
-  // A dialog like the others: Tab stays in it, Escape closes it from anywhere in it, search can't open over it, and the focus goes
-  // back where it was (2026-10-27 audit: Tab walked out to the page behind, and ⌘⇧F opened a second dialog on top).
-  const box = useRef<HTMLDivElement>(null);
-  useDismiss(box, onClose);
-
-  return (
-    <div className="quick-back" role="presentation" onMouseDown={onClose}>
-      <div ref={box} className="quick srch palette" role="dialog" aria-modal="true" aria-label="What do you want to do?" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="srch-find">
-          <Icon name="zap" size={16} />
-          <input
-            autoFocus
-            value={q}
-            spellCheck={false}
-            placeholder="What do you want to do?"
-            aria-label="What do you want to do?"
-            role="combobox"
-            aria-expanded="true"
-            aria-controls="pal-list"
-            aria-activedescendant={chosen ? optionId(chosen) : undefined}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => {
-              // Round from the last to the first and back, as every menu here goes (Arun, 2026-10-28: "TEST EVERYTHING… EVERY INTERACTION, EVERY VISUAL").
-              if (e.key === "ArrowDown" && flat.length) (e.preventDefault(), setAt((i) => (Math.min(i, flat.length - 1) + 1) % flat.length));
-              if (e.key === "ArrowUp" && flat.length) (e.preventDefault(), setAt((i) => (Math.min(i, flat.length - 1) - 1 + flat.length) % flat.length));
-              if (e.key === "Escape") onClose();
-              if (e.key === "Enter" && chosen) (e.preventDefault(), run(chosen));
-            }}
-          />
-          <kbd className="srch-esc">Esc</kbd>
-        </div>
-        <span className="sr-only" role="status">
-          {flat.length === 0 && q.trim() ? `Nothing matches ${q.trim()}` : ""}
-        </span>
-        <div className="srch-body" id="pal-list" role="listbox" aria-label="Actions">
-          {flat.length === 0 ? (
-            <div className="srch-empty">
-              <p className="srch-empty-title">Nothing matches “{q}”</p>
-              <p className="srch-note">Try another word, or search what was said in your sessions with {shortcut("⌘⇧F")}.</p>
-            </div>
-          ) : (
-            groups.map((g) => (
-              <section key={g.group} className="srch-group" role="group" aria-label={g.group}>
-                <h3>{g.group}</h3>
-                {g.items.map((a) => (
-                  <div
-                    key={a.id}
-                    id={optionId(a)}
-                    role="option"
-                    aria-selected={a === chosen}
-                    className={`srch-row${a === chosen ? " on" : ""}`}
-                    title={a.label}
-                    onMouseEnter={() => setAt(flat.indexOf(a))}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => run(a)}
-                  >
-                    {a.who ? <Avatar name={a.who.name} id={a.who.id} size={18} /> : <Icon name={a.icon ?? "chevronRight"} size={15} />}
-                    <span className="srch-title">{marked(a.label, q)}</span>
-                    {a.state && (
-                      <span className="pal-state">
-                        <span className="dass-dot size-2" data-state={a.state} aria-hidden />
-                        {STATE_WORD[a.state]}
-                      </span>
-                    )}
-                    {a.hint && <kbd className="pal-key">{a.hint}</kbd>}
-                  </div>
-                ))}
-              </section>
-            ))
-          )}
-        </div>
-        <div className="srch-foot" aria-hidden>
-          <span>
-            <kbd>↑</kbd>
-            <kbd>↓</kbd> to move
-          </span>
-          <span>
-            <kbd>↵</kbd> to run
-          </span>
-          <span>
-            <kbd>Esc</kbd> to close
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
  * The order the palette shows with nothing typed: a new session and the search first, the sessions you were in, then what the
  * open session offers, then the rest of the app. Reaching a session is what people do most, and a new one is what ⌘K meant.
  */
@@ -204,20 +84,6 @@ export function matchSpans(label: string, q: string): [number, number][] {
     i = found + 1;
   }
   return out;
-}
-
-function marked(label: string, q: string): ReactNode {
-  const spans = matchSpans(label, q);
-  if (!spans.length) return label;
-  const parts: ReactNode[] = [];
-  let from = 0;
-  spans.forEach(([a, z], i) => {
-    if (a > from) parts.push(label.slice(from, a));
-    parts.push(<mark key={i}>{label.slice(a, z)}</mark>);
-    from = z;
-  });
-  if (from < label.length) parts.push(label.slice(from));
-  return parts;
 }
 
 /** The first letter of each word: "Code Review" is "cr". */
@@ -327,3 +193,191 @@ export function baseActions(p: {
       })),
   ];
 }
+
+/**
+ * Everything the app can do, from the keyboard.
+ *
+ * A product grows places faster than it grows room for buttons, and the answer
+ * everywhere else is the same one: one key, type what you want. It is worth
+ * more than a menu because it takes what you already call the thing — the name
+ * of the session, of the person — rather than where somebody filed it.
+ *
+ * Matching is the same forgiving kind the file opener uses: the letters in
+ * order, not necessarily together, so "revch" finds "Review a change".
+ */
+export function Palette({ actions, onClose, onNew }: { actions: Action[]; onClose: () => void; /** Start a session with what was typed: offered under the matches once a few words are in, and alone when nothing matches. */ onNew?: (q: string) => void }) {
+  const [q, setQ] = useState("");
+  const [at, setAt] = useState(0);
+
+  const groups = useMemo(() => {
+    const g = paletteGroups(actions, q);
+    // ⌘K used to go straight to a new session: a task typed here still gets one, as the last row (the first when nothing else matches).
+    if (onNew && q.trim().length >= 2) g.push({ group: "Start", items: [{ id: "new-with", label: `${isLocal() ? "New thread" : "New session"}: “${q.trim()}”`, icon: "plus", group: "Start", run: () => onNew(q.trim()) }] });
+    return g;
+  }, [actions, q, onNew]);
+  const flat = groups.flatMap((g) => g.items);
+
+  useEffect(() => setAt(0), [q]);
+  const chosen = flat[Math.min(at, flat.length - 1)];
+  const optionId = (a: Action) => `pal-${a.id}`;
+  useEffect(() => {
+    if (chosen) document.getElementById(optionId(chosen))?.scrollIntoView({ block: "nearest" });
+  }, [chosen]);
+  const run = (a: Action) => {
+    onClose();
+    a.run();
+  };
+  // A dialog like the others: Tab stays in it, Escape closes it from anywhere in it, search can't open over it, and the focus goes
+  // back where it was (2026-10-27 audit: Tab walked out to the page behind, and ⌘⇧F opened a second dialog on top).
+  const box = useRef<HTMLDivElement>(null);
+  useDismiss(box, onClose);
+  // One highlight that moves to the chosen row (the command menu's short, crisp step) rather than each row lighting on its own,
+  // and a list that glides to the height of what matches as you type instead of jumping.
+  const list = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
+  const glow = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number>();
+  useLayoutEffect(() => {
+    const el = inner.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    const g = glow.current;
+    const row = chosen && list.current?.querySelector<HTMLElement>(`#${CSS.escape(optionId(chosen))}`);
+    if (!g) return;
+    if (!row) return void (g.style.opacity = "0");
+    g.style.transform = `translateY(${row.offsetTop}px)`;
+    g.style.height = `${row.offsetHeight}px`;
+    g.style.opacity = "1";
+  });
+
+  return (
+    <div className="quick-back" role="presentation" onMouseDown={onClose}>
+      <div ref={box} className="quick srch palette" role="dialog" aria-modal="true" aria-label="What do you want to do?" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="srch-find">
+          <Icon name="search" size={16} />
+          <input
+            autoFocus
+            value={q}
+            spellCheck={false}
+            placeholder="What do you want to do?"
+            aria-label="What do you want to do?"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="pal-list"
+            aria-activedescendant={chosen ? optionId(chosen) : undefined}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              // Round from the last to the first and back, as every menu here goes (Arun, 2026-10-28: "TEST EVERYTHING… EVERY INTERACTION, EVERY VISUAL").
+              if (e.key === "ArrowDown" && flat.length) (e.preventDefault(), setAt((i) => (Math.min(i, flat.length - 1) + 1) % flat.length));
+              if (e.key === "ArrowUp" && flat.length) (e.preventDefault(), setAt((i) => (Math.min(i, flat.length - 1) - 1 + flat.length) % flat.length));
+              // Tab jumps to the next section's first row, Shift+Tab back, as the kit's command menu does (its foot says so).
+              if (e.key === "Tab" && groups.length > 1) {
+                e.preventDefault();
+                const starts = groups.map((_, i) => groups.slice(0, i).reduce((n, g) => n + g.items.length, 0));
+                const now = Math.min(at, flat.length - 1);
+                const here = starts.findLastIndex((s0) => s0 <= now);
+                setAt(starts[(here + (e.shiftKey ? -1 : 1) + starts.length) % starts.length]);
+              }
+              if (e.key === "Escape") onClose();
+              if (e.key === "Enter" && chosen) (e.preventDefault(), run(chosen));
+            }}
+          />
+          <kbd className="srch-esc pal-kbd">Esc</kbd>
+        </div>
+        <span className="sr-only" role="status">
+          {flat.length === 0 && q.trim() ? `Nothing matches ${q.trim()}` : ""}
+        </span>
+        <div ref={list} className="srch-body" id="pal-list" role="listbox" aria-label="Actions" style={height === undefined ? undefined : { height }}>
+          <div ref={glow} className="pal-glow" aria-hidden />
+          <div ref={inner} className="pal-inner">
+          {flat.length === 0 ? (
+            <div className="srch-empty">
+              <p className="srch-empty-title">Nothing matches “{q}”</p>
+              <p className="srch-note">Try another word, or search what was said in your sessions with {shortcut("⌘⇧F")}.</p>
+            </div>
+          ) : (
+            groups.map((g) => (
+              <section key={g.group} className="srch-group" role="group" aria-label={g.group}>
+                <h3>{g.group}</h3>
+                {g.items.map((a) => (
+                  <div
+                    key={a.id}
+                    id={optionId(a)}
+                    role="option"
+                    aria-selected={a === chosen}
+                    className={`srch-row${a === chosen ? " on" : ""}`}
+                    title={a.label}
+                    onMouseEnter={() => setAt(flat.indexOf(a))}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => run(a)}
+                  >
+                    {a.who ? <Avatar name={a.who.name} id={a.who.id} size={20} /> : <Icon name={a.icon ?? "chevronRight"} size={16} />}
+                    <span className="pal-label">
+                      <span className="srch-title">{marked(a.label, q)}</span>
+                      {/* Words beside a name ("Customize") are its context, said quietly after it; only a shortcut is drawn as keys. */}
+                      {a.hint && !hintKeys(a.hint) && <span className="pal-context">{a.hint}</span>}
+                    </span>
+                    {a.state && (
+                      <span className="pal-state">
+                        <span className="dass-dot size-2" data-state={a.state} aria-hidden />
+                        {STATE_WORD[a.state]}
+                      </span>
+                    )}
+                    {a.hint && hintKeys(a.hint) && <Keys keys={hintKeys(a.hint)!} />}
+                  </div>
+                ))}
+              </section>
+            ))
+          )}
+          </div>
+        </div>
+        <div className="srch-foot" aria-hidden>
+          <span>
+            <Keys keys={["Tab"]} /> to jump between sections
+          </span>
+          <span className="pal-foot-end">
+            <Keys keys={[keyLabel("⌘"), "K"]} /> to open
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function marked(label: string, q: string): ReactNode {
+  const spans = matchSpans(label, q);
+  if (!spans.length) return label;
+  const parts: ReactNode[] = [];
+  let from = 0;
+  spans.forEach(([a, z], i) => {
+    if (a > from) parts.push(label.slice(from, a));
+    parts.push(<mark key={i}>{label.slice(a, z)}</mark>);
+    from = z;
+  });
+  if (from < label.length) parts.push(label.slice(from));
+  return parts;
+}
+
+/** One key as the command menu draws it: its own square, the keys of a chord side by side. */
+const KEY = /^(?:[⌘⇧⌥⌃↵⌫↑↓←→?]|Ctrl|Shift|Alt|Enter|Esc|Tab|Space|[A-Z0-9]|F\d{1,2})$/;
+/** A hint's keys when it is a shortcut ("⌘⇧F", "Ctrl+Shift+F", "?"), or null when it is words ("Customize"). */
+export function hintKeys(hint: string): string[] | null {
+  const parts = /[+ ]/.test(hint) ? hint.split(/[+ ]+/).filter(Boolean) : [...hint];
+  return parts.length && parts.every((p) => KEY.test(p)) ? parts : null;
+}
+function Keys({ keys }: { keys: string[] }) {
+  return (
+    <span className="pal-keys">
+      {keys.map((k, i) => (
+        <kbd key={i} className="pal-kbd">
+          {k}
+        </kbd>
+      ))}
+    </span>
+  );
+}
+

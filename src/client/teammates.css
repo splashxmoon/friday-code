@@ -119,7 +119,7 @@
 .tm-path { display: flex; align-items: center; height: 36px; padding: 0 12px; overflow: hidden; border-radius: 8px; background: var(--hover); color: var(--ink-2); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .tm-backup { display: flex; align-items: center; gap: 10px; margin-top: 2px; color: var(--text-muted); font-size: 12.5px; }
 .tm-backup .tm-select { flex: 0 1 220px; height: 32px; }
-.tm-switched { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: color-mix(in srgb, var(--amber) 14%, transparent); color: color-mix(in srgb, var(--amber) 75%, var(--ink)); font-size: 12px; font-weight: 500; }
+.tm-switched { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: var(--r-sm, 6px); background: color-mix(in srgb, var(--amber) 14%, transparent); color: color-mix(in srgb, var(--amber) 75%, var(--ink)); font-size: 12px; font-weight: 500; }
 .tm-checkins { display: flex; flex-direction: column; gap: 10px; }
 .tm-checkin { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: var(--r-lg); }
 .tm-checkin-when { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -192,7 +192,7 @@ html.dark .tm-time { color-scheme: dark; }
 .tm-model { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .tm-route { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 8px 0 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: transparent; color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease; }
 .tm-route:hover { color: var(--ink); background: var(--hover); }
-.tm-route > em { padding: 1px 7px; border-radius: 999px; background: var(--hover-strong); color: var(--text-muted); font-size: 12px; font-style: normal; font-weight: 600; }
+.tm-route > em { padding: 1px 7px; border-radius: var(--r-sm, 6px); background: var(--hover-strong); color: var(--text-muted); font-size: 12px; font-style: normal; font-weight: 600; }
 .tm-route.on { border-color: var(--border-strong); color: var(--ink); background: var(--hover-strong); box-shadow: none; }
 .tm-route.on > em { background: var(--ink); color: var(--bg); }
 .tm-route:focus-visible, .tm-select:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
@@ -452,7 +452,7 @@ body[style*="pointer-events: none"] > .amp { pointer-events: auto; }
 .tt-thread-field { display: flex; flex: 1 1 auto; align-items: flex-end; gap: 6px; min-width: 0; padding: 2px 6px 2px 0; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--bg); }
 .tt-thread-field:focus-within { border-color: var(--border-focus); }
 .tt-thread-field textarea { border: 0 !important; background: transparent !important; box-shadow: none !important; outline: none; }
-.tt-thread-field .tt-thread-send { width: 30px; height: 30px; margin-bottom: 4px; border-radius: 50%; }
+.tt-thread-field .tt-thread-send { width: 30px; height: 30px; margin-bottom: 4px; border-radius: var(--r-md, 8px); }
 /* A thread's count leads the line under its message, never pushed along by actions shown only under the pointer (audit CREW-34). */
 .tt-foot > .tt-thread.has { order: -1; margin-left: -6px; }
 /* The open room or teammate in the sidebar: the app's one selected highlight (style.css --sel-*). */
@@ -550,7 +550,7 @@ html .tm-row[data-active="true"] { background: var(--sel-bg, var(--hover-strong)
 /* The header's team controls: Threads and Board as the header's own icon buttons with a count, Stop all while anyone works, and
    the Away / Pause switch as a quiet pill that says its state. */
 /* Stop all, in the room's header while anyone works (TeamControls.tsx): a stop, said in red but quiet until pointed at. */
-.tm-stop-all { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 9px; border: 1px solid color-mix(in srgb, var(--red) 34%, transparent); border-radius: var(--r-pill, 999px); background: color-mix(in srgb, var(--red) 8%, transparent); color: var(--red); font: 500 12.5px/1 var(--font); white-space: nowrap; cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
+.tm-stop-all { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 9px; border: 1px solid color-mix(in srgb, var(--red) 34%, transparent); border-radius: var(--r-md, 8px); background: color-mix(in srgb, var(--red) 8%, transparent); color: var(--red); font: 500 12.5px/1 var(--font); white-space: nowrap; cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
 .tm-stop-all:hover { background: color-mix(in srgb, var(--red) 16%, transparent); border-color: color-mix(in srgb, var(--red) 52%, transparent); }
 .tm-stop-n { min-width: 16px; padding: 0 4px; border-radius: 999px; background: color-mix(in srgb, var(--red) 18%, transparent); font-size: 12px; font-weight: 600; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums; }
 .tm-hd-btn { position: relative; }
@@ -711,7 +711,7 @@ html .tm-row[data-active="true"] { background: var(--sel-bg, var(--hover-strong)
 /* The dialog's roles to start from, and its Access choices. */
 .tm-templates { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .tm-templates-label { margin-right: 2px; color: var(--text-muted); font-size: 12px; }
-.tm-template { height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--ink-2); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; transition: background-color 120ms ease, border-color 120ms ease; }
+.tm-template { height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); background: none; color: var(--ink-2); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; transition: background-color 120ms ease, border-color 120ms ease; }
 .tm-template:hover { background: var(--hover); color: var(--ink); }
 .tm-template[aria-pressed="true"] { border-color: var(--sel-edge, var(--ink)); background: var(--sel-bg, var(--hover)); color: var(--ink); box-shadow: var(--sel-lift, none); }
 /* Access as one list to choose from: a row per level with its mark, what it allows in a line, and a radio (Arun, 2026-10-28:
@@ -741,7 +741,7 @@ html .tm-row[data-active="true"] { background: var(--sel-bg, var(--hover-strong)
 .tm-page .tm-head-name { font-size: 20px; line-height: 28px; letter-spacing: -.01em; }
 .tm-page .tm-head > .pr { margin: 5px; }
 /* Its role chip: a hairline pill in meta size, beside the name (DIRECTION.md principle 5). */
-.tm-head-lead { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 999px; color: var(--ink-2); font-size: 12px; font-weight: 400; letter-spacing: 0; }
+.tm-head-lead { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: var(--r-sm, 6px); color: var(--ink-2); font-size: 12px; font-weight: 400; letter-spacing: 0; }
 /* The live line under the name, in body size: --ink-2 while working, the question in --ink while it needs you (DIRECTION.md §8). */
 .tm-head-status { overflow: hidden; color: var(--text-muted); font-size: 14px; line-height: 22px; text-overflow: ellipsis; white-space: nowrap; }
 .tm-head-status.s-working, .tm-head-status.s-limited { color: var(--ink-2); }
@@ -1466,7 +1466,7 @@ html.dark { --badge-work: #4d8eff; --badge-need: #ffc53d; --badge-done: #2fbf71;
 .tp-meta { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 3px; color: var(--text-muted); font-size: 12px; line-height: 18px; }
 .tp-meta-bits { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tp-state { flex: none; }
-.tp-state { display: inline-flex; align-items: center; gap: 5px; height: 18px; padding: 0 7px 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink-2); font-weight: 500; }
+.tp-state { display: inline-flex; align-items: center; gap: 5px; height: 18px; padding: 0 7px 0 6px; border-radius: var(--r-sm, 6px); background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink-2); font-weight: 500; }
 .tp-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); }
 .tp-state[data-tone="work"] { background: color-mix(in srgb, var(--mate-working) 14%, transparent); color: var(--ink); }
 .tp-state[data-tone="work"] i { background: var(--mate-working); animation: tp-pulse 1.4s ease-in-out infinite; }
@@ -1811,6 +1811,20 @@ button.mt-tab { padding: 0 10px; border: 0; background: none; cursor: pointer; }
 .cw-post-head span, .cw-post-head time { color: var(--text-muted); }
 .cw-post-body p { margin: 0; color: var(--ink); font-size: 13px; line-height: 19px; overflow-wrap: anywhere; }
 .cw-post-typing { align-items: center; }
+/* The agents' talk to the measured Collaboration Stream (2026-11-27): a card of radius 10 with its head at 13/500 over 12/400, and
+   each message a bubble under its sender's face: the name at 13/500 in its colour (Arun, 2026-11-15: "in their colour"), whom it
+   was to as a small chip, the time at the bubble's right, the words at 13/20 in the second ink. */
+.cw.cw { border-radius: calc(var(--r-md) + 2px); }
+.cw .cw-title b { font-weight: 500; }
+.cw .cw-title span { font-size: 12px; line-height: 16px; }
+.cw .cw-thread { gap: 8px; padding: 10px 12px 12px; }
+.cw .cw-post { gap: 10px; }
+.cw .cw-post-body { flex: 1; gap: 6px; padding: 10px 12px 11px; border-radius: var(--r-lg); background: var(--bg); box-shadow: 0 0 0 1px var(--border); }
+.cw .cw-post-head { align-items: center; gap: 8px; }
+.cw .cw-post-head b { font-weight: 500; line-height: 20px; }
+.cw .cw-post-head > span { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: var(--r-sm); background: var(--hover); color: var(--text-muted); font-size: 11.5px; line-height: 16px; white-space: nowrap; }
+.cw .cw-post-head > time { margin-left: auto; color: var(--faint); font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; }
+.cw .cw-post-body p { color: var(--ink-2); line-height: 20px; }
 
 /* Who a crew mate waits on (crew-waiting.tsx): one line of who, each with how it stands. */
 .cwait { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-width: 760px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
@@ -2114,3 +2128,48 @@ html.reduce-motion :is(.tm-face.tm-dozing, .tm-zz i) { animation: none !importan
 .rs > .tm-pop-head { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 0; }
 .rs > .tm-pop-head b { font-size: 15px; }
 .rs > .tm-pop-head span { color: var(--text-muted); font-size: 12.5px; line-height: 18px; }
+
+/* ── New agent and the crew's dialogs on the shared kit's measurements (affect-pro SPEC.md, 2026-11-27): fields 32 tall at radius 8
+   on a ring, labels 13/500/20, the model row a 44px two-line option at radius 10; suggestions the kit's cards (radius 10, a ring for
+   an edge, the name 13/500/20 over 12/400/16), their label an eyebrow; the face's shapes 36px tiles at radius 8; buttons 28 at
+   radius 6; a pick list's rows 44 at radius 6 with a 16px box at radius 5. Colour dots and faces stay round; nothing else is a pill
+   (Arun, 2026-11-14). */
+.nag-page, .tm-room-dialog { --nag-ring: var(--aui-shadow-card, 0 0 0 1px var(--border)), 0 1px 2px rgb(0 0 0 / .05); --nag-ring-hover: 0 0 0 1px var(--border-strong), 0 2px 6px -2px rgb(0 0 0 / .12); }
+html.dark :is(.nag-page, .tm-room-dialog) { --nag-ring: var(--aui-shadow-card, 0 0 0 1px var(--border)), 0 1px 2px rgb(0 0 0 / .4); --nag-ring-hover: 0 0 0 1px var(--border-strong), 0 2px 6px -2px rgb(0 0 0 / .5); }
+.nag-head h1 { font-size: 15px; font-weight: 500; line-height: 24px; letter-spacing: 0; }
+.nag-crumb { font-weight: 400; letter-spacing: 0; }
+.nag-head-sub { font-size: 12px; line-height: 16px; color: var(--faint, var(--text-muted)); }
+.nag-cancel { height: 28px; padding: 0 10px 0 8px; border: 0; border-radius: 6px; background: var(--card); box-shadow: var(--nag-ring); font-size: 13px; font-weight: 500; transition: background-color .15s ease; }
+.nag-cancel svg { width: 16px; height: 16px; }
+.nag-field, .tm-room-dialog .tm-field > span { font-size: 13px; font-weight: 500; line-height: 20px; }
+:is(.nag, .tm-room-dialog) input[data-slot="input"] { height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--card); box-shadow: var(--nag-ring); font-size: 13px; transition: box-shadow .16s ease; }
+:is(.nag, .tm-room-dialog) textarea[data-slot="textarea"] { padding: 6px 10px; border: 0; border-radius: 8px; background: var(--card); box-shadow: var(--nag-ring); font-size: 13px; line-height: 20px; transition: box-shadow .16s ease; }
+:is(.nag, .tm-room-dialog) :is(input[data-slot="input"], textarea[data-slot="textarea"]):focus-visible { box-shadow: 0 0 0 1px var(--border-focus); }
+:is(.nag, .tm-room-dialog) :is(input[data-slot="input"], textarea[data-slot="textarea"])[aria-invalid="true"] { box-shadow: 0 0 0 1px var(--red); }
+.nag-row { min-height: 44px; padding: 0 8px 0 12px; border: 0; border-radius: 10px; box-shadow: var(--nag-ring); font-size: 13px; }
+.nag-shapes { gap: 2px; }
+.nag-shape { border: 0; border-radius: 8px; transition: background-color .14s ease, box-shadow .14s ease; }
+.nag-shape[aria-checked="true"] { background: var(--card); box-shadow: var(--nag-ring), inset 0 0 0 1px var(--border-strong); }
+.nag-colour { transition: box-shadow .18s cubic-bezier(.22, 1, .36, 1), transform .18s cubic-bezier(.34, 1.56, .64, 1); }
+:is(.nag-acts, .tm-room-dialog [data-slot="dialog-footer"]) button[data-slot="button"] { height: 28px; padding: 0 10px; border-radius: 6px; font-size: 13px; font-weight: 500; line-height: 20px; }
+.nag-sugg h2 { margin: 0 0 8px 2px; font-size: 10px; font-weight: 500; line-height: 16px; letter-spacing: .5px; text-transform: uppercase; color: var(--faint, var(--text-muted)); }
+.nag-cards { gap: 8px; }
+.nag-card { gap: 12px; min-height: 64px; padding: 12px; border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--nag-ring); transition: box-shadow .2s ease; animation: nag-in .38s cubic-bezier(.32, .72, .24, 1) both; }
+.nag-card:hover { background: var(--card); box-shadow: var(--nag-ring-hover); }
+.nag-card[aria-pressed="true"] { box-shadow: var(--nag-ring), 0 0 0 1.5px var(--ink-2); }
+.nag-card:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+.nag-card > span { gap: 2px; }
+.nag-card b { font-size: 13px; font-weight: 500; line-height: 20px; }
+.nag-card small { font-size: 12px; line-height: 16px; }
+.nag-card:nth-child(2) { animation-delay: .04s; } .nag-card:nth-child(3) { animation-delay: .08s; } .nag-card:nth-child(4) { animation-delay: .12s; } .nag-card:nth-child(n+5) { animation-delay: .16s; }
+@keyframes nag-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .nag-card { animation: none; } }
+html.reduce-motion .nag-card { animation: none; }
+html.glass :is(.nag-card, .nag-row) { background: var(--glass-float, var(--card)); }
+/* A crew dialog's pick list: 44px rows at radius 6 in a ring-edged well, a 16px box at radius 5. */
+.tm-room-dialog .tm-pick { gap: 0; padding: 4px; border: 0; border-radius: 10px; box-shadow: var(--nag-ring); }
+.tm-room-dialog .tm-pick-row { min-height: 44px; padding: 0 8px; border-radius: 6px; transition: background-color .14s ease; }
+.tm-room-dialog .tm-pick-row[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.tm-room-dialog .tm-pick-check { width: 16px; height: 16px; border-radius: 5px; transition: background-color .16s ease, border-color .16s ease; }
+.tm-room-dialog .tm-pick-check svg { transition: transform .26s cubic-bezier(.34, 1.56, .64, 1); }
+.tm-room-dialog .tm-field > small { font-size: 12px; line-height: 16px; color: var(--faint, var(--text-muted)); }

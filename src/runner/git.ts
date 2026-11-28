@@ -1,8 +1,10 @@
 import { execFile } from "node:child_process";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
-import { access, copyFile, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, rmdir, stat, symlink, unlink, utimes, writeFile } from "node:fs/promises";
-import { lstatSync as fsLstatSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { access, copyFile, lstat, mkdir, mkdtemp, readdir, readFile, readlink, realpath, rename, rm, rmdir, stat, symlink, unlink, utimes, writeFile } from "node:fs/promises";
+import { existsSync, lstatSync as fsLstatSync, mkdirSync, writeFileSync } from "node:fs";
+import { devNull, homedir, tmpdir } from "node:os";
+import type { GithubLook } from "../automations.js";
 import path from "node:path";
 import nodePath from "node:path";
 import type { DiffFile } from "../types.js";
@@ -50,10 +52,72 @@ const LONG = ["-c", "core.longpaths=true", "-c", "core.quotePath=false", "-c", "
 // quotePath: a file name past ASCII as it is. Quoted and octal-escaped, `café.ts` came back as `"b/caf\303\251.ts"`, which
 // the Diff panel showed as such and no later pathspec matched, so the file couldn't be committed from the app.
 
+/**
+ * A folder that isn't its owner's own checkout on their own computer: one uploaded to Friday's server, where git runs as the
+ * server beside everyone else's sessions. Git runs programs a repository's settings name (hooks, a filter or textconv driver
+ * bound by .gitattributes, an external diff, a pager, a credential or signing helper), so there every call is made as below.
+ * The first guard is uploaded.ts, which never lets an upload bring a `.git`; this is the second, for the day that one slips
+ * (2026-11-27 security review: an uploaded archive's own .git/config ran its programs as the server).
+ */
+const untrusted = new AsyncLocalStorage<true>();
+/** Every git call `fn` makes, however deep, is made as for a folder Friday doesn't trust. */
+export const inUntrustedRepo = <T>(fn: () => Promise<T>): Promise<T> => untrusted.run(true, fn);
+
+/** The subcommands that draw a diff, which is where a textconv or external diff program would run. */
+const DRAWS_DIFF = new Set(["diff", "show", "log", "diff-tree", "diff-index", "diff-files"]);
+
+/**
+ * The arguments and environment one git call is really made with. Unchanged on a person's own computer. For an untrusted folder:
+ * no system or per-user settings or attributes, no hooks, no external diff or textconv program, no prompt, and an environment
+ * built up from nothing (as a command's is there, see repo-read.ts) plus what the call itself passed, so a program git did start
+ * would find none of the server's keys in its own environment.
+ * ponytail: a clean/smudge filter has no switch; what stops one is that the folder's .git/config is Friday's own (uploaded.ts).
+ */
+/**
+ * An empty folder for no hooks and an empty file for no global settings, made once: git on Windows can't open the null device
+ * (`\\.\nul`) as either, and failed outright ("unable to access '\\.\nul'"), so git in an uploaded folder broke there (CI,
+ * 2026-11-28). The same on every system.
+ */
+let nothingAt: { hooks: string; config: string } | null = null;
+function nothing(): { hooks: string; config: string } {
+  if (nothingAt && existsSync(nothingAt.hooks) && existsSync(nothingAt.config)) return nothingAt;
+  const hooks = path.join(tmpdir(), "friday-git-nothing", "hooks");
+  mkdirSync(hooks, { recursive: true });
+  const config = path.join(tmpdir(), "friday-git-nothing", "empty.gitconfig");
+  if (!existsSync(config)) writeFileSync(config, "");
+  return (nothingAt = { hooks, config });
+}
+
+export function gitCall(args: string[], env?: NodeJS.ProcessEnv, isUntrusted = !!untrusted.getStore()): { args: string[]; env: NodeJS.ProcessEnv | undefined } {
+  if (!isUntrusted) return { args, env: env ? { ...process.env, ...env } : undefined };
+  // The subcommand is the first word that is neither a `-c key=value` pair nor another leading option.
+  let at = 0;
+  while (at < args.length && args[at]!.startsWith("-")) at += args[at] === "-c" || args[at] === "--git-dir" || args[at] === "--work-tree" || args[at] === "-C" ? 2 : 1;
+  const hardened = DRAWS_DIFF.has(args[at] ?? "") ? [...args.slice(0, at + 1), "--no-ext-diff", "--no-textconv", ...args.slice(at + 1)] : args;
+  const keep = (k: string) => (process.env[k] ? { [k]: process.env[k] } : {});
+  return {
+    args: ["-c", `core.hooksPath=${nothing().hooks}`, "-c", "core.fsmonitor=false", "-c", "core.pager=cat", "-c", "protocol.ext.allow=never", ...hardened],
+    env: {
+      PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+      LANG: process.env.LANG ?? "en_US.UTF-8",
+      ...keep("TMPDIR"),
+      ...keep("TEMP"),
+      ...keep("TMP"),
+      ...keep("SystemRoot"),
+      ...env,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: nothing().config,
+      GIT_ATTR_NOSYSTEM: "1",
+      GIT_TERMINAL_PROMPT: "0",
+    },
+  };
+}
+
 /** `timeout`: how long git may take before it is killed, for the commands that can wait on a hook or a network. */
 function git(cwd: string, args: string[], okCodes = [0], timeout = 0): Promise<string> {
+  const call = gitCall([...LONG, ...args]);
   return new Promise((resolve, reject) => {
-    execFile("git", [...LONG, ...args], { cwd, maxBuffer: 64 * 1024 * 1024, windowsHide: true, timeout }, (err, stdout, stderr) => {
+    execFile("git", call.args, { cwd, maxBuffer: 64 * 1024 * 1024, windowsHide: true, timeout, env: call.env }, (err, stdout, stderr) => {
       const code = err ? (typeof (err as NodeJS.ErrnoException & { code?: unknown }).code === "number" ? ((err as unknown as { code: number }).code) : -1) : 0;
       if (okCodes.includes(code)) resolve(stdout);
       else reject(new Error(String(stderr).trim() || (err as Error).message));
@@ -1105,8 +1169,9 @@ const FRIDAY_IDENT = { GIT_AUTHOR_NAME: "Friday", GIT_AUTHOR_EMAIL: "checkpoint@
 const RAW = ["-c", "core.autocrlf=false", "-c", "core.safecrlf=false"];
 
 function gitEnv(cwd: string, args: string[], env: Record<string, string>, { input, timeout = 0 }: { input?: string; timeout?: number } = {}): Promise<string> {
+  const call = gitCall([...LONG, ...RAW, ...args], env);
   return new Promise((resolve, reject) => {
-    const child = execFile("git", [...LONG, ...RAW, ...args], { cwd, maxBuffer: 64 * 1024 * 1024, windowsHide: true, timeout, env: { ...process.env, ...env } }, (err, stdout, stderr) => {
+    const child = execFile("git", call.args, { cwd, maxBuffer: 64 * 1024 * 1024, windowsHide: true, timeout, env: call.env }, (err, stdout, stderr) => {
       if (err) reject(new Error(String(stderr).trim() || err.message));
       else resolve(stdout);
     });
@@ -1445,7 +1510,7 @@ export async function baseAfterCommit(cwd: string, base: string, from: string, t
 /** A file's bytes at `spec` ("<tree>:<path>"), or null when it isn't there. Bytes, not text: it may be an image. */
 function blobAt(root: string, spec: string): Promise<Buffer | null> {
   return new Promise((resolve) =>
-    execFile("git", [...LONG, "cat-file", "blob", spec], { cwd: root, encoding: "buffer", maxBuffer: 256 * 1024 * 1024, windowsHide: true }, (err, out) => resolve(err ? null : out)),
+    execFile("git", gitCall([...LONG, "cat-file", "blob", spec]).args, { cwd: root, encoding: "buffer", maxBuffer: 256 * 1024 * 1024, windowsHide: true, env: gitCall([]).env }, (err, out) => resolve(err ? null : out)),
   );
 }
 
@@ -1499,27 +1564,91 @@ export async function applyCopy(copy: string, base: string, into: string): Promi
   const patch = await gitEnv(root, ["diff", "--binary", "--full-index", "--no-color", "--no-ext-diff", "--no-renames", base, tree, "--", ".", ":(exclude)friday-runner.mjs", ":(exclude)runner.log", ...(await fridayExcludes(root))], {});
   const plain = await gitEnv(dest, ["apply", "--whitespace=nowarn"], {}, { input: patch }).then(() => true, () => false);
   if (plain) return { files, conflicts: [], tree };
-  // A copy is a worktree of the same repository, so every version of every file is readable from here.
+  // A copy is a worktree of the same repository, so every version of every file is readable from here. Each path as git sees it
+  // (its mode before and after): a folder is never read or written as a file (Arun's edge Captain, 2026-11-27: "EISDIR: illegal
+  // operation on a directory"). Removals go first, deepest first, and the folders they leave empty go with them, so a folder
+  // that became a file (or a file that became a folder) lands; a link is made as a link; a nested repository (a gitlink) is left.
+  const modes = new Map<string, { from: string; to: string }>();
+  const raw = (await git(root, ["diff", "--raw", "--no-renames", "-z", base, tree])).split("\0");
+  for (let i = 0; i + 1 < raw.length; i += 2) {
+    const m = /^:(\d{6}) (\d{6}) /.exec(raw[i]!);
+    if (m) modes.set(raw[i + 1]!, { from: m[1]!, to: m[2]! });
+  }
+  const gone = (f: string) => modes.get(f)?.to === "000000";
+  const order = [...files.filter(gone).sort((a, b) => b.split("/").length - a.split("/").length || b.localeCompare(a)), ...files.filter((f) => !gone(f)).sort()];
   const conflicts: string[] = [];
-  for (const f of files) {
+  // All or nothing (Arun, 2026-11-28: a copy that failed half way had already written conflict markers into main's package.json,
+  // and nothing took them out): each path as it was is kept before it's touched, and put back, in reverse, if anything throws.
+  const undo: (() => Promise<unknown>)[] = [];
+  const keep = async (target: string) => {
+    const was = await lstat(target).catch(() => null);
+    if (!was) return void undo.push(() => rm(target, { recursive: true, force: true }));
+    if (was.isSymbolicLink()) {
+      const to = await readlink(target);
+      return void undo.push(async () => (await rm(target, { recursive: true, force: true }), symlink(to, target)));
+    }
+    if (was.isDirectory()) return void undo.push(() => mkdir(target, { recursive: true }));
+    const data = await readFile(target);
+    undo.push(async () => (await rm(target, { recursive: true, force: true }), await mkdir(path.dirname(target), { recursive: true }), writeFile(target, data, { mode: was.mode })));
+  };
+  try {
+  for (const f of order) {
+    const mode = modes.get(f);
+    if (mode?.from === "160000" || mode?.to === "160000") continue;
     const target = path.join(dest, f);
-    const [before, theirs, ours] = await Promise.all([blobAt(root, `${base}:${f}`), blobAt(root, `${tree}:${f}`), readFile(target).catch(() => null)]);
+    const at = await lstat(target).catch(() => null);
+    const [before, theirs] = await Promise.all([blobAt(root, `${base}:${f}`), blobAt(root, `${tree}:${f}`)]);
+    if (at?.isDirectory()) {
+      // A folder here where the copy has a file gone: nothing of this path to remove. Where it has a file now: only into an empty
+      // folder (what was in it removed above); one still holding the person's files is theirs to sort out.
+      if (theirs === null) continue;
+      if ((await readdir(target).catch(() => ["?"])).length) {
+        conflicts.push(f);
+        continue;
+      }
+      await keep(target);
+      await rmdir(target);
+    }
+    const ours = at?.isSymbolicLink() ? Buffer.from(await readlink(target)) : at?.isFile() ? await readFile(target).catch(() => null) : null;
     const text = [before, theirs, ours].every((b) => b === null || !binary(b));
     const same = (x: Buffer | null, y: Buffer | null) => (text ? sameBytes(x && lf(x), y && lf(y)) : sameBytes(x, y));
     if (same(ours, theirs)) continue;
+    // Written in place of a link, not through it.
+    const put = async (data: Buffer | string) => {
+      await keep(target);
+      await mkdir(path.dirname(target), { recursive: true });
+      if (at?.isSymbolicLink()) await rm(target, { force: true });
+      if (mode?.to === "120000") {
+        await rm(target, { force: true });
+        await symlink(String(data), target);
+      } else await writeFile(target, data);
+    };
     if (same(ours, before)) {
-      if (theirs === null) await rm(target, { force: true });
-      else {
-        await mkdir(path.dirname(target), { recursive: true });
-        await writeFile(target, text ? inStyleOf(theirs, ours) : theirs);
-      }
+      if (theirs === null) {
+        await keep(target);
+        await rm(target, { force: true });
+        await dropEmpty(path.dirname(target), dest);
+      } else await put(text && mode?.to !== "120000" ? inStyleOf(theirs, ours) : theirs);
       continue;
     }
-    const merged = text && ours && theirs ? await mergeOne(before, ours, theirs) : null;
-    if (merged) await writeFile(target, merged.out);
+    const merged = text && ours && theirs && mode?.to !== "120000" ? await mergeOne(before, ours, theirs) : null;
+    if (merged) await put(merged.out);
     if (!merged?.clean) conflicts.push(f);
   }
+  } catch (e) {
+    for (const back of undo.reverse()) await back().catch(() => {});
+    throw e;
+  }
   return { files, conflicts, tree };
+}
+
+/** Folders left empty by a removal, from `dir` up to (not including) `top`. */
+async function dropEmpty(dir: string, top: string): Promise<void> {
+  const stop = path.resolve(top);
+  for (let d = path.resolve(dir); d.startsWith(stop + path.sep) && d !== stop; d = path.dirname(d)) {
+    if ((await readdir(d).catch(() => ["?"])).length) return;
+    await rmdir(d).catch(() => {});
+  }
 }
 
 // ── shipping ──────────────────────────────────────────────────────────
@@ -2130,6 +2259,60 @@ export async function compareOf(cwd: string, base: string): Promise<Compare> {
     deletions += Number(del) || 0;
   }
   return { base: ref.replace(/^origin\//, ""), ahead: Number(a) || 0, behind: Number(b) || 0, files, additions, deletions };
+}
+
+/** Who this computer's gh is signed in as, looked up once. */
+let ghLogin: Promise<string> | null = null;
+
+/**
+ * One look at a GitHub repository for an automation watching it (automations.ts githubNews): its open issues or pull requests,
+ * or the latest workflow runs on its default branch, through the gh this computer is signed in with. Read-only. Only what the
+ * event needs is asked for, so a look every two minutes stays a request or two.
+ */
+export async function repoWatch(repo: string, event: string): Promise<GithubLook | { error: string }> {
+  const home = homedir();
+  const rows = (s: string) => (JSON.parse(s) as Record<string, unknown>[]).filter((x) => x && typeof x === "object");
+  const who = (a: unknown) => String((a as { login?: unknown } | null)?.login ?? "");
+  try {
+    ghLogin ??= gh(home, ["api", "user", "--jq", ".login"]).then((s) => s.trim(), () => ((ghLogin = null), ""));
+    const me = await ghLogin;
+    const look: GithubLook = { me, defaultBranch: "", issues: [], prs: [], runs: [] };
+    if (event === "issue")
+      look.issues = rows(await gh(home, ["issue", "list", "--repo", repo, "--state", "open", "--limit", "30", "--json", "number,title,url,labels,author,body"])).map((x) => ({
+        number: Number(x.number),
+        title: String(x.title ?? "").slice(0, 200),
+        url: String(x.url ?? ""),
+        labels: Array.isArray(x.labels) ? x.labels.map((l) => String((l as { name?: unknown })?.name ?? "")).filter(Boolean) : [],
+        author: who(x.author),
+        body: String(x.body ?? "").slice(0, 3000),
+      }));
+    else if (event === "pr")
+      look.prs = rows(await gh(home, ["pr", "list", "--repo", repo, "--state", "open", "--limit", "30", "--json", "number,title,url,author,isDraft,body"])).map((x) => ({
+        number: Number(x.number),
+        title: String(x.title ?? "").slice(0, 200),
+        url: String(x.url ?? ""),
+        author: who(x.author),
+        draft: x.isDraft === true,
+        body: String(x.body ?? "").slice(0, 3000),
+      }));
+    else {
+      look.defaultBranch = (await gh(home, ["repo", "view", repo, "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"])).trim();
+      look.runs = rows(await gh(home, ["run", "list", "--repo", repo, "--branch", look.defaultBranch, "--limit", "15", "--json", "databaseId,name,conclusion,headSha,url"])).map((x) => ({
+        id: Number(x.databaseId),
+        name: String(x.name ?? "").slice(0, 120),
+        conclusion: String(x.conclusion ?? ""),
+        sha: String(x.headSha ?? ""),
+        url: String(x.url ?? ""),
+      }));
+    }
+    return look;
+  } catch (e) {
+    const m = (e as Error).message || "";
+    if ((e as NodeJS.ErrnoException).code === "ENOENT" || /not found|ENOENT/.test(m) && /\bgh\b/.test(m)) return { error: "GitHub's gh isn't installed on this computer." };
+    if (/auth login|not logged|authentication/i.test(m)) return { error: "This computer's gh isn't signed in to GitHub (gh auth login)." };
+    if (/Could not resolve|not found|404/i.test(m)) return { error: `GitHub has no repository ${repo} that this computer can see.` };
+    return { error: m.slice(0, 300) || "GitHub didn't answer." };
+  }
 }
 
 /** One of a repository's open issues or pull requests, for a new thread to start from (threads.tsx New thread). */

@@ -1,4 +1,5 @@
-import { useContext, useEffect, useId, useState, type ReactNode } from "react";
+import { lazy, Suspense, useContext, useEffect, useId, useState, type ReactNode } from "react";
+import type { ToolCallStatus } from "@/components/affect/tool-call-card";
 import { stepKind } from "../run-strip.js";
 import { tickEvery } from "./presence.js";
 import { doingVerb, stepsSummary } from "../step-summary.js";
@@ -10,6 +11,25 @@ import { Orb } from "@/components/aicss/Orb";
 import { StepList, tookFor, type Step } from "./Response.js";
 import { IdeChatContext } from "./ide/mode.js";
 import { LIVE_WORDS } from "../step-words.js";
+
+// The kit's Tool Call Group and Thinking Loader (components/affect), fetched as this file loads, so they are in hand by the first turn
+// drawn, and kept out of the session screen's first download (test/client-bundle.test.ts).
+const toolsKit = import("@/components/affect/tool-call-card");
+const thinkKit = import("@/components/affect/thinking-loader");
+const ToolCallGroup = lazy(() => toolsKit.then((m) => ({ default: m.ToolCallGroup })));
+const ToolCallCard = lazy(() => toolsKit.then((m) => ({ default: m.ToolCallCard })));
+const ThinkingLoader = lazy(() => thinkKit.then((m) => ({ default: m.ThinkingLoader })));
+
+/** One kind of step in the tool group: the group reads its status and icon for its own line (Tool Call Group), the row is ours. */
+function KindRow({ children }: { status: ToolCallStatus; icon: ReactNode; startedAt?: number | undefined; children: ReactNode }) {
+  return <div className="rl-group">{children}</div>;
+}
+/** What a failed call said, for its card's error line: its last line that names an error or a failure, else its last line. */
+const lastLine = (out: string) => {
+  const lines = out.trim().split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  return (lines.findLast((l) => /error|fail|✖|not ok|exception|denied|not found/i.test(l) && !/^ℹ|^#\s*fail\s+\d/i.test(l)) ?? lines.at(-1) ?? "It failed.").slice(0, 240);
+};
+const statusOf = (ss: readonly Step[]): ToolCallStatus => (ss.some((x) => x.state === "running") ? "running" : ss.some((x) => x.state === "failed") ? "error" : "success");
 
 /**
  * A reply's work as one line (Arun, 2026-11-14, direction A of the working-state mockups: "instead of having so many of these",
@@ -82,7 +102,8 @@ export function doingKind(blocks: readonly Block[], live: boolean): string {
   return k === "test" ? "run" : k;
 }
 
-function Clock({ since }: { since: number }) {
+/** "0:42"-style: how long it has worked, ticking with the page's one clock. */
+export function Clock({ since }: { since: number }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     // The page's one 1-second ticker, shared with every other clock and still while the window is hidden (presence.tsx).
@@ -96,6 +117,8 @@ export function RunLine({ blocks, live, since, took, waiting = false, writing = 
   const [open, setOpen] = useState(startOpen || bare);
   // The group opened: undefined follows the step under way while it works (its group opens as the line does), null is none.
   const [group, setGroup] = useState<string | null | undefined>(undefined);
+  // The step opened in a kind: undefined follows the first failure, so its output shows without a press.
+  const [shownStep, setShownStep] = useState<string | null | undefined>(undefined);
   const body = useId();
   const steps = blocks.flatMap((b) => (b.kind === "work" && "steps" in b ? b.steps : []));
   const thinks = blocks.filter((b): b is Extract<Block, { kind: "think" }> => b.kind === "think" && "thought" in b);
@@ -118,12 +141,13 @@ export function RunLine({ blocks, live, since, took, waiting = false, writing = 
   const empty = !steps.length && !thinks.length;
   const full = running ? doingOf(running) : word;
   const words = useHeldWords(word, live);
-  const opened = group === undefined ? (live && running && !bare ? groupOf(running).key : null) : group;
+  // A failed step is the one worth reading: done, its kind opens first and the step shows what it printed (its error), where a
+  // working run opens on the step under way.
+  const firstFail = steps.find((x) => x.state === "failed");
+  const opened = group === undefined ? (live && running && !bare ? groupOf(running).key : !live && firstFail && !bare ? groupOf(firstFail).key : null) : group;
   const pick = (key: string) => setGroup(opened === key ? null : key);
   const summary = stepsSummary(steps, thoughtSecs);
   const doneLine = [took >= 1000 ? `Worked ${tookFor(took)}` : "", took >= 1000 ? summary.charAt(0).toLowerCase() + summary.slice(1) : summary].filter(Boolean).join(" · ");
-  // A tick per step, the newest last; a long run keeps its last 24.
-  const ticks = steps.slice(-24);
 
   // Opened: the steps by kind, in the order each kind first came up, and the thinking first when there was some.
   const groups: { key: string; label: string; steps: Step[] }[] = [];
@@ -144,76 +168,124 @@ export function RunLine({ blocks, live, since, took, waiting = false, writing = 
     return { text: g.key === "read" || g.key === "edit" ? `${new Set(g.steps.map((s) => s.target)).size} file${new Set(g.steps.map((s) => s.target)).size === 1 ? "" : "s"}` : `${n}×`, tone: "" };
   };
 
-  return (
-    <div className={`rl${live ? " live" : ""}${failed && !live ? " has-fail" : ""}${bare ? " bare" : ""}`} data-orb={live && !waiting && !bare ? "" : undefined}>
-      {!bare && <button type="button" className="rl-head" aria-expanded={empty ? undefined : open} aria-controls={empty ? undefined : body} onClick={() => !empty && setOpen((o) => !o)}>
-        {/* The same nine-cell grid as the reply's "Thinking" line, so working reads as the same thing moving on. */}
-        {live && !waiting && <Orb variant="S3" size={14} label={word} />}
-        <span className="rl-text">
-          {live ? (
-            // Keyed by the step, so each new one slides in over the last.
-            <Shine key={words} on={!waiting} className={`rl-now${waiting ? " needs" : ""}`} {...(full !== words ? { title: full } : {})}>
-              {words}
-            </Shine>
-          ) : (
-            <span className="rl-done">
-              {doneLine}
-              {failed > 0 && !/failed/.test(doneLine) && <span className="rl-fail"> · {failed} failed</span>}
-            </span>
-          )}
-        </span>
-        {live && !plain && steps.length > 1 && <span className="rl-count">{steps.length} steps</span>}
-        {/* A tick per step: hovered, what it was; pressed, the line opens on its kind (the head itself is the keyboard's way in). */}
-        {ticks.length > 1 && !plain && (
-          <span className="rl-ticks" aria-hidden="true">
-            {ticks.map((s) => (
-              <i
-                key={s.id}
-                className={s.state === "running" ? "now" : s.state === "failed" ? "bad" : s.state === "waiting" ? "skip" : "on"}
-                data-k={groupOf(s).key.split(":")[0]}
-                title={`${doingOf(s)}${s.state === "failed" ? " · failed" : ""}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpen(true);
-                  setGroup(groupOf(s).key);
-                }}
-              />
-            ))}
-          </span>
-        )}
-        {live && since !== undefined && !waiting && <Clock since={since} />}
-        {live && forecast && <span className="rl-clock">{forecast}</span>}
-        {!empty && <span className={`rsp-caret side ${open ? "open" : ""}`} aria-hidden />}
-      </button>}
-      {open && !empty && (
-        <div id={body} className="rl-body">
-          {thinks.length > 0 && (
-            <div className="rl-group">
+  const toolsLine = `Used ${steps.length} tool${steps.length === 1 ? "" : "s"}`;
+  // A coding session's turn (the redesign of 2026-11-27): while it works, what it is doing rolls through in a small box of its own
+  // (the words shining, its clock beside them); its tool calls are one card under it, "Used 4 tools · 1 failed", opening to them by
+  // kind and each to its result. Done, the card's line is the run's summary. A crew mate's steps (bare) keep their thin rule.
+  const bodyEl = open && !empty && (
+    <div id={body} className="rl-body">
+      {thinks.length > 0 && (
+        <div className="rl-group">
+          <button type="button" className="rl-row" aria-expanded={opened === "think"} onClick={() => pick("think")}>
+            <span className="rl-label"><GroupIcon k="think" {...(inColumn && thoughtOwn ? { tip: "Thought" } : {})} /><span className="rl-lt" {...(thoughtOwn ? { "data-own": "" } : {})}>Thought</span></span>
+            <span className="rl-what">{clip(thinks.map((t) => t.thought).join(" "), 90)}</span>
+            <span className="rl-side">{thoughtSecs ? tookFor(thoughtSecs * 1000) : ""}</span>
+          </button>
+          {opened === "think" && <p className="rsp-tl-thought rl-thought">{thinks.map((t) => t.thought).join("\n\n")}</p>}
+        </div>
+      )}
+      {groups.map((g) => {
+        const s = side(g);
+        return (
+          <div key={g.key} className="rl-group">
+            <button type="button" className="rl-row" aria-expanded={opened === g.key} onClick={() => pick(g.key)}>
+              {/* Code's column says the kind with its mark alone (data-own), where the mark is its own and the row has words to go with it. */}
+              <span className="rl-label"><GroupIcon k={g.key} {...(inColumn && OWN_MARK.has(g.key) && what(g) ? { tip: g.label } : {})} /><span className="rl-lt" {...(OWN_MARK.has(g.key) && what(g) ? { "data-own": "" } : {})}>{g.label}</span></span>
+              <span className="rl-what">{what(g)}</span>
+              <span className={`rl-side${s.tone ? ` ${s.tone}` : ""}`}>{s.text}</span>
+            </button>
+            {opened === g.key && <StepList steps={g.steps} />}
+          </div>
+        );
+      })}
+      {notes}
+    </div>
+  );
+  // The turn's tools as the kit's Tool Call Group (Arun, 2026-11-27: one row per call): one line, "Used 4 tools · 1 failed" with
+  // their time and the marks of the kinds it used last, opening to a Tool Call Card per call (its icon, name, what it was for, time
+  // and status, opening to its arguments and what it printed; a failure opens by itself to its error). Code's column keeps its
+  // rows by kind (Arun, 2026-11-17: "add svg icons next to the steps like looked at, searched, changed, ran"). Done, its line is
+  // the run's summary.
+  // The group says how many failed itself ("· 1 failed"), so the summary leaves its own count out.
+  const doneLabel = ((t) => t.charAt(0).toUpperCase() + t.slice(1))(summary.replace(/\s*[·,]\s*\d+ failed\b/g, ""));
+  const card = !empty && (
+    <Suspense fallback={<div className="rl-card rl-wait"><span className="rl-done">{live ? toolsLine : doneLabel}</span></div>}>
+      <ToolCallGroup open={open} onOpenChange={setOpen} label={live ? (steps.length ? toolsLine : summary) : doneLabel} runningLabel={toolsLine} className="rl-tools">
+        {inColumn ? (
+          [
+            thinks.length > 0 && (
+            <KindRow key="think" status="success" icon={<GroupIcon k="think" />}>
               <button type="button" className="rl-row" aria-expanded={opened === "think"} onClick={() => pick("think")}>
                 <span className="rl-label"><GroupIcon k="think" {...(inColumn && thoughtOwn ? { tip: "Thought" } : {})} /><span className="rl-lt" {...(thoughtOwn ? { "data-own": "" } : {})}>Thought</span></span>
                 <span className="rl-what">{clip(thinks.map((t) => t.thought).join(" "), 90)}</span>
                 <span className="rl-side">{thoughtSecs ? tookFor(thoughtSecs * 1000) : ""}</span>
               </button>
               {opened === "think" && <p className="rsp-tl-thought rl-thought">{thinks.map((t) => t.thought).join("\n\n")}</p>}
-            </div>
-          )}
-          {groups.map((g) => {
-            const s = side(g);
+            </KindRow>
+            ),
+            ...groups.map((g) => {
+            const st = side(g);
+            const status = statusOf(g.steps);
             return (
-              <div key={g.key} className="rl-group">
+              <KindRow key={g.key} status={status} icon={<GroupIcon k={g.key} />} {...(status === "running" && since !== undefined ? { startedAt: since } : {})}>
                 <button type="button" className="rl-row" aria-expanded={opened === g.key} onClick={() => pick(g.key)}>
-                  {/* Code's column says the kind with its mark alone (data-own), where the mark is its own and the row has words to go with it. */}
                   <span className="rl-label"><GroupIcon k={g.key} {...(inColumn && OWN_MARK.has(g.key) && what(g) ? { tip: g.label } : {})} /><span className="rl-lt" {...(OWN_MARK.has(g.key) && what(g) ? { "data-own": "" } : {})}>{g.label}</span></span>
                   <span className="rl-what">{what(g)}</span>
-                  <span className={`rl-side${s.tone ? ` ${s.tone}` : ""}`}>{s.text}</span>
+                  <span className={`rl-side${st.tone ? ` ${st.tone}` : ""}`}>{st.text}</span>
                 </button>
-                {opened === g.key && <StepList steps={g.steps} />}
-              </div>
+                {opened === g.key && <StepList steps={g.steps} shown={shownStep === undefined ? (g.steps.find((x) => x.state === "failed" && x.detail)?.id ?? null) : shownStep} onShown={setShownStep} />}
+              </KindRow>
             );
-          })}
-          {notes}
-        </div>
-      )}
+          }),
+          ]
+        ) : (
+          [
+            ...(thinks.length ? [<ToolCallCard key="think" name="thinking" summary={clip(thinks.map((t) => t.thought).join(" "), 90)} icon={<GroupIcon k="think" />} status="success" result={thinks.map((t) => t.thought).join("\n\n")} {...(thoughtSecs ? { duration: thoughtSecs * 1000 } : {})} />] : []),
+            ...steps.map((x) => {
+              const status: ToolCallStatus = x.state === "running" ? "running" : x.state === "failed" ? "error" : "success";
+              return (
+                <ToolCallCard
+                  key={x.id}
+                  name={(x.call?.name ?? x.verb).toLowerCase()}
+                  summary={`${x.target ? `${x.verb} ${clip(x.target, 80)}` : x.verb}${x.state === "waiting" ? " · didn't run" : ""}`}
+                  icon={<GroupIcon k={groupOf(x).key} />}
+                  status={status}
+                  {...(x.call ? { args: x.call.args, startedAt: x.call.startedAt } : {})}
+                  {...(x.call?.output ? { result: x.call.output.length > 6000 ? `${x.call.output.slice(0, 6000)}\n…` : x.call.output } : {})}
+                  {...(x.call?.ms !== undefined ? { duration: x.call.ms } : {})}
+                  {...(status === "error" ? { error: lastLine(x.call?.output ?? ""), defaultOpen: true } : {})}
+                />
+              );
+            }),
+          ]
+        )}
+      </ToolCallGroup>
+    </Suspense>
+  );
+  if (!bare)
+    return (
+      <div className={`rl${live ? " live" : ""}${failed && !live ? " has-fail" : ""}`}>
+        {/* What it is doing as the kit's Thinking Loader: each new step rolls in over the last and the box glides to its width. Its
+            clock counts beside it; waiting on you, the head's "Waiting on you" says so and this line steps aside. */}
+        {live && !waiting && (
+          <div className="rl-think">
+            <span className="rl-now" {...(full !== words ? { title: full } : {})}>
+              <Suspense fallback={<Shine on className="rl-now">{words}</Shine>}>
+                <ThinkingLoader phases={[words]} phase={0} variant="pill" size="sm" />
+              </Suspense>
+            </span>
+            {since !== undefined && <Clock since={since} />}
+            {forecast && <span className="rl-clock">{forecast}</span>}
+          </div>
+        )}
+        {card}
+        {/* Done with nothing to open (a reply that only wrote): its line alone. */}
+        {!live && empty && doneLine && <div className="rl-quiet">{doneLine}</div>}
+      </div>
+    );
+  return (
+    <div className={`rl${live ? " live" : ""}${failed && !live ? " has-fail" : ""} bare`}>
+      {bodyEl}
     </div>
   );
 }

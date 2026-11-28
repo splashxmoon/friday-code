@@ -4,6 +4,7 @@ import { isOwnModel } from "../own-model-id.js";
 import { api } from "./api.js";
 import { machineError } from "./GitHubConnect.js";
 import { Icon } from "./icons.js";
+import { OwnContext } from "./OwnContext.js";
 import { NoMachine, hostApi, useMachine } from "./local.js";
 import { OwnHostMark, ownHostMarked } from "./model-lane-add.js";
 import { groupOwn } from "./own-groups.js";
@@ -123,6 +124,8 @@ export function OwnModelsSection({ identity, workspace }: { identity: Identity; 
   /** What a test said, for the model as it was tested: changed since (edited, moved, another model), it is gone (audit REST-7). */
   const [notes, setNotes] = useState<Record<string, { text: string; bad?: boolean; of: string }>>({});
   const [error, setError] = useState("");
+  /** The model whose Context is open (OwnContext.tsx): one at a time. */
+  const [ctxOpen, setCtxOpen] = useState("");
   const [ask, confirmUI] = useConfirm();
   const solo = true;
 
@@ -266,6 +269,11 @@ export function OwnModelsSection({ identity, workspace }: { identity: Identity; 
                     )}
                     {/* Three marks close together, not words (Arun, 2026-11-04: "use svg icons for these… closer together"). */}
                     <div className="own-acts">
+                      {m.local && (
+                        <button type="button" className={`icon-btn${ctxOpen === m.id ? " on" : ""}`} aria-label={`Context for ${m.name}`} aria-pressed={ctxOpen === m.id} title="Context: its window, and what happens when it fills" onClick={() => setCtxOpen(ctxOpen === m.id ? "" : m.id)}>
+                          <Icon name="sliders" size={14} />
+                        </button>
+                      )}
                       <button type="button" className="icon-btn" aria-label={`Test ${m.name}`} title="Test: ask it for a short reply" onClick={() => void test(m)}>
                         <Icon name="play" size={14} />
                       </button>
@@ -278,6 +286,7 @@ export function OwnModelsSection({ identity, workspace }: { identity: Identity; 
                     </div>
                   </div>
                   {draft?.id === m.id && form(draft)}
+                  {ctxOpen === m.id && <OwnContext identity={identity} id={m.id} name={m.model} others={models.filter((o) => o.id !== m.id && o.local).map((o) => ({ id: o.id, name: o.name }))} />}
                 </div>
               ))}
             </div>

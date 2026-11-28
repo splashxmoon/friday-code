@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConnectionView, Draft } from "../runner/connections.js";
 import { Button } from "@/components/ui/button";
+import { Button as KitButton } from "@/components/affect/button";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState, PageHeader } from "@/components/dass";
 import { CircleAlertIcon } from "lucide-react";
-import { ClaudeMark } from "./BrandMarks.js";
 import { Icon } from "./icons.js";
 import { hostApi } from "./local.js";
 import type { Identity } from "./storage.js";
+import { CustomizeSwitch, type CustomizeTab } from "./customize-switch.js";
 import { Directory, lineOf } from "./mcp-directory.js";
 import "./mcp-servers.css";
 
@@ -25,8 +26,10 @@ type List = { servers: ConnectionView[]; claudeCode: boolean; claudeCodeNames: s
 const call = <T,>(identity: Identity, op: string, body?: unknown) =>
   hostApi<T>(identity, `/api/runner/${op}`, body === undefined ? undefined : { method: "POST", body: JSON.stringify(body) });
 
-export function McpServersPage({ identity, tabs }: { identity: Identity; /** Customize's tabs, at the toolbar's left (App.tsx). */ tabs?: ReactNode }) {
+export function McpServersPage({ identity, onTab }: { identity: Identity; /** Customize's other tab (App.tsx): the switch starts the header line. */ onTab?: (tab: CustomizeTab) => void }) {
   const [list, setList] = useState<List | null>(null);
+  /** Custom server's sheet: from the header, and from a search that found nothing. */
+  const [custom, setCustom] = useState(false);
   const [failed, setFailed] = useState("");
   const [trying, setTrying] = useState(false);
   const load = useCallback(
@@ -82,21 +85,27 @@ export function McpServersPage({ identity, tabs }: { identity: Identity; /** Cus
     <div className="page conns-page msv-page px-6! max-[640px]:px-4!">
       <div className="page-inner">
         <PageHeader title="Plugins" />
-        {tabs && <div className="customize-bar">{tabs}</div>}
         <div className="msv">
           <Directory
             identity={identity}
             servers={list?.servers ?? null}
             builtInApps={list?.builtInApps ?? []}
+            claudeCodeNames={list?.claudeCode ? list.claudeCodeNames : []}
             onChanged={load}
+            onCustom={() => setCustom(true)}
             trouble={trouble}
+            lead={onTab && <CustomizeSwitch tab="mcp" onTab={onTab} count={list?.servers.length} />}
             actions={
               <>
-                <CustomServer identity={identity} servers={list?.servers ?? []} onAdded={() => void load()} />
                 {list && <ClaudeCodeSwitch identity={identity} list={list} onChange={(on) => setList((l) => (l ? { ...l, claudeCode: on } : l))} />}
+                {/* The white button ends the header's row (the approved mock, 2026-11-27). */}
+                <KitButton type="button" variant="primary" className="mdir-custom-btn" icon={<Icon name="plus" size={14} />} onClick={() => setCustom(true)}>
+                  Custom server
+                </KitButton>
               </>
             }
           />
+          <CustomServer identity={identity} servers={list?.servers ?? []} open={custom} onOpenChange={setCustom} onAdded={() => void load()} />
         </div>
       </div>
     </div>
@@ -107,10 +116,9 @@ export function McpServersPage({ identity, tabs }: { identity: Identity; /** Cus
  * Custom server, in the header (Arun, 2026-11-17: "add a button in the header for custom mcp, with input fields and stuff", then
  * "like this for the custom one and like the key or whatever instead of a input box thing we have"): a sheet of plain fields (its
  * name, where it is, a key), remote or run here. Its config pasted whole (JSON, a claude mcp add line) is one link away, for the
- * servers whose docs give one. One added shows as a card under Your own.
+ * servers whose docs give one. One added is listed under Connected on the rail.
  */
-function CustomServer({ identity, servers, onAdded }: { identity: Identity; servers: ConnectionView[]; onAdded: () => void }) {
-  const [open, setOpen] = useState(false);
+function CustomServer({ identity, servers, open, onOpenChange: setOpen, onAdded }: { identity: Identity; servers: ConnectionView[]; open: boolean; onOpenChange: (open: boolean) => void; onAdded: () => void }) {
   const [paste, setPaste] = useState(false);
   const [where, setWhere] = useState<"remote" | "local">("remote");
   const [name, setName] = useState("");
@@ -119,9 +127,12 @@ function CustomServer({ identity, servers, onAdded }: { identity: Identity; serv
   const [envName, setEnvName] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  /** Saved but off: it's under Your own now, so the sheet only closes; adding again would make a second. */
+  /** Saved but off: it's under Connected now, so the sheet only closes; adding again would make a second. */
   const [saved, setSaved] = useState(false);
-  const start = () => (setSaved(false), setPaste(false), setWhere("remote"), setName(""), setAddr(""), setKey(""), setEnvName(""), setErr(""), setOpen(true));
+  // Each time it opens, it starts empty.
+  useEffect(() => {
+    if (open) setSaved(false), setPaste(false), setWhere("remote"), setName(""), setAddr(""), setKey(""), setEnvName(""), setErr("");
+  }, [open]);
   const remote = where === "remote";
   const add = async () => {
     if (!addr.trim() || busy) return;
@@ -146,7 +157,7 @@ function CustomServer({ identity, servers, onAdded }: { identity: Identity; serv
       const a = await call<{ server: ConnectionView }>(identity, "connections.add", { draft, values });
       onAdded();
       if (a.server.status?.ok) setOpen(false);
-      else setSaved(true), setErr(`Saved, but it's off: ${a.server.status?.error ?? "it didn't answer."} It's under Your own to try again.`);
+      else setSaved(true), setErr(`Saved, but it's off: ${a.server.status?.error ?? "it didn't answer."} It's under Connected to try again.`);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -155,9 +166,6 @@ function CustomServer({ identity, servers, onAdded }: { identity: Identity; serv
   };
   return (
     <>
-      <Button type="button" variant="outline" size="sm" className="mdir-custom-btn" onClick={start}>
-        <Icon name="plus" size={14} /> Custom server
-      </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="mdir-sheet msv-dlg sm:max-w-[460px]">
           <DialogHeader>
@@ -252,7 +260,8 @@ function CustomServer({ identity, servers, onAdded }: { identity: Identity; serv
 
 /**
  * The person's own Claude Code servers handed to the other tools too, as a switch in the header (Arun, 2026-11-17: "make the also
- * give every tool my claude servers a toggle in the header"). Off unless turned on; hidden when Claude Code has none.
+ * give every tool my claude servers a toggle in the header"). Off unless turned on; hidden when Claude Code has none. A quiet
+ * button with its switch beside Custom server, as the approved mock draws it (2026-11-27).
  */
 function ClaudeCodeSwitch({ identity, list, onChange }: { identity: Identity; list: List; onChange: (on: boolean) => void }) {
   const n = list.claudeCodeNames.length;
@@ -266,8 +275,7 @@ function ClaudeCodeSwitch({ identity, list, onChange }: { identity: Identity; li
     <Tooltip>
       <TooltipTrigger asChild>
         <label className="mdir-cc">
-          <ClaudeMark size={14} />
-          <span>Claude Code servers</span>
+          <span>Claude Code's own servers</span>
           <Switch aria-label="Also give every tool my Claude Code servers" checked={list.claudeCode} onCheckedChange={(on) => void set(on)} />
         </label>
       </TooltipTrigger>

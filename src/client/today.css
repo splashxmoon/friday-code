@@ -38,14 +38,14 @@
 .td-clip video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
 .td-clip-cap { position: absolute; right: 3px; bottom: 3px; padding: 0 4px; border-radius: 4px; background: rgb(0 0 0 / .6); color: #fff; font-size: 10px; font-variant-numeric: tabular-nums; line-height: 14px; }
 .td-clip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.td-size { min-width: 26px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: center; }
+.td-size { min-width: 26px; padding: 1px 6px; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); color: var(--text-muted); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: center; }
 .td-acts { display: flex; align-items: center; gap: 6px; }
-.td-go { display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 999px; background: none; color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer; }
+.td-go { display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--r-md, 8px); background: none; color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer; }
 .td-go:hover:not(:disabled) { background: var(--hover); }
 .td-go.primary { border-color: var(--ink); background: var(--ink); color: var(--bg); }
 .td-go.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 86%, var(--bg)); }
 .td-go:disabled { opacity: .5; cursor: default; }
-.td-x { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 999px; background: none; color: var(--text-muted); opacity: 0; cursor: pointer; }
+.td-x { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--r-md, 8px); background: none; color: var(--text-muted); opacity: 0; cursor: pointer; }
 .td-row:hover .td-x, .td-row:focus-within .td-x, .td-x.shown { opacity: 1; }
 .td-x:hover { background: var(--hover); color: var(--ink); }
 @media (hover: none) { .td-x { opacity: 1; } }

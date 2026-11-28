@@ -7,6 +7,7 @@ import { commandFailed, receiptOf } from "./receipt.js";
 import { riskOf, type Risk, type RiskFacts } from "./review-risk.js";
 import { carriedOn, limitHit } from "./limit-reset.js";
 import { needsIn } from "./needs-you.js";
+import { parseAsks } from "./ask-parse.js";
 
 /**
  * Every agent that is working for you, as cards on a board.
@@ -73,6 +74,10 @@ export interface BoardCard {
   review?: RiskFacts;
   /** How risky that work is to wave through (review-risk.ts), with the pull request's checks once GitHub has said. */
   risk?: Risk;
+  /** How full its context was at the end of its last turn and that model's window, when its tool says (agent.usage): the card's bar. */
+  ctx?: { used: number; window: number };
+  /** Working: the tool calls its run has made so far, so the card says how much has gone into it. */
+  steps?: number;
 }
 
 /** The most files a card carries for its score: enough to find the sensitive one, not a whole tree on every poll. */
@@ -320,10 +325,15 @@ export function boardCards(state: SessionState, events: SessionEvent[], meId: st
     const review = pr || files > 0 || commitBody ? ((files > 0 && reviewFacts(mine, true)) || (commitBody ? reviewFacts(mine, false) : null)) : null;
     // The run's start: the event it began at, else its first event after.
     const since = column === "working" ? (events.find((e) => e.seq >= run.sinceSeq)?.ts ?? undefined) : undefined;
+    // How full it is and how much its run has done, for the card (Arun, 2026-11-27, the board's cards "that tell you something").
+    // A coding tool's turn says it on agent.usage; Friday's agent on an own model, on each step's agent.message (agent/window.ts).
+    const used = mine.findLast((e) => (e.body.type === "agent.usage" || e.body.type === "agent.message") && !!e.body.context && !!e.body.window);
+    const ctx = used && (used.body.type === "agent.usage" || used.body.type === "agent.message") ? { used: used.body.context!, window: used.body.window! } : null;
+    const steps = column === "working" ? mine.filter((e) => e.seq >= run.sinceSeq && e.body.type === "tool.result").length : 0;
     out.push({
       id: `${state.id}|${lane}`, sid: state.id, lane, title: state.title || "Untitled session", task, agent, tool, column, status, detail, branch, files, pr,
       ...(prFrom ? { prFrom } : {}), ...(shepherd ? { shepherd } : {}), at, ...(since ? { since } : {}), you, ...(you ? { waits: waitIds.get(lane) } : {}), mine: driverIsMe,
-      ...(review ? { review, risk: riskOf(review) } : {}),
+      ...(review ? { review, risk: riskOf(review) } : {}), ...(ctx ? { ctx } : {}), ...(steps ? { steps } : {}),
     });
   }
   return out;
@@ -338,6 +348,142 @@ export function weekOf(events: SessionEvent[], now = Date.now(), days = 7): { cr
     created: (events[0]?.ts ?? 0) >= since,
     shipped: recent.some((e) => e.body.type === "folder.committed" && !e.body.error && !!(e.body.pushed || e.body.prUrl)),
     runs: recent.filter((e) => e.body.type === "run.ended").length,
+  };
+}
+
+const DAY_MS = 86_400_000;
+/** How far back a session's week is kept: this week and the one before it, which the change is read against. */
+const WEEK_BACK = 14;
+
+/**
+ * What one session did lately, as moments rather than counts, so the week can be cut into days at the time it is asked for (a
+ * count made when the log last moved goes stale while the session sits still). `waits`: each time an agent waited on this
+ * person and they answered, when they answered and how long it had waited.
+ */
+export interface WeekFacts {
+  createdAt: number;
+  ships: number[];
+  runs: number[];
+  waits: { at: number; ms: number }[];
+}
+
+/** The board's week: the three numbers its foot says, each day of the last seven, and the seven before. */
+export interface WeekStats {
+  sessions: number;
+  shipped: number;
+  runs: number;
+  /** Each of the last seven days, oldest first; a day is the 24 hours up to now, then the 24 before, as the week is the last 168. */
+  days: { shipped: number[]; runs: number[]; /** That day's median wait, null when nothing was answered. */ waited: (number | null)[] };
+  /** The seven days before those, for "+2 on last week". */
+  before: { shipped: number; runs: number; waited: number | null };
+  /** How long agents waited on this person before an answer, this week: the median in ms, null with nothing answered. */
+  waited: number | null;
+  /** How many answers that median is of. */
+  answers: number;
+}
+
+/**
+ * A session's ships, runs and answered waits over the last two weeks.
+ *
+ * A wait is what the Needs you page would have listed and this person then answered, read from the log alone: a question put to
+ * them (agent.question) until their next message to that agent; a command to allow (engine.approval) until their yes or no to
+ * it; a coding tool's numbered questions until their reply. Each ends unanswered, and uncounted, the way the session drops it:
+ * the run stopped or cancelled, the tool gone, somebody else answering. Still open is not a wait yet: it has no length.
+ */
+export function weekFacts(events: SessionEvent[], meId: string, now = Date.now()): WeekFacts {
+  const since = now - WEEK_BACK * DAY_MS;
+  const out: WeekFacts = { createdAt: events[0]?.ts ?? 0, ships: [], runs: [], waits: [] };
+  const asked = new Map<string, number>();
+  const approvals = new Map<string, { id: string; ts: number }>();
+  const tool = new Set<string>();
+  for (const e of events) {
+    const lane = e.lane ?? MAIN_LANE;
+    const b = e.body;
+    // Which lanes a coding tool is on is read from the start: only its last words can be numbered questions.
+    if (b.type === "engine.attached") tool.add(lane);
+    if (e.ts < since) continue;
+    if (b.type === "folder.committed") {
+      if (!b.error && (b.pushed || b.prUrl)) out.ships.push(e.ts);
+    } else if (b.type === "run.ended") {
+      out.runs.push(e.ts);
+    } else if (b.type === "agent.question") {
+      if (b.to === meId) asked.set(lane, e.ts);
+      else asked.delete(lane);
+    } else if (b.type === "engine.approval") {
+      approvals.set(lane, { id: b.id, ts: e.ts });
+    } else if (b.type === "agent.message") {
+      if (tool.has(lane) && !b.toolCalls.length && !b.interrupted && parseAsks(b.text).length) asked.set(lane, e.ts);
+      else if (tool.has(lane)) asked.delete(lane);
+    } else if (b.type === "instruction") {
+      // Friday's own words to the agent (carry on, a failed check) and another agent's answer nobody.
+      if (e.actor.kind !== "human" || b.keepGoing || b.check || b.mesh || b.peer) continue;
+      const mine = e.actor.id === meId;
+      const ap = approvals.get(lane);
+      if (b.approval) {
+        if (mine && ap && ap.id === b.approval.id) out.waits.push({ at: e.ts, ms: e.ts - ap.ts });
+        approvals.delete(lane);
+        continue;
+      }
+      const q = asked.get(lane);
+      if (mine && q !== undefined) out.waits.push({ at: e.ts, ms: e.ts - q });
+      asked.delete(lane);
+      approvals.delete(lane);
+    } else if (b.type === "run.pause" || b.type === "run.cancel" || b.type === "engine.detached" || b.type === "lane.cleared") {
+      asked.delete(lane);
+      approvals.delete(lane);
+    } else if (b.type === "lane.removed") {
+      asked.delete(b.laneId);
+      approvals.delete(b.laneId);
+    }
+  }
+  return out;
+}
+
+/** The middle of some numbers (the mean of the middle two when there is an even count), null of none. */
+export function median(xs: number[]): number | null {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = s.length >> 1;
+  return s.length % 2 ? s[mid]! : Math.round((s[mid - 1]! + s[mid]!) / 2);
+}
+
+/**
+ * The week over every session listed. Shipped counts sessions, as the foot's "6 shipped" always has: a session that shipped on
+ * two days is one of the week's and one of each day's. Runs and waits are counted each.
+ */
+export function weekStats(all: WeekFacts[], now = Date.now()): WeekStats {
+  /** How many whole days ago: 0 is the last 24 hours. Past the two weeks, or ahead of the clock: -1. */
+  const ago = (ts: number) => (ts > now ? -1 : Math.floor((now - ts) / DAY_MS));
+  const shipped = Array<number>(WEEK_BACK).fill(0);
+  const runs = Array<number>(WEEK_BACK).fill(0);
+  const waits: number[][] = Array.from({ length: WEEK_BACK }, () => []);
+  let sessions = 0;
+  let shippedNow = 0;
+  let shippedBefore = 0;
+  for (const f of all) {
+    if (f.createdAt >= now - 7 * DAY_MS) sessions++;
+    const on = new Set(f.ships.map(ago).filter((d) => d >= 0 && d < WEEK_BACK));
+    for (const d of on) shipped[d]!++;
+    if ([...on].some((d) => d < 7)) shippedNow++;
+    if ([...on].some((d) => d >= 7)) shippedBefore++;
+    for (const d of f.runs.map(ago)) if (d >= 0 && d < WEEK_BACK) runs[d]!++;
+    for (const w of f.waits) {
+      const d = ago(w.at);
+      if (d >= 0 && d < WEEK_BACK) waits[d]!.push(w.ms);
+    }
+  }
+  const sum = (xs: number[]) => xs.reduce((n, x) => n + x, 0);
+  // Oldest first, as a chart reads.
+  const week = <T,>(xs: T[]) => xs.slice(0, 7).reverse();
+  const answered = waits.slice(0, 7).flat();
+  return {
+    sessions,
+    shipped: shippedNow,
+    runs: sum(runs.slice(0, 7)),
+    days: { shipped: week(shipped), runs: week(runs), waited: week(waits).map(median) },
+    before: { shipped: shippedBefore, runs: sum(runs.slice(7)), waited: median(waits.slice(7).flat()) },
+    waited: median(answered),
+    answers: answered.length,
   };
 }
 

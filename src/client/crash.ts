@@ -54,28 +54,43 @@ function draw(error: unknown): void {
   if (!root) return;
   const e = error instanceof Error ? error : new Error(String(error));
   const loop = looping();
+  // The kit's card with its empty state's tile at the head: a 42px tile with the mark, the title 15/500/24, what happened in
+  // muted 13/20, the stack in a code well, and a 44px foot over a hairline, Copy the error at its start and the way out at its
+  // end, the primary last. Drawn with inline styles: the app's own components may be what failed, the stylesheet with them.
   const box = document.createElement("div");
   box.setAttribute("role", "alert");
   box.className = "crash-screen";
-  box.style.cssText = "box-sizing:border-box;max-width:560px;margin:15vh auto 0;padding:0 16px;font:14px/1.5 var(--font, system-ui);color:var(--ink, #ededed)";
+  box.style.cssText = "box-sizing:border-box;width:min(560px,calc(100% - 32px));margin:15vh auto 0;border-radius:10px;background:var(--card, #1f1f1f);box-shadow:var(--aui-shadow-card, 0 0 0 1px rgb(127 127 127 / .2));font:13px/20px var(--font, system-ui);color:var(--ink, #ededed);overflow:hidden;animation:ch-dialog-in .24s cubic-bezier(.22,1,.36,1) both";
+  const body = document.createElement("div");
+  body.style.cssText = "padding:20px 20px 16px";
+  const tile = document.createElement("div");
+  tile.setAttribute("aria-hidden", "true");
+  tile.style.cssText = "display:grid;place-items:center;width:42px;height:42px;border-radius:11px;margin-bottom:16px;background:color-mix(in srgb, var(--red, #ef5b5b) 12%, transparent);color:var(--red, #ef5b5b)";
+  tile.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/></svg>';
   const title = document.createElement("div");
   title.textContent = loop ? "Friday couldn't draw this screen again" : "Friday couldn't draw this screen";
-  title.style.cssText = "font-size:17px;font-weight:600;margin-bottom:8px;text-wrap:balance";
+  title.style.cssText = "font-size:15px;line-height:24px;font-weight:500;text-wrap:balance";
   const what = document.createElement("div");
   what.textContent = loop ? "It stopped again right after reloading. Go home to start from a clean page; your sessions are safe." : e.message || "Something went wrong.";
-  what.style.cssText = "color:var(--ink-2, #b5b5b5);margin-bottom:12px;overflow-wrap:anywhere";
+  what.style.cssText = "color:var(--text-muted, #929292);margin:4px 0 14px;overflow-wrap:anywhere";
   const stack = document.createElement("pre");
   // The stack's first line is the message, in Chromium; said once, above it, only where it isn't.
   const lines = (e.stack ?? "").split("\n").slice(0, 6);
   stack.textContent = [loop && !lines[0]?.includes(e.message) ? e.message : "", ...lines].filter(Boolean).join("\n");
-  stack.style.cssText = "white-space:pre-wrap;overflow-wrap:anywhere;font:11.5px/1.45 var(--mono, ui-monospace, monospace);color:var(--text-muted, #929292);background:rgb(127 127 127 / .08);border-radius:8px;padding:10px 12px;margin:0 0 16px;max-height:40vh;overflow:auto";
+  stack.style.cssText = "white-space:pre-wrap;overflow-wrap:anywhere;font:12px/18px var(--mono, ui-monospace, monospace);color:var(--text-muted, #929292);background:color-mix(in srgb, var(--ink, #ededed) 3%, transparent);box-shadow:inset 0 0 0 .5px var(--border-strong, rgb(127 127 127 / .3));border-radius:8px;padding:8px 12px;margin:0;max-height:40vh;overflow:auto";
   const row = document.createElement("div");
-  row.style.cssText = "display:flex;flex-wrap:wrap;gap:8px";
-  const button = (label: string, primary: boolean, act: () => void) => {
+  row.style.cssText = "display:flex;align-items:center;gap:8px;height:44px;box-sizing:border-box;padding:0 8px 0 12px;border-top:1px solid var(--border, rgb(127 127 127 / .2))";
+  const button = (label: string, kind: "primary" | "secondary" | "ghost", act: () => void) => {
     const b = document.createElement("button");
     b.type = "button";
     b.textContent = label;
-    b.style.cssText = `height:32px;padding:0 14px;border-radius:999px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;border:1px solid ${primary ? "transparent" : "var(--border-strong, rgb(127 127 127 / .35))"};background:${primary ? "var(--ink, #ededed)" : "transparent"};color:${primary ? "var(--bg, #191919)" : "var(--ink, #ededed)"}`;
+    const look =
+      kind === "primary"
+        ? "background:var(--accent, #ededed);color:var(--on-accent, #141414);box-shadow:none"
+        : kind === "secondary"
+          ? "background:var(--card, #1f1f1f);color:var(--ink, #ededed);box-shadow:0 0 0 .5px var(--border-strong, rgb(127 127 127 / .35)),0 1px 2px rgb(0 0 0 / .08)"
+          : "background:none;color:var(--text-muted, #929292);box-shadow:none;margin-right:auto";
+    b.style.cssText = `height:28px;padding:0 10px;border:0;border-radius:6px;font:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer;${look}`;
     b.onclick = act;
     return b;
   };
@@ -89,12 +104,12 @@ function draw(error: unknown): void {
   };
   const copy = () => void navigator.clipboard?.writeText(`${e.message}\n${e.stack ?? ""}`).catch(() => {});
   row.append(
-    ...(loop
-      ? [button("Go home", true, home), button("Reload", false, reload)]
-      : [button("Reload", true, reload), button("Go home", false, home)]),
-    button("Copy the error", false, copy),
+    button("Copy the error", "ghost", copy),
+    // The one to press ends the row: Reload the first time, Go home in a loop.
+    ...(loop ? [button("Reload", "secondary", reload), button("Go home", "primary", home)] : [button("Go home", "secondary", home), button("Reload", "primary", reload)]),
   );
-  box.append(title, what, stack, row);
+  body.append(tile, title, what, stack);
+  box.append(body, row);
   root.replaceChildren(box);
 }
 

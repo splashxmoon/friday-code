@@ -4,14 +4,16 @@ import type { SkillFolder } from "../skill-import.js";
 import { SKILL_CATALOG } from "../skill-catalog.js";
 import type { EngineTool } from "../types.js";
 import { Button } from "@/components/ui/button";
+import { Button as KitButton } from "@/components/affect/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { PageHeader } from "@/components/dass";
 import { api } from "./api.js";
+import { CustomizeSwitch, type CustomizeTab } from "./customize-switch.js";
 import { EngineMark, GitHubMark } from "./BrandMarks.js";
 import { Icon } from "./icons.js";
 import { hostApi } from "./local.js";
-import { MenuButton, relTime } from "./ui.js";
+import { MenuButton, agoWords } from "./ui.js";
 import type { Identity } from "./storage.js";
 import "./mcp-servers.css";
 import "./skills-page.css";
@@ -104,7 +106,7 @@ function putKey(key: string, push: boolean) {
 
 const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
-export function SkillsPage({ identity, onUse, tabs }: { identity: Identity; /** Customize's tabs, at the toolbar's left (App.tsx). */ tabs?: ReactNode; /** A new session, its box filled with this (App.tsx, as Code Review hands one over). */ onUse?: (brief: string) => void }) {
+export function SkillsPage({ identity, onUse, onTab }: { identity: Identity; /** Customize's other tab (App.tsx): the switch starts the header line. */ onTab?: (tab: CustomizeTab) => void; /** A new session, its box filled with this (App.tsx, as Code Review hands one over). */ onUse?: (brief: string) => void }) {
   const [lib, setLib] = useState<Library | null>(null);
   const [failed, setFailed] = useState("");
   const [view, setView] = useState<View>("mine");
@@ -242,29 +244,40 @@ export function SkillsPage({ identity, onUse, tabs }: { identity: Identity; /** 
       {n !== null && <span className="mdir-count">{n}</span>}
     </button>
   );
+  const shelfFilter = (sh: Shelf) => filter(sh.id, sh.label, sh.skills.filter((x) => matches(x, sh)).length, <ShelfMark shelf={sh} size={14} />);
   const total = mine.filter((s) => matches(s, null)).length + shelves.reduce((n, s) => n + s.skills.filter((x) => matches(x, s)).length, 0);
   const empty = view === "mine" && !mine.length && !needle && !!lib;
+  // Where skills come from, under small labels (the approved mock, 2026-11-27): each coding tool's, each plugin set's, each
+  // project's. Friday's own sit after All: they're no coding tool's.
+  const RAIL: { label: string; kinds: Shelf["kind"][] }[] = [
+    { label: "Coding tools", kinds: ["tool"] },
+    { label: "Plugins", kinds: ["plugins"] },
+    { label: "Projects", kinds: ["project"] },
+  ];
 
   return (
     <div className="page conns-page msv-page skl-page px-6! max-[640px]:px-4!">
       <div className="page-inner">
         <PageHeader title="Skills" />
-        {tabs && <div className="customize-bar">{tabs}</div>}
         <div className="msv">
           <section className="mdir" aria-label="Skills">
+            {/* One line (the approved mock, 2026-11-27): Customize's switch, the search with its / key, then Import and New skill, the
+                white one at the right end. */}
             <div className="mdir-head skl-head">
+              {onTab && <CustomizeSwitch tab="skills" onTab={onTab} count={lib ? mine.length + shelves.reduce((n, sh) => n + sh.skills.length, 0) : undefined} />}
               <label className="mdir-search skl-search">
                 <Icon name="search" size={14} />
                 <input ref={search} type="search" placeholder="Search skills" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search skills" />
-                {!q && <kbd className="skl-kbd">/</kbd>}
+                {!q && <kbd className="mdir-kbd">/</kbd>}
               </label>
+              <span className="mdir-grow" />
               <div className="mdir-head-acts">
-                <Button type="button" variant="outline" size="sm" className="mdir-custom-btn" onClick={() => setImporting(true)}>
-                  <GitHubMark size={13} /> Import
-                </Button>
-                <Button type="button" size="sm" className="mdir-custom-btn" onClick={() => setCreating(true)} title="New skill (N)">
-                  <Icon name="plus" size={14} /> New skill
-                </Button>
+                <KitButton type="button" variant="secondary" icon={<Icon name="download" size={14} />} onClick={() => setImporting(true)}>
+                  Import
+                </KitButton>
+                <KitButton type="button" variant="primary" icon={<Icon name="plus" size={14} />} onClick={() => setCreating(true)} title="New skill (N)">
+                  New skill
+                </KitButton>
               </div>
             </div>
             {said && (
@@ -274,13 +287,16 @@ export function SkillsPage({ identity, onUse, tabs }: { identity: Identity; /** 
             )}
             <div className={`skl-shell${open ? " has-open" : ""}${empty ? " no-detail" : ""}`}>
               <nav className="mdir-filters" aria-label="Where skills are">
-                {filter("mine", "Your skills", mine.filter((s) => matches(s, null)).length, <Icon name="book" size={14} />)}
+                {filter("mine", "Your skills", mine.filter((s) => matches(s, null)).length, <Icon name="user" size={14} />)}
                 {shelves.length > 0 && filter("all", "All", total, <Icon name="grid" size={14} />)}
-                {shelves.length > 0 && <span className="mdir-sep" aria-hidden="true" />}
-                {shelves.map((s) => filter(s.id, s.label, s.skills.filter((x) => matches(x, s)).length, <ShelfMark shelf={s} size={14} />))}
+                {shelves.filter((sh) => sh.kind === "friday").map(shelfFilter)}
+                {RAIL.map((g) => {
+                  const here = shelves.filter((sh) => g.kinds.includes(sh.kind));
+                  return here.length ? [<span key={g.label} className="mdir-rail-label">{g.label}</span>, ...here.map(shelfFilter)] : null;
+                })}
               </nav>
               {empty ? (
-                <EmptyMine onNew={() => setCreating(true)} onImport={() => setImporting(true)} shelf={shelves.find((s) => s.kind !== "friday") ?? null} onShelf={(id) => setView(id)} />
+                <EmptyMine onNew={() => setCreating(true)} onImport={() => setImporting(true)} />
               ) : (
                 <>
                   <div className="skl-listcol" ref={listRef}>
@@ -376,7 +392,6 @@ export function SkillsPage({ identity, onUse, tabs }: { identity: Identity; /** 
                                         ) : (
                                           row.files > 0 && (
                                             <span className="skl-files" title={`${row.files} file${row.files === 1 ? "" : "s"} beside its SKILL.md`}>
-                                              <Icon name="file" size={12} />
                                               {row.files} file{row.files === 1 ? "" : "s"}
                                             </span>
                                           )
@@ -442,27 +457,23 @@ export function SkillsPage({ identity, onUse, tabs }: { identity: Identity; /** 
   );
 }
 
-/** None of your own yet: what a skill is, and the ways to have one. */
-function EmptyMine({ onNew, onImport, shelf, onShelf }: { onNew: () => void; onImport: () => void; shelf: Shelf | null; onShelf: (id: string) => void }) {
+/**
+ * None of your own yet: what a skill is, and the two ways to have one, in the approved mock's empty box (2026-11-27). Another
+ * tool's skills are a press away on the rail, so the box no longer offers to copy from one.
+ */
+function EmptyMine({ onNew, onImport }: { onNew: () => void; onImport: () => void }) {
   return (
     <div className="skl-empty">
-      <span className="skl-empty-mark" aria-hidden="true">
-        <Icon name="book" size={20} />
-      </span>
-      <b>Write a skill once, and every agent has it</b>
-      <p>A skill is how to do one kind of task: how you review a pull request, ship a release, or write a migration. Every coding tool and crew mate reads it when a task matches what it says it's for.</p>
+      <Icon name="book" size={28} strokeWidth={1.2} />
+      <b>No skills of your own yet</b>
+      <p>A skill is a set of instructions every coding tool here can use. Write one, or bring one in from a GitHub repository.</p>
       <span className="skl-empty-acts">
-        <Button type="button" size="sm" onClick={onNew}>
-          <Icon name="plus" size={14} /> New skill
-        </Button>
-        <Button type="button" variant="outline" size="sm" onClick={onImport}>
-          <GitHubMark size={13} /> Import from GitHub
-        </Button>
-        {shelf && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => onShelf(shelf.id)}>
-            Copy from {shelf.label}
-          </Button>
-        )}
+        <KitButton type="button" size="sm" variant="secondary" onClick={onImport}>
+          Import
+        </KitButton>
+        <KitButton type="button" size="sm" variant="primary" onClick={onNew}>
+          New skill
+        </KitButton>
       </span>
     </div>
   );
@@ -555,7 +566,7 @@ function SkillDetail({ identity, item, have, onBack, onOpenMine, onChanged, onUs
   const jump = (i: number) => md.current?.querySelectorAll("h2, h3")[i]?.scrollIntoView({ block: "start", behavior: "smooth" });
   const whose = item.shelf ? (item.shelf.kind === "project" ? `${item.shelf.label}'s project skill` : `${item.shelf.label}'s${item.row.from ? `, ${FROM[item.row.from].toLowerCase()}` : ""}`) : "Yours, for every tool";
   const files = read?.files.length ?? item.row.files;
-  const facts = [whose, files ? `${files} file${files === 1 ? "" : "s"}` : "", item.row.updated ? `changed ${relTime(item.row.updated)}${/^(now|just)/.test(relTime(item.row.updated)) ? "" : " ago"}` : "", words ? `${words.toLocaleString()} word${words === 1 ? "" : "s"}` : ""].filter(Boolean);
+  const facts = [whose, files ? `${files} file${files === 1 ? "" : "s"}` : "", item.row.updated ? `changed ${agoWords(item.row.updated)}` : "", words ? `${words.toLocaleString()} word${words === 1 ? "" : "s"}` : ""].filter(Boolean);
   const brief = `Use the ${name} skill (${item.row.dir}/SKILL.md): `;
   // A tool's own or a project's (Arun, 2026-11-20: "also allow for deleting of skills too"); not one that comes with its tool, a
   // plugin's, a synced set's or a managed one, which are theirs (skill-library.ts removeAt).
@@ -576,23 +587,24 @@ function SkillDetail({ identity, item, have, onBack, onOpenMine, onChanged, onUs
         </div>
         <div className="skl-head2-acts">
           {onUse && (
-            <Button type="button" size="sm" onClick={() => onUse(brief)} title="Start a session with this skill">
-              <Icon name="play" size={12} /> Use it
-            </Button>
+            <KitButton type="button" size="sm" variant="secondary" icon={<Icon name="play" size={12} />} onClick={() => onUse(brief)} title="Start a session with this skill">
+              Use it
+            </KitButton>
           )}
           {mine ? (
-            <Button type="button" variant="outline" size="sm" disabled={!read} onClick={() => setEditing(true)}>
-              <Icon name="pencil" size={13} /> Edit
-            </Button>
+            <KitButton type="button" size="sm" variant="secondary" icon={<Icon name="pencil" size={13} />} disabled={!read} onClick={() => setEditing(true)}>
+              Edit
+            </KitButton>
           ) : have ? (
-            <Button type="button" variant="outline" size="sm" onClick={onOpenMine}>
+            <KitButton type="button" size="sm" variant="secondary" onClick={onOpenMine}>
               Open yours
-            </Button>
+            </KitButton>
           ) : ours ? null : (
-            <Button
+            <KitButton
               type="button"
-              variant="outline"
               size="sm"
+              variant="secondary"
+              icon={<Icon name="copy" size={13} />}
               disabled={busy}
               onClick={() =>
                 void act(async () => {
@@ -601,12 +613,13 @@ function SkillDetail({ identity, item, have, onBack, onOpenMine, onChanged, onUs
                 })
               }
             >
-              <Icon name="copy" size={13} /> {busy ? "Copying…" : "Copy to your skills"}
-            </Button>
+              {busy ? "Copying…" : "Copy to your skills"}
+            </KitButton>
           )}
           <MenuButton
             label={`More for ${name}`}
             end
+            className="skl-more-btn"
             items={() => [
               { label: `Copy /${item.row.folder}`, sub: "What you type to call it in Claude Code", icon: "terminal", onSelect: () => copy(`/${item.row.folder}`, "call") },
               { label: "Copy where it is", sub: tildePath(item.row.dir), icon: "folder", onSelect: () => copy(item.row.dir, "path") },
@@ -699,15 +712,13 @@ function SkillDetail({ identity, item, have, onBack, onOpenMine, onChanged, onUs
           {err}
         </p>
       )}
-      <div className="skl-tabbar">
-        <div className="msv-seg skl-tabs" role="tablist" aria-label="What to show">
-          <button type="button" role="tab" aria-selected={tab === "text"} onClick={() => (setTab("text"), setFile(null))}>
-            Instructions
-          </button>
-          <button type="button" role="tab" aria-selected={tab === "files"} onClick={() => setTab("files")}>
-            Files <span className="mdir-count">{files}</span>
-          </button>
-        </div>
+      <div className="skl-tabs" role="tablist" aria-label="What to show">
+        <button type="button" role="tab" aria-selected={tab === "text"} onClick={() => (setTab("text"), setFile(null))}>
+          Instructions
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "files"} onClick={() => setTab("files")}>
+          Files <span className="mdir-count">{files}</span>
+        </button>
       </div>
       {!read ? (
         !err && <p className="mdir-state">Reading it…</p>
@@ -736,19 +747,30 @@ function SkillDetail({ identity, item, have, onBack, onOpenMine, onChanged, onUs
           {file.text ? <pre>{file.text}</pre> : <p className="mdir-empty">Not text: open it in its folder.</p>}
           {file.cut && file.text && <p className="mdir-note">The first 200 KB.</p>}
         </div>
-      ) : read.files.length ? (
-        <ul className="skl-filelist">
-          {read.files.map((f) => (
-            <li key={f}>
-              <button type="button" onClick={() => void openFile(f)}>
-                <Icon name={/\.(py|sh|js|mjs|cjs|ts|rb|ps1)$/i.test(f) ? "code" : "file"} size={13} />
-                <span>{f}</span>
+      ) : (
+        // Its SKILL.md first (the Instructions tab, with how long it is), then each file beside it, as rows of one card.
+        <>
+          <ul className="skl-filelist">
+            <li>
+              <button type="button" onClick={() => setTab("text")}>
+                <Icon name="file" size={14} />
+                <span>SKILL.md</span>
+                <em>
+                  {words.toLocaleString()} word{words === 1 ? "" : "s"}
+                </em>
               </button>
             </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mdir-empty">Just its SKILL.md. Scripts and references it needs go in its folder beside it.</p>
+            {read.files.map((f) => (
+              <li key={f}>
+                <button type="button" onClick={() => void openFile(f)}>
+                  <Icon name={/\.(py|sh|js|mjs|cjs|ts|rb|ps1)$/i.test(f) ? "code" : "file"} size={14} />
+                  <span>{f}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {!read.files.length && <p className="mdir-empty">Just its SKILL.md. Scripts and references it needs go in its folder beside it.</p>}
+        </>
       )}
     </div>
   );

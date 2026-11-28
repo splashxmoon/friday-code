@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -107,6 +107,24 @@ test("Apply where both changed the same lines leaves conflict markers and says w
   assert.equal(g("diff", "--cached", "--name-only"), "", "nothing staged, conflict included");
 });
 
+test("an Apply that fails part way puts back everything it already wrote: no conflict markers left behind (Arun, 2026-11-28)", { skip: process.platform === "win32" || process.getuid?.() === 0 }, async (t) => {
+  const { dir, g, done } = await repo();
+  t.after(async () => (await chmod(path.join(dir, "zz"), 0o755).catch(() => {}), await done()));
+  const copy = await addWorktree(dir, "codex", true);
+  t.after(() => dropWorktree(copy.path).then(() => {}));
+  const base = (await sessionBase(copy.path, "s4/copy"))!;
+  // Both change app.txt (a merge with markers, written first), then a file in a folder that can't be written to (it throws).
+  await writeFile(path.join(copy.path, "app.txt"), "a\nagent\nc\n");
+  await mkdir(path.join(copy.path, "zz"), { recursive: true });
+  await writeFile(path.join(copy.path, "zz", "new.txt"), "new\n");
+  await writeFile(path.join(dir, "app.txt"), "a\nperson\nc\n");
+  await mkdir(path.join(dir, "zz"), { recursive: true });
+  await chmod(path.join(dir, "zz"), 0o555);
+  await assert.rejects(applyCopy(copy.path, base, dir));
+  assert.equal(await readFile(path.join(dir, "app.txt"), "utf8"), "a\nperson\nc\n", "the person's file is as it was, no markers");
+  assert.equal(g("diff", "--cached", "--name-only"), "", "nothing staged");
+});
+
 test("on a Windows-style checkout (autocrlf on) the files a commit recorded stop showing as changed", async (t) => {
   const { dir, g, done } = await repo();
   t.after(done);
@@ -124,4 +142,40 @@ test("on a Windows-style checkout (autocrlf on) the files a commit recorded stop
   const next = await baseAfterCommit(dir, base, `${c.sha}^`, c.sha);
   assert.deepEqual(await diffTrees(dir, next), [], "committed is committed, whatever the line endings");
   assert.deepEqual(await diffTrees(dir, "HEAD"), [], "and measured against HEAD, the same");
+});
+
+test("Apply brings folders over as git sees them: a new folder made, a deleted one gone, a file turned folder and a folder turned file, never a folder read as a file", async (t) => {
+  const { dir, g, done } = await repo();
+  t.after(done);
+  await mkdir(path.join(dir, "olddir", "sub"), { recursive: true });
+  await writeFile(path.join(dir, "olddir", "x.txt"), "x\n");
+  await writeFile(path.join(dir, "olddir", "sub", "y.txt"), "y\n");
+  await writeFile(path.join(dir, "thing"), "a file for now\n");
+  await mkdir(path.join(dir, "folder2"));
+  await writeFile(path.join(dir, "folder2", "z.txt"), "z\n");
+  g("add", "-A");
+  g("commit", "-qm", "folders");
+  const copy = await addWorktree(dir, "coder", true);
+  t.after(() => dropWorktree(copy.path).then(() => {}));
+  const base = (await sessionBase(copy.path, "s9/copy"))!;
+  const c = (...p: string[]) => path.join(copy.path, ...p);
+  await mkdir(c("newdir", "deep"), { recursive: true });
+  await writeFile(c("newdir", "deep", "a.txt"), "new\n");
+  await rm(c("olddir"), { recursive: true });
+  await rm(c("thing"));
+  await mkdir(c("thing"));
+  await writeFile(c("thing", "inner.txt"), "now a folder\n");
+  await rm(c("folder2"), { recursive: true });
+  await writeFile(c("folder2"), "now a file\n");
+  // Both changed the same lines of one file: the one-patch way can't apply, so each path is brought over on its own.
+  await writeFile(c("app.txt"), "a\nagent\nc\n");
+  await writeFile(path.join(dir, "app.txt"), "a\nperson\nc\n");
+
+  const r = await applyCopy(copy.path, base, dir);
+  assert.deepEqual(r.conflicts, ["app.txt"]);
+  assert.equal(await readFile(path.join(dir, "newdir", "deep", "a.txt"), "utf8"), "new\n");
+  await assert.rejects(stat(path.join(dir, "olddir")), "the deleted folder is gone, empty folders too");
+  assert.equal(await readFile(path.join(dir, "thing", "inner.txt"), "utf8"), "now a folder\n");
+  assert.equal(await readFile(path.join(dir, "folder2"), "utf8"), "now a file\n");
+  assert.equal(await readFile(path.join(dir, "mine.txt"), "utf8"), "one\n");
 });

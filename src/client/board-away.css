@@ -1,0 +1,22 @@
+/* While you were away (BoardAway.tsx): the Agent Board mock's "What happened while you were gone", after the shared kit's Away
+   Summary. A card on the ring shadow, radius 10, padding 12 14, 8 between its parts: a 13/500 head with how long in 12px faint at
+   its far end, a short list in 12/20 muted with each count in ink at 500, and two 26px buttons, the main one first. */
+.bd-away {
+  --bda-ring: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .05);
+  display: grid; gap: 8px; min-width: 0; margin-top: 4px; padding: 12px 14px; border-radius: 10px; background: var(--card); box-shadow: var(--bda-ring);
+  animation: bda-in .28s cubic-bezier(.22, 1, .36, 1);
+}
+.dark .bd-away { --bda-ring: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .4); }
+html.glass .bd-away { background: var(--glass-float); box-shadow: inset 0 1px 0 var(--glass-hi), var(--bda-ring); }
+@keyframes bda-in { from { opacity: 0; transform: translateY(-4px); } }
+.bd-away-h { display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0; color: var(--ink); font: 500 13px/20px var(--font); }
+.bd-away-h span { margin-left: auto; flex: none; color: var(--faint); font-weight: 400; font-size: 12px; white-space: nowrap; }
+/* The app's reset takes a list's bullets; this one is a list of three things and reads as one with them. */
+.bd-away ul { display: block; margin: 0; padding-left: 16px; list-style: disc outside; }
+.bd-away li::marker { color: var(--faint); }
+.bd-away li { min-width: 0; color: var(--text-muted); font: 400 12px/20px var(--font); overflow-wrap: anywhere; }
+.bd-away li b { color: var(--ink); font-weight: 500; }
+.bd-away-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.bd-away-acts .ui-buttonc { --h: 26px; --px: 9px; }
+@media (prefers-reduced-motion: reduce) { .bd-away { animation: none; } }
+html.reduce-motion .bd-away { animation: none; }

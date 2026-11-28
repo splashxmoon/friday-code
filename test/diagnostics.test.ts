@@ -187,7 +187,9 @@ test("Copy diagnostics: this computer's own page only, redacted, with the versio
   const friday = await startLocal({ home, port: 0 });
   t.after(() => friday.close());
 
-  const r = await fetch(`${friday.url}/api/local/diagnostics`);
+  // As Friday's own page asks: with this install's key (local-key.ts).
+  const key = { "x-friday-key": friday.key };
+  const r = await fetch(`${friday.url}/api/local/diagnostics`, { headers: key });
   assert.equal(r.status, 200);
   const b = (await r.json()) as { text: string; logFile: string };
   assert.equal(b.logFile, logPath(home), "the page gets the real place, to show it");
@@ -201,7 +203,7 @@ test("Copy diagnostics: this computer's own page only, redacted, with the versio
   assert.ok(!b.text.includes(planted), "the planted token is gone");
   assert.ok(!b.text.includes(fakeHome), "the home folder never appears as it is");
 
-  const where = (await (await fetch(`${friday.url}/api/local/diagnostics?path=1`)).json()) as { logFile: string; exists: boolean };
+  const where = (await (await fetch(`${friday.url}/api/local/diagnostics?path=1`, { headers: key })).json()) as { logFile: string; exists: boolean };
   assert.deepEqual(where, { logFile: logPath(home), shown: ["~", ".friday", "diagnostics", "friday.log"].join(path.sep), exists: true });
 
   // Another site's page, or a name that only resolves here (DNS rebinding): refused before anything is read.
@@ -216,7 +218,7 @@ test("Copy diagnostics: this computer's own page only, redacted, with the versio
     });
   });
   assert.equal(rebound, 403);
-  assert.equal((await fetch(`${friday.url}/api/local/diagnostics`, { method: "POST" })).status, 405);
+  assert.equal((await fetch(`${friday.url}/api/local/diagnostics`, { method: "POST", headers: key })).status, 405);
   assert.ok(existsSync(logPath(home)));
 });
 

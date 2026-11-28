@@ -53,14 +53,15 @@ export function BisectCard({ culprit: c }: { culprit: Culprit }) {
       )}
       {c.check && <div className="bsc-check">Found with <code>{c.check}</code></div>}
       <div className="bsc-acts">
+        {/* Quietest first, the main one ending the row on the right (the kit's footers). */}
+        {asked && <span className="bsc-said" role="status">{asked}</span>}
+        <button type="button" className="bsc-btn" onClick={() => send(revertText(c), "Asked for a revert")} title="Prepares a revert commit. Nothing is pushed.">Revert it</button>
+        <button type="button" className={`bsc-btn${inIde ? "" : " on"}`} onClick={() => send(fixForwardText(c), "Asked for a fix")}>Fix it</button>
         {inIde && (
           <button type="button" className="bsc-btn on" onClick={() => window.dispatchEvent(new CustomEvent("friday:vsc-command", { detail: { name: "openCommit", arg: c.commit } }))}>
             Open the change
           </button>
         )}
-        <button type="button" className={`bsc-btn${inIde ? "" : " on"}`} onClick={() => send(fixForwardText(c), "Asked for a fix")}>Fix it</button>
-        <button type="button" className="bsc-btn" onClick={() => send(revertText(c), "Asked for a revert")} title="Prepares a revert commit. Nothing is pushed.">Revert it</button>
-        {asked && <span className="bsc-said" role="status">{asked}</span>}
       </div>
     </div>
   );

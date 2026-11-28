@@ -1,0 +1,176 @@
+/* The project overview (ProjectOverview.tsx): a page in the window, every thread of the project as the kit's Agent Tree on a map
+   you drag and zoom. Measured from affectUI's previews and drawn in Friday's tokens: cards radius 8 on the ring shadow, 13/500
+   names over 11px models, 18px chips on a tint of their state, connectors in the border colour. */
+.pov-page {
+  --pov-ring: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .05);
+  --pov-ring-up: 0 0 0 .5px var(--border-hover), 0 2px 6px -2px rgb(0 0 0 / .14);
+  --pov-link: var(--border-strong);
+  --pov-sheet: cubic-bezier(.32, .72, .24, 1);
+  display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; background: var(--bg); color: var(--ink); font: 400 13px/20px var(--font, inherit);
+}
+.dark .pov-page { --pov-ring: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .4); --pov-ring-up: 0 0 0 .5px var(--border-hover), 0 2px 8px -2px rgb(0 0 0 / .6); }
+
+.pov-bar { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 12px 0 10px; border-bottom: 1px solid var(--border); }
+/* In the desktop app the bar is the window's band (Arun, 2026-11-27: "move this to the header"), so the map starts under the
+   window's own line, level with the sidebar's. */
+.pov-page.in-band { grid-template-rows: minmax(0, 1fr); }
+.pov-head, .pov-tools { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pov-head { flex: 1; overflow: hidden; }
+.pov-tools { flex: none; gap: 8px; }
+:is(#band-left, #band-slot) :is(.pov-head, .pov-tools) :is(button, a, input, label) { -webkit-app-region: no-drag; }
+.pov-find { display: inline-flex; align-items: center; gap: 6px; width: 220px; height: 28px; padding: 0 6px 0 9px; border-radius: 7px; background: var(--card); box-shadow: var(--pov-ring, 0 0 0 .5px var(--border-strong)); color: var(--faint); }
+.pov-find input { flex: 1; min-width: 0; height: 26px; border: 0; background: none; color: var(--ink); font: inherit; font-size: 12.5px; outline: none; }
+.pov-find input::placeholder { color: var(--faint); }
+.pov-find:focus-within { box-shadow: 0 0 0 1px var(--border-focus, var(--ink-2)); }
+.pov-find kbd, .pov-find em { flex: none; min-width: 18px; height: 18px; display: grid; place-items: center; padding: 0 4px; border-radius: 4px; font: 500 11px var(--font, inherit); font-style: normal; color: var(--faint); box-shadow: inset 0 0 0 1px var(--border-strong); font-variant-numeric: tabular-nums; }
+@media (max-width: 1100px) { .pov-find { width: 196px; } }
+.pov-back { display: inline-flex; flex: none; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 8px; border: 0; border-radius: 6px; background: none; color: var(--text-muted); font: inherit; font-size: 13px; cursor: pointer; }
+.pov-back:hover { background: var(--hover); color: var(--ink); }
+.pov-ttl { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; font-weight: 500; white-space: nowrap; }
+.pov-tile { display: grid; place-items: center; width: 20px; height: 20px; flex: none; border-radius: 6px; background: var(--hover-strong); color: var(--ink); font-size: 11px; font-weight: 600; }
+.pov-sum { display: flex; align-items: center; gap: 10px; min-width: 0; margin-left: 4px; font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; }
+.pov-run { color: var(--live); }
+.pov-grow { flex: 1; }
+.pov-seg { display: inline-flex; flex: none; padding: 2px; border-radius: 7px; background: var(--hover); }
+.pov-seg button { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border: 0; border-radius: 5px; background: none; color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.pov-seg button.on { background: var(--card); color: var(--ink); box-shadow: var(--pov-ring); }
+.pov-seg em { font-style: normal; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+/* The map: a dotted ground you drag; the world on it moved and scaled as one. */
+.pov-stage { position: relative; overflow: hidden; cursor: grab; touch-action: none; outline: none; user-select: none;
+  background-color: var(--bg); background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ink) 11%, transparent) 1px, transparent 1.2px); background-size: 22px 22px; }
+.pov-stage.grabbing { cursor: grabbing; }
+.pov-world { position: absolute; left: 0; top: 0; display: grid; gap: 64px 72px; align-items: start; padding: 8px; transform-origin: 0 0; }
+/* No will-change: it kept the map as one picture drawn at the zoom it had, so text went soft after a zoom or on a half pixel (Arun,
+   2026-11-27: "this gets randomly blurrly too"); the world is moved to whole pixels and redrawn sharp at each scale. */
+.pov-cluster { position: relative; display: flex; flex-direction: column; align-items: center; gap: 28px; padding: 18px 34px 22px; border-radius: 16px; transition: opacity .25s ease, background-color .2s ease; }
+.pov-cluster:hover { background: color-mix(in srgb, var(--ink) 2.5%, transparent); }
+.pov-cluster.here { background: color-mix(in srgb, var(--ink) 3.5%, transparent); box-shadow: inset 0 0 0 1px var(--border); }
+.pov-cluster.dim { opacity: .3; }
+.pov-cluster.pov-skel { width: 260px; height: 220px; background: var(--hover); animation: pov-pulse 1.2s ease-in-out infinite alternate; }
+
+/* Glyphs and chips: the live spinner for work, a dot for the rest. */
+.pov-spin { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%; border: 1.3px solid color-mix(in srgb, currentColor 25%, transparent); border-top-color: currentColor; animation: pov-turn .9s linear infinite; }
+.pov-chip { display: inline-flex; flex: none; align-items: center; gap: 4px; height: 18px; padding: 0 6px 0 5px; border-radius: 5px; background: var(--hover); color: var(--text-muted); font-size: 11px; font-weight: 500; line-height: 16px; white-space: nowrap; }
+.pov-chip .pov-dot { width: 6px; height: 6px; border-radius: 2px; background: currentColor; }
+.pov-chip.is-work { background: color-mix(in srgb, var(--live) 12%, transparent); color: var(--live); }
+.pov-chip.is-need { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--amber); }
+.pov-chip.is-done { background: color-mix(in srgb, var(--green) 13%, transparent); color: var(--green); }
+.pov-chip.is-fail { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
+
+/* A tree: levels centred under the thread, each agent's subagents hanging below it, connectors drawn under the cards. */
+.pov-links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.pov-links path { fill: none; stroke: var(--pov-link); stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 2000; stroke-dashoffset: 2000; animation: pov-draw .6s var(--pov-sheet) .05s forwards; }
+.pov-links circle { fill: var(--bg); stroke: var(--pov-link); stroke-width: 1.5; }
+.pov-lvl { display: flex; justify-content: center; align-items: flex-start; gap: 16px; }
+.pov-col { display: flex; flex-direction: column; align-items: flex-start; }
+/* Hung below its agent, indented, without widening the agent's column: the line from the thread meets the agent's middle. */
+.pov-hang { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; margin-right: -28px; padding-left: 28px; }
+.pov-tn { position: relative; z-index: 1; display: grid; gap: 6px; width: 216px; padding: 10px 10px 8px; border-radius: 8px; background: var(--card); box-shadow: var(--pov-ring); cursor: pointer; outline: none; transition: box-shadow .2s ease; animation: pov-rise .36s var(--pov-sheet) both; animation-delay: calc(min(var(--i, 0), 12) * 40ms); }
+.pov-tn.root { width: 232px; }
+.pov-tn:hover, .pov-tn:focus-visible { box-shadow: var(--pov-ring-up); }
+.pov-tn:focus-visible { box-shadow: var(--pov-ring-up), 0 0 0 2px var(--border-focus, var(--ink-2)); }
+.pov-tn.is-need { box-shadow: var(--pov-ring), 0 0 0 1px color-mix(in srgb, var(--amber) 40%, transparent); }
+.pov-tn.pov-sub.is-done, .pov-tn.pov-sub.is-idle { opacity: .8; }
+.pov-tn-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pov-av { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: 6px; background: var(--card); box-shadow: var(--pov-ring); color: var(--text-muted); }
+.pov-who { display: grid; flex: 1; min-width: 0; }
+.pov-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 16px; }
+.pov-who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 14px; color: var(--faint); }
+.pov-task { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; padding: 0 2px; font-size: 12px; line-height: 16px; color: var(--text-muted); overflow-wrap: anywhere; }
+.pov-shine { background: linear-gradient(90deg, var(--text-muted) 0 38%, var(--ink) 50%, var(--text-muted) 62% 100%); background-size: 240% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: pov-shine 1.8s linear infinite; }
+.pov-meta { display: flex; align-items: center; gap: 5px; min-height: 20px; font-size: 11px; line-height: 16px; color: var(--faint); font-variant-numeric: tabular-nums; }
+/* A thread's change and pull request, and when it last did anything; an agent's plan as a strip of steps. */
+.pov-facts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11.5px; line-height: 16px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.pov-plus { color: var(--green); font-weight: 500; } .pov-minus { color: var(--red); font-weight: 500; }
+.pov-pr { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px 0 5px; border-radius: 5px; background: var(--hover); color: var(--text-muted); font-size: 11px; font-weight: 500; text-decoration: none; }
+.pov-pr:hover { color: var(--ink); }
+.pov-pr.merged { background: color-mix(in srgb, var(--green) 13%, transparent); color: var(--green); }
+.pov-ago { margin-left: auto; }
+.pov-plan { display: flex; gap: 2px; padding: 0 2px; }
+.pov-plan i { flex: 1; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.pov-plan i.done { background: color-mix(in srgb, var(--ink) 38%, transparent); }
+.pov-plan i.now { background: color-mix(in srgb, var(--live) 45%, transparent); }
+.pov-fold { display: inline-flex; align-items: center; gap: 2px; height: 20px; margin-left: auto; padding: 0 4px 0 6px; border: 0; border-radius: 5px; background: none; color: var(--faint); font: inherit; font-size: 11px; font-weight: 500; cursor: pointer; }
+.pov-fold:hover { background: var(--hover); color: var(--ink); }
+.pov-act { height: 20px; margin-left: auto; padding: 0 7px; border: 0; border-radius: 5px; background: var(--card); box-shadow: var(--pov-ring); color: var(--ink); font: inherit; font-size: 11px; font-weight: 500; cursor: pointer; }
+.pov-act:hover { background: var(--hover); }
+.pov-empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 6px; color: var(--faint); text-align: center; pointer-events: none; }
+.pov-empty b { color: var(--ink); font-weight: 500; }
+.pov-empty span { font-size: 12px; color: var(--text-muted); }
+
+/* The minimap and the zoom, floating on the map's corners, and a line on how to move. */
+.pov-mini { position: absolute; right: 16px; bottom: 16px; z-index: 2; border-radius: 8px; background: var(--card); box-shadow: var(--pov-ring-up); overflow: hidden; cursor: pointer; }
+.pov-mini-b { position: absolute; border-radius: 2px; background: color-mix(in srgb, var(--ink) 16%, transparent); }
+.pov-mini-b.is-work { background: color-mix(in srgb, var(--live) 55%, transparent); }
+.pov-mini-b.is-need { background: color-mix(in srgb, var(--amber) 65%, transparent); }
+.pov-mini-b.is-fail { background: color-mix(in srgb, var(--red) 55%, transparent); }
+.pov-mini-b.is-dim { opacity: .35; }
+.pov-mini-v { position: absolute; border-radius: 3px; box-shadow: inset 0 0 0 1.5px var(--ink-2); background: color-mix(in srgb, var(--ink) 4%, transparent); pointer-events: none; }
+.pov-tray { position: absolute; left: 16px; top: 14px; z-index: 2; display: inline-flex; gap: 6px; }
+.pov-tray button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 8px; border: 0; border-radius: 7px; background: var(--card); box-shadow: var(--pov-ring-up); color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.pov-tray button:hover { color: var(--ink); }
+.pov-tray button[aria-pressed="true"] { color: var(--ink); background: var(--hover-strong); }
+.pov-zoom { position: absolute; left: 16px; bottom: 16px; z-index: 2; display: inline-flex; align-items: center; padding: 2px; border-radius: 8px; background: var(--card); box-shadow: var(--pov-ring-up); }
+.pov-zoom button { display: grid; place-items: center; min-width: 28px; height: 26px; padding: 0 6px; border: 0; border-radius: 6px; background: none; color: var(--text-muted); font: inherit; font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.pov-zoom button:hover { background: var(--hover); color: var(--ink); }
+.pov-zoom .pov-zoom-n { min-width: 46px; }
+.pov-hint { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); color: var(--faint); font-size: 12px; white-space: nowrap; pointer-events: none; }
+
+@media (max-width: 760px) { .pov-sum, .pov-hint, .pov-mini { display: none; } }
+
+@keyframes pov-rise { from { opacity: 0; transform: translateY(6px); } }
+@keyframes pov-draw { to { stroke-dashoffset: 0; } }
+@keyframes pov-turn { to { transform: rotate(360deg); } }
+@keyframes pov-shine { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+@keyframes pov-pulse { to { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) {
+  .pov-tn, .pov-cluster { animation: none; transition: none; }
+  .pov-links path { animation: none; stroke-dashoffset: 0; }
+  .pov-spin, .pov-shine { animation: none; }
+}
+
+
+/* ── The status bar at the map's foot (Arun, 2026-11-27: "get rid of this in the header and add it to the bottom row here"): the
+   zoom, the project's totals, and the map's own controls; the minimap floats just above it. */
+.pov-page { grid-template-rows: auto minmax(0, 1fr) auto; }
+.pov-page.in-band { grid-template-rows: minmax(0, 1fr) auto; }
+.pov-status { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 12px; border-top: 1px solid var(--border); background: var(--bg); }
+.pov-status .pov-zoom { position: static; box-shadow: none; background: var(--hover); }
+.pov-status .pov-sum { flex: 1; justify-content: center; margin: 0; gap: 14px; }
+.pov-status .pov-sum > span + span::before { content: ""; display: inline-block; width: 3px; height: 3px; margin: 0 10px 0 -4px; border-radius: 50%; background: var(--faint); vertical-align: middle; }
+.pov-status-r { display: flex; align-items: center; gap: 8px; }
+.pov-tog { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border: 0; border-radius: 6px; background: var(--hover); color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.pov-tog i { width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--faint); }
+.pov-tog i.on { background: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 22%, transparent); }
+.pov-tog[aria-pressed="true"] { color: var(--ink); }
+.pov-status .pov-x { width: 26px; height: 26px; border: 0; border-radius: 6px; background: var(--hover); color: var(--text-muted); font: 500 12px var(--font, inherit); cursor: pointer; }
+.pov-status .pov-x[aria-pressed="true"] { color: var(--ink); background: var(--hover-strong); }
+.pov-mini { bottom: 12px; }
+.pov-new { display: inline-flex; flex: none; align-items: center; gap: 5px; height: 26px; padding: 0 10px 0 8px; border: 0; border-radius: 6px; background: var(--accent); color: var(--on-accent); font: 500 12px var(--font, inherit); cursor: pointer; }
+
+/* Picked (J, K or a press on its ground), and a thread's hover moves above its top card. */
+.pov-cluster.picked { box-shadow: inset 0 0 0 1.5px var(--border-hover); background: color-mix(in srgb, var(--ink) 3%, transparent); }
+.pov-acts { position: absolute; top: -12px; left: 50%; z-index: 3; display: inline-flex; gap: 4px; padding: 3px; border-radius: 8px; background: var(--card); box-shadow: var(--pov-ring-up); opacity: 0; transform: translate(-50%, 4px); pointer-events: none; transition: opacity .15s ease, transform .2s var(--pov-sheet); }
+.pov-cluster:hover > .pov-acts, .pov-cluster.picked > .pov-acts, .pov-acts:focus-within { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.pov-acts button { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px; border: 0; border-radius: 5px; background: none; color: var(--text-muted); font: 500 11px var(--font, inherit); cursor: pointer; }
+.pov-acts button:hover { background: var(--hover); color: var(--ink); }
+
+/* By state: a column for each state with a thread, its name as a chip and a count, its threads stacked. */
+.pov-world.by-state { display: flex; align-items: flex-start; gap: 56px; }
+.pov-lane { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 12px 6px 18px; border-radius: 18px; background: color-mix(in srgb, var(--ink) 1.5%, transparent); }
+.pov-lane-h { display: flex; align-items: center; gap: 6px; margin: 0 0 -6px; font: inherit; }
+.pov-lane-h em { font-style: normal; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+/* The shortcuts, over the map's bottom right, above the minimap. */
+.pov-help { position: absolute; right: 16px; bottom: 16px; z-index: 4; display: grid; gap: 6px; width: 260px; padding: 12px 14px; border-radius: 10px; background: var(--card); box-shadow: var(--pov-ring-up), 0 12px 32px -12px rgb(0 0 0 / .35); font-size: 12px; color: var(--text-muted); }
+.pov-help b { color: var(--ink); font-weight: 500; font-size: 12.5px; margin-bottom: 2px; }
+.pov-help span { display: flex; align-items: center; gap: 10px; }
+.pov-help kbd { min-width: 92px; color: var(--ink-2); font: 500 11.5px var(--font, inherit); }
+@media (max-width: 900px) { .pov-status .pov-sum > span:nth-child(n+5) { display: none; } }
+/* The map's top row in the desktop app: This thread on the left, find, filter and New thread on the right, one height. */
+.pov-stage-tools { position: absolute; right: 16px; top: 14px; z-index: 2; display: flex; justify-content: flex-end; max-width: calc(100% - 200px); }
+.pov-stage-tools .pov-tools { flex-wrap: wrap; justify-content: flex-end; }
+.pov-stage-tools .pov-find { box-shadow: var(--pov-ring-up); }
+.pov-stage-tools .pov-seg { background: var(--card); box-shadow: var(--pov-ring-up); height: 28px; align-items: center; }
+.pov-stage-tools .pov-new { height: 28px; border-radius: 7px; }

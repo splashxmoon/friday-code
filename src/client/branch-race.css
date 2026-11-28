@@ -1,0 +1,52 @@
+/* A session's branch picker (Branches.tsx) and racing two agents (Race.tsx), measured to the shared kit (affect-pro SPEC.md §1 and
+   "data-table", 2026-11-27): the branch button a 28px rounded square at radius 6 (it was a pill), its card the menu popover
+   at radius 10 with a 36px find field and 32px rows at radius 6; the race's columns as cards at radius 10 on a ring with a 13/500 head
+   and its state as an 18px chip, and the comparison as the kit's table (a 36px header in 12/500, 40px rows between hairlines, 13/400,
+   the better value 500 with a green dot). app.css comes before style.css, so each rule is a step stronger than the one it measures (the branch button only by its tag, so the places that draw it quieter keep their look). */
+/* Only its shape: the places that draw it quieter (the session bar, the status bar, the thread card, the Git panel) set their own fill and
+   edge, which win over this. */
+button.branch-pill { height: 28px; padding: 0 10px 0 8px; border-radius: 6px; font: 500 13px/20px var(--font); transition: background-color .14s ease, color .14s ease, border-color .14s ease; }
+button.branch-pill > svg { width: 16px; height: 16px; }
+div.branch-card { border: 0; border-radius: 10px; box-shadow: 0 0 0 .5px var(--border-strong), 0 12px 28px -10px rgb(0 0 0 / .16), 0 1px 2px rgb(0 0 0 / .05); }
+html.dark div.branch-card { box-shadow: 0 0 0 .5px rgb(255 255 255 / .12), 0 12px 28px -10px rgb(0 0 0 / .6); }
+/* Its search a full row, 40 tall with a 13px field, not a sliver at the card's top (Arun, 2026-11-27: "fix this search bar too thin"). */
+.branch-card .branch-find { height: 40px; flex: none; box-sizing: border-box; padding: 0 12px; }
+.branch-card .branch-find input { height: 30px; font-size: 13px; }
+.branch-card .branch-list { padding: 4px; }
+.branch-card .branch-row { min-height: 32px; padding: 0 8px; border-radius: 6px; font-size: 13px; line-height: 20px; transition: background-color .09s ease-out; }
+.branch-card .branch-row.on { color: var(--ink); font-weight: 500; }
+.branch-card .branch-track { font-size: 11.5px; }
+.branch-card .branch-note, .branch-card .branch-foot { font-size: 12px; line-height: 16px; }
+.race-modal .race-title { font-size: 15px; font-weight: 500; line-height: 24px; }
+.race-cols .race-col { border: 0; border-radius: 10px; box-shadow: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .05); }
+.race-cols .race-col.bad { box-shadow: 0 0 0 .5px color-mix(in srgb, var(--red) 55%, transparent), 0 1px 2px rgb(0 0 0 / .05); }
+.race-col .race-col-head { font-size: 13px; line-height: 20px; }
+.race-col .race-col-head b { font-weight: 500; }
+.race-col .race-status { height: 18px; padding: 0 6px; border-radius: 5px; background: color-mix(in srgb, var(--ink) 6%, transparent); font-size: 11px; font-weight: 500; line-height: 18px; }
+.race-col .race-status.running { background: color-mix(in srgb, var(--live) 12%, transparent); color: var(--live); }
+.race-col .race-status.error { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
+.race-col .race-facts { font-size: 12px; line-height: 16px; }
+.race-col .race-col .btn, .race-col .btn { height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; }
+.race-compare.race-compare { border: 0; border-radius: 10px; box-shadow: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .05); font-variant-numeric: tabular-nums; }
+.race-compare .race-compare-head { min-height: 36px; align-items: center; background: none; color: var(--ink-2); font-size: 12px; font-weight: 500; line-height: 16px; }
+.race-compare .race-compare-row { min-height: 40px; align-items: center; font-size: 13px; line-height: 20px; }
+.race-compare .race-compare-label { font-size: 12px; line-height: 16px; }
+.race-compare .race-compare-row .better { font-weight: 500; }
+.race-compare .race-verdict { font-size: 12px; line-height: 16px; }
+
+/* The race dialog in the kit's form measurements: the title 15/500/24 over a 13/400/20 muted line, labels 13/500/20, the pickers 32 tall
+   at radius 8 on a ring, the task box at radius 8 on a ring with the kit's focus, Add an agent a 24px ghost button, the foot's buttons 28
+   tall at radius 6 (the main one last). Nothing heavier than 500. */
+.race-modal.race-modal { --rc-ring: 0 0 0 .5px var(--border-strong), 0 1px 1px -1px rgb(0 0 0 / .1), 0 1px 2px rgb(0 0 0 / .05); }
+html.dark .race-modal.race-modal { --rc-ring: 0 0 0 .5px rgb(255 255 255 / .1), 0 1px 2px rgb(0 0 0 / .4); }
+.race-modal.race-modal .pop-head h2 { font-size: 15px; font-weight: 500; line-height: 24px; letter-spacing: 0; }
+.race-modal.race-modal .pop-head p { margin-top: 2px; color: var(--text-muted); font-size: 13px; font-weight: 400; line-height: 20px; }
+.race-modal.race-modal .field > span:first-child { font-size: 13px; font-weight: 500; line-height: 20px; }
+.race-modal.race-modal .field { gap: 6px; }
+.race-modal.race-modal select { height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background-color: var(--card); box-shadow: var(--rc-ring); font-size: 13px; }
+.race-modal.race-modal textarea { padding: 8px 10px; border: 0; border-radius: 8px; background: var(--card); box-shadow: var(--rc-ring); font-size: 13px; line-height: 20px; }
+.race-modal.race-modal :is(select, textarea):focus { outline: none; box-shadow: 0 0 0 .5px var(--border-strong), 0 0 0 3px color-mix(in srgb, var(--ink) 10%, transparent); }
+.race-modal.race-modal .race-add { height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; }
+.race-modal.race-modal .modal-actions .btn { height: 28px; margin-top: 0; padding: 0 10px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+.race-modal.race-modal .modal-actions .btn.primary { box-shadow: 0 1px 2px rgb(0 0 0 / .16); }
+.race-modal.race-modal .icon-btn.tiny { width: 28px; height: 28px; border-radius: 6px; }

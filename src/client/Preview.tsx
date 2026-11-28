@@ -264,7 +264,8 @@ function siteLabel(url: string): string {
  * not a page on Friday's origin, so there is nothing to block and nothing to
  * proxy. Anything else has to go through Friday.
  */
-export function loadsDirectly(o: { mode: string; protocol: string; desktop: boolean; ownMachine: boolean }): boolean {
+export function loadsDirectly(o: { mode: string; protocol: string; desktop: boolean; ownMachine: boolean; /** A host, looked at from another computer (local/hosts.ts): its localhost isn't the viewer's, so always through Friday. */ remote?: boolean }): boolean {
+  if (o.remote) return false;
   if (o.mode === "local" && o.protocol === "http:") return true;
   return o.mode === "linked" && o.desktop && o.ownMachine;
 }
@@ -354,7 +355,7 @@ function PreviewPanelDrawn({
       live = false;
     };
   }, [machine.mode]);
-  const direct = loadsDirectly({ mode: machine.mode, protocol: location.protocol, desktop: !!window.fridayDesktop, ownMachine });
+  const direct = loadsDirectly({ mode: machine.mode, protocol: location.protocol, desktop: !!window.fridayDesktop, ownMachine, remote: !!machine.remote || !!(window.fridayDesktop as { remoteHost?: boolean } | undefined)?.remoteHost });
   // An iOS app too, on a Mac in the desktop app whose own machine has this folder: built with Xcode and run in a simulator
   // (IosPreview). Which side was showing is kept per session.
   const mac = (window.fridayDesktop?.platform ?? "") === "darwin" || (!!window.fridayDesktop && /mac/i.test(navigator.userAgent));

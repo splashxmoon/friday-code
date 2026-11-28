@@ -4,7 +4,9 @@ import { ENGINE_NAMES, ENGINE_TOOLS, type EngineTool } from "../types.js";
 import { EngineMark } from "./BrandMarks.js";
 import {
   cyclesOf,
+  dailyPeaks,
   forecastOf,
+  groupOf,
   idOf,
   isFiveHour,
   isWeekly,
@@ -14,6 +16,7 @@ import {
   readCosts,
   readHistory,
   saveCost,
+  shortName,
   weekGrid,
   windowsOf,
   type Forecast,
@@ -24,7 +27,7 @@ import type { Read } from "./toolLimits.js";
 import { Skeleton } from "./ui.js";
 import { PlugIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Badge, Button as KitButton } from "@/components/affect";
 import { EmptyState, surface } from "@/components/dass";
 import { AccountCardsView } from "./gauge.js";
 import { UsageAccounts } from "./usage-accounts.js";
@@ -42,6 +45,12 @@ const day = (sec: number) => new Date(sec * 1000).toLocaleDateString([], { weekd
 function until(sec: number, now: number): string {
   const m = Math.max(0, Math.round((sec * 1000 - now) / 60_000));
   return m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m` : `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`;
+}
+/** When a window resets, short, for its row: "in 2h 10m" within the day, else its day and hour ("Mon 9 AM"), as the polish mock says it. */
+function resetShort(sec: number, now: number): string {
+  if (sec * 1000 - now < 86_400_000) return `in ${until(sec, now)}`;
+  const d = new Date(sec * 1000);
+  return `${day(sec)} ${d.toLocaleTimeString([], d.getMinutes() ? { hour: "numeric", minute: "2-digit" } : { hour: "numeric" })}`;
 }
 /** One meaning for every limit, whatever the tool: green with room, yellow from 70%, red from 90%. */
 const level = (used: number) => (used >= 90 ? "hot" : used >= 70 ? "warm" : "ok");
@@ -63,19 +72,6 @@ function paceLine(w: Win, f: Forecast | null, now: number): string {
   return f.atReset !== null ? `At this pace, ${f.atReset}% when it resets` : `${Math.round(f.perHour)}% an hour`;
 }
 
-/** What a window is of, after its "·": "Opus" in "Weekly · Opus", "Gemini" in "5h · Gemini"; "" for the tool's own. */
-const groupOf = (w: Win) => {
-  const of = w.label.includes("·") ? w.label.slice(w.label.indexOf("·") + 1).trim() : "";
-  return of ? `${of[0]!.toUpperCase()}${of.slice(1)}` : "";
-};
-/** A window's name in a few words: "5-hour", "Week", "Opus week", "Gemini 5-hour", "Month". */
-function shortName(w: Win): string {
-  const of = groupOf(w);
-  if (isFiveHour(w)) return of ? `${of} 5-hour` : "5-hour";
-  if (isWeekly(w)) return of ? `${of} week` : "Week";
-  if (w.minutes && w.minutes >= 40_000) return "Month";
-  return w.label;
-}
 /** The same, as said in a sentence: "of its 5 hours", "of its week", "of its Gemini 5 hours". */
 function ofName(w: Win): string {
   if (isFiveHour(w)) return groupOf(w) ? `${groupOf(w)} 5 hours` : "5 hours";
@@ -109,7 +105,7 @@ function WinBar({ w, history, now, bare }: { w: Win; history: History; now: numb
       <span className="lh-wrow-name">{name}</span>
       {meter}
       <span className={`lh-wrow-n ${level(w.used)}`}>{used}%</span>
-      <span className="lh-wrow-in">{w.resetsAt ? until(w.resetsAt, now) : "—"}</span>
+      <span className="lh-wrow-in">{w.resetsAt ? resetShort(w.resetsAt, now) : "—"}</span>
     </li>
   );
 }
@@ -118,7 +114,7 @@ function WinBar({ w, history, now, bare }: { w: Win; history: History; now: numb
  * A tool, said as one number: what is left of the window it will run out of first, when that resets and where its pace ends,
  * then each of its windows on the same scale (Arun, 2026-11-08: "easy to glance at and fully understand", design C).
  */
-function ToolCard({ tool, wins, plan, note, roomy, history, now, cost, onCost }: { tool: EngineTool; wins: Win[]; plan: string | null; note: string; roomy: boolean; history: History; now: number; cost: number | undefined; onCost: (usd: number | null) => void }) {
+function ToolCard({ tool, wins, plan, note, roomy, history, now, cost, onCost, account }: { /** Whose figures these are, for a tool with more than one account here: the tool's own sign-in's. */ account?: string; tool: EngineTool; wins: Win[]; plan: string | null; note: string; roomy: boolean; history: History; now: number; cost: number | undefined; onCost: (usd: number | null) => void }) {
   // The five-hour first, then the week, then the rest (a model's own week, a month's allowance): the same order on every card.
   const order = [...wins.filter(isFiveHour), ...wins.filter((w) => isWeekly(w) && !isFiveHour(w)), ...wins.filter((w) => !isFiveHour(w) && !isWeekly(w))];
   // The one it meets first: the fullest; between two as full, the one that resets later holds it up longer.
@@ -126,55 +122,102 @@ function ToolCard({ tool, wins, plan, note, roomy, history, now, cost, onCost }:
   const f = hero ? forecastOf(hero, history[idOf(hero)] ?? [], now) : null;
   const out = !!hero && hero.used >= 100;
   const lv = hero ? level(hero.used) : "ok";
+  // The strip of days: a week, all the history keeps (limitHistory.ts).
+  const five = order.find(isFiveHour);
+  const strip = dayStrip(five, history, now);
   return (
-    <section className="lh-card" data-level={hero ? lv : undefined} aria-label={ENGINE_NAMES[tool]}>
+    <section className={cn("lh-card", out && "out")} data-level={hero ? lv : undefined} aria-label={ENGINE_NAMES[tool]}>
       <header className="lh-card-head">
         <EngineMark tool={tool} size={16} />
         <b>{ENGINE_NAMES[tool]}</b>
-        {roomy && (
-          <span className="lh-roomy" title="Of your coding tools, the one with the most left of its fullest limit">
-            Most room
-          </span>
-        )}
-        {/* Its plan without the tool's name again ("Antigravity Starter Quota" on Antigravity's card), and the first to give way: the
-            tool's own name read "A." beside it (Arun, 2026-11-20: "fix this design please"). */}
+        {/* With two accounts, these figures are the tool's own sign-in's: said, so they aren't read as the one in use (Arun,
+            2026-11-26). Every account's are in Accounts below. */}
+        {account && <span className="lh-card-acct">{account}</span>}
+        {/* Its plan as a chip after the name, without the tool's name again ("Antigravity Starter Quota" on Antigravity's card), and
+            the first to give way: the tool's own name read "A." beside it (Arun, 2026-11-20: "fix this design please"). */}
         {plan && (
-          <span className="lh-card-plan" title={plan}>
+          <Badge size="md" className="lh-planchip" title={plan}>
             {plan.replace(new RegExp(`^${ENGINE_NAMES[tool].split(/\s+/)[0]!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+`, "i"), "") || plan}
-          </span>
+          </Badge>
         )}
+        {roomy && (
+          <Badge size="md" tone="success" dot className="lh-room" title="Of your coding tools, the one with the most left of its fullest limit">
+            Most room
+          </Badge>
+        )}
+        {/* Out is a state, said in red beside the name, and when it's back at the end of the line. */}
+        {out && (
+          <Badge size="md" tone="danger" dot className="lh-outchip">
+            Out of usage
+          </Badge>
+        )}
+        {out && hero.resetsAt && <span className="lh-card-reset num">resets {resetWhen(hero)}</span>}
       </header>
-      {hero ? (
+      {/* Out, the card is the chip, the reset and its meters, as the polish mock draws it: the headline, the days and the cost come
+          back with the window. */}
+      {hero && !out ? (
         <div className="lh-hero">
+          {/* What's left as the headline, with what it is of on the same line; the countdown is the rows' when there are rows. */}
           <p className="lh-hero-n">
-            <span className={`lh-hero-big ${lv}`}>{out ? "Out" : `${Math.max(0, Math.round(100 - hero.used))}%`}</span>
-            <span className="lh-hero-unit">{out ? (hero.resetsAt ? `until ${resetWhen(hero)}` : "for now") : "left"}</span>
+            <span className={`lh-hero-big ${lv}`}>{Math.max(0, Math.round(100 - hero.used))}%</span>
+            <span className="lh-hero-unit">
+              left of its {ofName(hero)}
+              {hero.resetsAt ? (
+                // On a narrow card the rows already say when it resets, so the headline keeps to one line without it.
+                <span className={cn(order.length > 1 && "lh-hero-reset")}>
+                  {" "}· resets {resetWhen(hero)}
+                  {order.length === 1 && <span className="num">, in {until(hero.resetsAt, now)}</span>}
+                </span>
+              ) : (
+                " · reset time not reported"
+              )}
+            </span>
           </p>
-          <p className="lh-hero-of">
-            of its {ofName(hero)}
-            {hero.resetsAt ? (
-              <>
-                {" "}· resets {resetWhen(hero)}, <span className="num">in {until(hero.resetsAt, now)}</span>
-              </>
-            ) : (
-              " · reset time not reported"
-            )}
-          </p>
-          <p className={cn("lh-hero-pace", f?.fullAt && "warn", out && "hot")}>{out ? "It picks up again when the window resets." : paceLine(hero, f, now)}</p>
+          {/* The pace only once it says something: "Pace shows after a few readings" sat on every fresh card. */}
+          {f && <p className={cn("lh-hero-pace", f.fullAt && "warn")}>{paceLine(hero, f, now)}</p>}
           {order.length === 1 && <WinBar w={hero} history={history} now={now} bare />}
         </div>
       ) : (
-        <p className="lh-none">{note}</p>
+        !hero && <p className="lh-none">{note}</p>
       )}
-      {order.length > 1 && (
+      {(order.length > 1 || out) && (
         <ul className="lh-wrows" aria-label={`${ENGINE_NAMES[tool]}'s limits`}>
           {order.map((w) => (
             <WinBar key={idOf(w)} w={w} history={history} now={now} />
           ))}
         </ul>
       )}
-      <CostLine tool={tool} plan={plan} cost={cost} onCost={onCost} />
+      {!out && strip && <DayStrip w={five!} strip={strip} />}
+      {!out && <CostLine tool={tool} plan={plan} cost={cost} onCost={onCost} />}
     </section>
+  );
+}
+
+/**
+ * A tool's five-hour window day by day: the highest it stood each of the last seven days, today in ink and a day it ran out in
+ * red. Only once the readings kept here (limitHistory.ts, a week of them) cover two days or more; a fresh card has nothing to show.
+ */
+function dayStrip(w: Win | undefined, history: History, now: number) {
+  if (!w) return null;
+  const days = dailyPeaks(history[idOf(w)] ?? [], 7, now);
+  const read = days.filter((d) => d.peak !== null);
+  if (read.length < 2) return null;
+  return { days, read, avg: read.length ? Math.round(read.reduce((n, d) => n + d.peak!, 0) / read.length) : null };
+}
+function DayStrip({ w, strip }: { w: Win; strip: NonNullable<ReturnType<typeof dayStrip>> }) {
+  const { days, read, avg } = strip;
+  return (
+    <div className="lh-days">
+      <div className="lh-days-head">
+        <span className="lh-days-lbl">Per day</span>
+        {avg !== null && <span className="num">avg {avg}% of a window</span>}
+      </div>
+      <div className="lh-days-bars" role="img" aria-label={`${shortName(w)} limit's highest each day: ${read.map((d) => `${d.label} ${d.peak}%`).join(", ")}`}>
+        {days.map((d, i) => (
+          <i key={d.label} className={cn(i === days.length - 1 && "today", d.peak === null ? "none" : d.peak >= 100 && "hot")} style={d.peak === null ? undefined : { height: `${Math.max(4, d.peak)}%` }} title={d.peak === null ? `${d.label}: not read` : `${d.label}: highest ${d.peak}%`} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -199,18 +242,18 @@ function CostLine({ tool, plan, cost, onCost }: { tool: EngineTool; plan: string
           <input autoFocus inputMode="decimal" aria-label={`What you pay for ${ENGINE_NAMES[tool]} a month`} value={text} placeholder={list ? String(list.usd) : "0"} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setEditing(false)} />
           <span>/ month</span>
         </label>
-        <Button type="submit" variant="ghost" size="xs" className="ml-auto">
+        <KitButton type="submit" variant="ghost" size="sm" className="ml-auto">
           Save
-        </Button>
+        </KitButton>
       </form>
     );
   return (
     <div className="lh-cost">
-      <span className="lh-cost-n">{usd === undefined ? "Cost unknown" : `$${usd % 1 ? usd.toFixed(2) : usd} / month`}</span>
+      <span className={cn("lh-cost-n", usd === undefined && "unknown")}>{usd === undefined ? "Cost unknown" : `$${usd % 1 ? usd.toFixed(2) : usd} / month`}</span>
       <span className="lh-cost-src">{cost !== undefined ? "your figure" : list ? `${list.tier} list price` : ""}</span>
-      <Button variant="ghost" size="xs" className="ml-auto text-[var(--text-muted)]" onClick={() => (setText(usd !== undefined ? String(usd) : ""), setEditing(true))}>
+      <KitButton variant="ghost" size="sm" className="ml-auto" onClick={() => (setText(usd !== undefined ? String(usd) : ""), setEditing(true))}>
         {usd === undefined ? "Add price" : "Edit"}
-      </Button>
+      </KitButton>
     </div>
   );
 }
@@ -302,8 +345,9 @@ export function LimitsHub({ read, identity }: { read: Read; /** For the accounts
             tool={t}
             wins={wins.filter((w) => w.tool === t)}
             plan={planOf(t, limits)}
-            note={t === "claude" && claudeSaid.length ? (claudeSaid.some((w) => w.status === "rejected") ? "Out of usage for now: its limit was reached." : "Under its limit. Claude Code said so without a figure for how much is used.") : "No limits reported on this plan."}
+            note={t === "claude" && claudeSaid.length ? (claudeSaid.some((w) => w.status === "rejected") ? "Out of usage for now: its limit was reached." : "Under its limit. Claude Code said so without a figure for how much is used.") : (limits.tools?.[t]?.why ?? "No limits reported on this plan.")}
             roomy={room?.tool === t}
+            {...((t === "claude" || t === "codex") && (limits.accounts?.[t]?.length ?? 0) > 1 ? { account: limits.accounts![t]!.find((a) => a.id === "default")?.label ?? "Main" } : {})}
             history={history}
             now={now}
             cost={costs[t]}

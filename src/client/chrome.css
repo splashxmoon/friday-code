@@ -1,0 +1,208 @@
+/* The app-wide layer (polish 2026-11-27): what floats over every page (menus, dialogs, tooltips, toasts, the command menu),
+   on the kit's measurements. One material for all of them and for the kit's own components (components/affect): its popover
+   surface and edge (--aui-overlay, --aui-shadow-popover, themed once in style.css, so dark, light and glass follow), rows at
+   radius 6 to 8 lit by a quiet ink tint that reads the same on a solid surface and on glass, and entrances on the EXPO curve.
+   style.css loads after this file, so rules below carry an extra `html` where they meet one of its own. */
+:root {
+  --ch-expo: cubic-bezier(.22, 1, .36, 1);
+  --ch-sheet: cubic-bezier(.32, .72, .24, 1);
+  --ch-pop: var(--aui-overlay, var(--card));
+  --ch-sh-pop: var(--aui-shadow-popover, 0 0 0 1px var(--border-strong), var(--shadow-pop));
+  --ch-f6: color-mix(in srgb, var(--ink) 8%, transparent);
+  --ch-f3: color-mix(in srgb, var(--ink) 4%, transparent);
+  --ch-sh-raised: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .4), 0 12px 28px -10px rgb(0 0 0 / .6);
+  --ch-sh-card: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .4);
+}
+:root:not(.dark) {
+  --ch-f6: color-mix(in srgb, var(--ink) 6%, transparent);
+  --ch-f3: color-mix(in srgb, var(--ink) 3%, transparent);
+  --ch-sh-raised: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .05), 0 10px 28px -12px rgb(0 0 0 / .16);
+  --ch-sh-card: 0 0 0 .5px var(--border-strong), 0 1px 1px -1px rgb(0 0 0 / .1), 0 1px 2px rgb(0 0 0 / .05);
+}
+html.glass { --ch-sh-raised: var(--ch-sh-pop); }
+:root { --ch-btn: color-mix(in srgb, var(--ink) 6%, var(--ch-pop)); }
+:root:not(.dark) { --ch-btn: var(--card); }
+:root { --ch-glow: color-mix(in srgb, var(--ink) 7%, transparent); }
+:root:not(.dark) { --ch-glow: color-mix(in srgb, var(--ink) 4.5%, transparent); }
+
+/* ── Menus (ui.tsx MenuPopup: MenuButton and ContextMenu, every generic menu; and the Radix ones in components/ui): the kit's
+   DropdownMenu at SPEC's menu measurements. A 10px panel with a 4px inset on the popover's surface and edge, 36px rows at radius 6
+   (44px with a line under the name) in 13/400 secondary ink that turn primary under the pointer on a quiet tint, 16px icons a step
+   quieter, shortcuts as plain faint text, hairline separators inset 6px, group labels as the kit's eyebrow (10/500 capitals). It
+   grows from its trigger's corner (MenuPopup says which): scale .96 and 4px, 260ms on the SHEET curve. */
+html :is(.menu, [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="context-menu-content"], [data-slot="context-menu-sub-content"], [data-slot="select-content"]) {
+  border: 0; border-radius: 10px !important; background: var(--ch-pop); box-shadow: var(--ch-sh-pop) !important;
+}
+html .menu { padding: 4px !important; transform-origin: top left; animation: ch-menu-in .26s var(--ch-sheet) both; }
+html .menu[data-align="end"] { transform-origin: top right; }
+html .menu[data-side="top"] { transform-origin: bottom left; animation-name: ch-menu-in-up; }
+html .menu[data-side="top"][data-align="end"] { transform-origin: bottom right; }
+html .menu > * + :is(.menu-item, .menu-row) { margin-top: 1px; }
+@keyframes ch-menu-in { from { opacity: 0; transform: scale(.96) translateY(-4px); } }
+@keyframes ch-menu-in-up { from { opacity: 0; transform: scale(.96) translateY(4px); } }
+html .menu .menu-item {
+  min-height: 36px; gap: 10px; padding: 8px; border-radius: 6px; color: var(--ink-2); font-size: 13px; line-height: 20px; font-weight: 400;
+  transition: background-color .12s ease, color .12s ease;
+}
+html .menu .menu-item:has(.menu-sub) { min-height: 44px; padding: 6px 8px; }
+html .menu .menu-item:is(:hover, :focus-visible):not(:disabled) { background: var(--ch-glow); color: var(--ink); }
+html .menu .menu-item:focus-visible { outline: 0; }
+html .menu .menu-item[aria-checked="true"] { color: var(--ink); font-weight: 500; }
+html .menu .menu-item > svg:first-child { width: 16px; height: 16px; color: var(--text-muted); transition: color .12s ease; }
+html .menu .menu-item:is(:hover, :focus-visible):not(:disabled) > svg { color: var(--ink); }
+html .menu .menu-item.danger, html .menu .menu-item.danger > svg { color: var(--red); }
+html .menu .menu-item.danger:is(:hover, :focus-visible):not(:disabled) { background: color-mix(in srgb, var(--red) 9%, transparent); color: var(--red); }
+html .menu .menu-check { width: 14px; height: 14px; color: var(--ink) !important; transform: none; }
+html .menu .menu-sub { font-size: 12px; line-height: 16px; color: var(--faint); }
+html .menu .menu-heading { display: flex; align-items: flex-end; height: 30px; box-sizing: border-box; padding: 10px 8px 4px; font: 500 10px/16px var(--font); letter-spacing: .5px; text-transform: uppercase; color: var(--text-muted); }
+html .menu .menu-heading:empty { height: 1px; margin: 4px 6px; padding: 0; border: 0; background: var(--border); }
+html .menu .menu-item > kbd:not(.key) { padding: 0 0 0 16px; border: 0; background: none; box-shadow: none; font: 400 12px/16px var(--font); letter-spacing: .04em; color: var(--faint); }
+html .menu .menu-item kbd.key { min-width: 20px; height: 20px; padding: 0 5px; border: 0; border-radius: 5px; background: none; box-shadow: inset 0 0 0 .5px var(--border-hover); font: 500 11px/20px var(--font); color: var(--faint); }
+html .menu .menu-keys { gap: 2px; }
+html .menu.compact .menu-item { min-height: 32px; padding: 6px 8px; gap: 8px; }
+
+/* The Radix menus' rows, the same. */
+html :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="context-menu-item"], [data-slot="select-item"]) {
+  min-height: 36px; gap: 10px; border-radius: 6px; font-weight: 400; color: var(--ink-2);
+}
+html :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="context-menu-item"], [data-slot="select-item"]):is([data-highlighted], :focus, [data-state="open"]) { background: var(--ch-glow); color: var(--ink); }
+html :is([data-slot="dropdown-menu-checkbox-item"], [data-slot="dropdown-menu-radio-item"])[data-state="checked"] { color: var(--ink); font-weight: 500; }
+html :is([data-slot="dropdown-menu-label"], [data-slot="context-menu-label"]) { padding: 10px 8px 4px; font: 500 10px/16px var(--font); letter-spacing: .5px; text-transform: uppercase; color: var(--text-muted); }
+html :is([data-slot="dropdown-menu-separator"], [data-slot="context-menu-separator"], [data-slot="select-separator"]) { margin: 4px 6px; background: var(--border); }
+html [data-slot="dropdown-menu-shortcut"] { padding-left: 16px; font-size: 12px; letter-spacing: .04em; color: var(--faint); }
+html :is([data-slot="dropdown-menu-content"], [data-slot="context-menu-content"], [data-slot="select-content"])[data-state="open"] { transform-origin: var(--radix-dropdown-menu-content-transform-origin, var(--radix-context-menu-content-transform-origin, var(--radix-select-content-transform-origin, top left))); animation: ch-menu-in .26s var(--ch-sheet) both; }
+
+/* ── Popovers and hover cards (Radix and the app's .popover): the kit's Popover and HoverCard. Radius 12, the ring and the drop,
+   no border; they rise 4px in 200ms on EXPO. */
+html :is(.popover, [data-slot="popover-content"], [data-slot="hover-card-content"]) { border: 0; border-radius: 12px !important; background: var(--ch-pop); box-shadow: var(--ch-sh-pop) !important; }
+html :is([data-slot="popover-content"], [data-slot="hover-card-content"])[data-state="open"] { animation: ch-pop-in .2s var(--ch-expo) both; }
+@keyframes ch-pop-in { from { opacity: 0; transform: translateY(4px) scale(.98); } }
+
+/* ── Tooltips (Tooltips.tsx's .tip, ui.tsx Hint's bubble, Radix's): the kit's Tooltip as Friday themes it (components/affect,
+   LICENSE.md: the same material as its menus, where affectUI inverts it). A small label at radius 6, 4px 8px, 12/500/16 on the
+   popover surface and ring, its shortcut a step quieter beside it; it drifts 2px in from its trigger in 140ms. */
+html :is(.tip, [data-slot="tooltip-content"]) {
+  border: 0; border-radius: 6px; padding: 4px 8px; gap: 2px; max-width: min(240px, calc(100vw - 16px));
+  background: var(--ch-pop) !important; color: var(--ink); box-shadow: var(--ch-sh-pop) !important;
+  font: 500 12px/16px var(--font); animation: ch-tip-in .14s var(--ch-expo) both;
+}
+html .tip.two { padding: 5px 8px 6px; }
+html .tip .tip-head { gap: 6px; }
+html .tip .tip-body { color: var(--text-muted); font-weight: 400; }
+html .tip kbd, html [data-slot="tooltip-content"] kbd { padding: 0; border: 0; background: none; box-shadow: none; font: inherit; letter-spacing: .02em; color: var(--text-muted); }
+html .tip[data-side="below"] { animation-name: ch-tip-in-down; }
+html .tip.instant { animation: none; }
+html [data-slot="tooltip-content"] > span:last-child:has(svg) { display: none; }
+@keyframes ch-tip-in { from { opacity: 0; transform: translateY(2px); } }
+@keyframes ch-tip-in-down { from { opacity: 0; transform: translateY(-2px); } }
+/* The hint's bubble says more than a name (a sentence or two): the popover's material, at the kit's popover type. */
+html .hint-bubble { border: 0; border-radius: 8px; padding: 8px 10px; background: var(--ch-pop); box-shadow: var(--ch-sh-pop); color: var(--ink-2); font-size: 12px; line-height: 16px; }
+
+/* ── Dialogs (.overlay > .modal across the app, ui.tsx ConfirmDialog, and Radix's dialog): the kit's Dialog. The page dims a
+   little (16% light, 50% dark) in 180ms; the card is radius 14 on the popover's edge and drop, no border, and rises 6px from
+   97% in 240ms on EXPO. Titles 15/500/22, the quiet line under them 13/400/20, the actions 28px at the foot's end. */
+html .overlay { background: rgb(0 0 0 / .5); animation: ch-scrim .18s ease both; }
+:root:not(.dark) .overlay { background: rgb(0 0 0 / .16); }
+html [data-slot="dialog-overlay"] { background: rgb(0 0 0 / .5); }
+:root:not(.dark) [data-slot="dialog-overlay"] { background: rgb(0 0 0 / .16); }
+@keyframes ch-scrim { from { background-color: transparent; } }
+html :is(.modal, [data-slot="dialog-content"]) { border: 0; border-radius: 14px !important; background: var(--ch-pop); box-shadow: var(--ch-sh-pop) !important; }
+html .modal { animation: ch-dialog-in .24s var(--ch-expo) both; }
+@keyframes ch-dialog-in { from { opacity: 0; transform: translateY(6px) scale(.97); } }
+html :is(.modal h2, .confirm-head h2, .pop-head h2, [data-slot="dialog-title"]) { font-size: 15px; line-height: 22px; font-weight: 500; letter-spacing: -.005em; color: var(--ink); }
+html [data-slot="dialog-description"] { font-size: 13px; line-height: 20px; color: var(--text-muted); }
+html :is(.modal-actions, .confirm-actions, [data-slot="dialog-footer"]) { gap: 8px; }
+html .modal .pop-head > .icon-btn { width: 28px; height: 28px; margin: -3px -4px 0 0; border: 0; border-radius: 6px; color: var(--text-muted); }
+html .modal .pop-head > .icon-btn:hover { background: var(--ch-glow); color: var(--ink); }
+
+/* The confirmation (ui.tsx ConfirmDialog): the kit's AlertDialog. 400 wide, 20px in, the title and its line, then Cancel and
+   the one that does it at the end of a 28px row. */
+html .modal.confirm { width: min(400px, 100%); padding: 20px 20px 16px; }
+html .modal.confirm .confirm-head { gap: 10px; margin: 0; }
+html .modal.confirm .confirm-icon { width: 16px; height: 16px; }
+html .modal.confirm .confirm-body { margin: 6px 0 0; font-size: 13px; line-height: 20px; color: var(--text-muted); }
+html .modal.confirm .confirm-input { height: 32px; margin-top: 14px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--ch-f3); box-shadow: inset 0 0 0 .5px var(--border-strong); font-size: 13px; }
+html .modal.confirm .confirm-input:focus { box-shadow: inset 0 0 0 .5px var(--border-strong), 0 0 0 3px color-mix(in srgb, var(--border-focus) 22%, transparent); }
+html .modal.confirm .confirm-actions { margin-top: 20px; justify-content: flex-end; }
+html .modal.confirm .confirm-actions .btn { height: 28px; margin: 0; padding: 0 10px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+html .modal.confirm .confirm-actions .btn.ghost { border: 0; background: var(--ch-btn); box-shadow: var(--ch-sh-card); color: var(--ink); }
+html .modal.confirm .confirm-actions .btn.ghost:hover:not(:disabled) { background: var(--ch-btn); box-shadow: 0 0 0 .5px var(--border-hover), 0 1px 3px rgb(0 0 0 / .08); }
+html .modal.confirm .confirm-actions .btn.primary { border: 0; }
+html .modal.confirm .confirm-actions .btn.destructive { border: 0; background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); box-shadow: none; }
+html .modal.confirm .confirm-actions .btn.destructive:hover:not(:disabled) { background: color-mix(in srgb, var(--red) 18%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  html :is(.menu, .modal, .overlay, .tip, [data-slot="tooltip-content"], [data-slot="popover-content"], [data-slot="hover-card-content"], [data-slot="dropdown-menu-content"]) { animation: none !important; }
+}
+
+/* ── The app's one-line notice (App.tsx .toast, in place of the browser's alert): a toast as the kit's toaster draws one, at the
+   foot of the window's middle. Radius 10, 12px 14px, 13/500/20 in ink on the popover surface, the toast's ring and drop; it lifts
+   in from the edge on the SHEET curve. */
+html .toast {
+  bottom: 24px; max-width: min(420px, calc(100vw - 32px)); padding: 12px 14px; border: 0; border-radius: 10px;
+  background: var(--ch-pop); color: var(--ink); font: 500 13px/20px var(--font);
+  box-shadow: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .4), 0 12px 28px -10px rgb(0 0 0 / .6);
+  animation: ch-toast-in .42s var(--ch-sheet) both;
+}
+:root:not(.dark) .toast { box-shadow: 0 0 0 .5px rgb(0 0 0 / .08), 0 1px 1px -1px rgb(0 0 0 / .1), 0 1px 2px rgb(0 0 0 / .05), 0 10px 24px -10px rgb(0 0 0 / .14); }
+html.glass .toast { -webkit-backdrop-filter: blur(28px) saturate(1.6); backdrop-filter: blur(28px) saturate(1.6); box-shadow: var(--ch-sh-pop); }
+@keyframes ch-toast-in { from { opacity: 0; translate: 0 16px; } }
+@media (prefers-reduced-motion: reduce) { html .toast { animation: none; } }
+
+/* ── Empty states (components/dass/EmptyState.tsx): the kit's EmptyState, bare. A 42px tile at radius 11 on a soft ink tint with
+   its 18px icon in meta ink (amber when it waits on you, red when something is broken), the title 13/500/20, the line under it
+   13/400/20 muted and balanced at most 430 wide, the action 18px below. Inside a section (small): a 32px tile and less air. */
+.ch-empty { display: flex; flex-direction: column; align-items: center; box-sizing: border-box; min-width: 0; max-width: 480px; margin: 0 auto; padding: 48px 24px 52px; font-size: 13px; line-height: 20px; text-align: center; }
+.ch-empty-icon { display: grid; flex: none; place-items: center; width: 42px; height: 42px; border-radius: 11px; background: var(--aui-subtle, color-mix(in srgb, var(--ink) 5%, transparent)); color: var(--text-muted); }
+.ch-empty-icon svg { display: block; width: 18px; height: 18px; }
+.ch-empty[data-tone="needs"] .ch-empty-icon { color: var(--dass-needs, var(--amber)); }
+.ch-empty[data-tone="bad"] .ch-empty-icon { color: var(--red); }
+.ch-empty-title { max-width: 100%; margin: 0; font-size: 13px; line-height: 20px; font-weight: 500; letter-spacing: 0; color: var(--ink); overflow-wrap: anywhere; }
+.ch-empty-icon + .ch-empty-title { margin-top: 16px; }
+.ch-empty-text { max-width: 430px; margin: 4px 0 0; color: var(--text-muted); text-wrap: balance; overflow-wrap: anywhere; }
+.ch-empty-text p { margin: 0; }
+.ch-empty-action { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 18px; }
+.ch-empty[data-small] { padding: 28px 16px 32px; }
+.ch-empty[data-small] .ch-empty-icon { width: 32px; height: 32px; border-radius: 8px; }
+.ch-empty[data-small] .ch-empty-icon svg { width: 16px; height: 16px; }
+.ch-empty[data-small] .ch-empty-icon + .ch-empty-title { margin-top: 12px; }
+.ch-empty[data-small] .ch-empty-action { margin-top: 14px; }
+@media (max-width: 560px) { .ch-empty { padding: 36px 18px 40px; } }
+/* A page asking for less air (py-8) keeps it. */
+.ch-empty.py-8 { padding-block: 32px; }
+
+/* ── Skeletons (ui.tsx Skeleton and its rows, cards and code; components/ui/skeleton.tsx): the kit's Skeleton. A soft ink fill at
+   radius 6 with one sheen sweeping across every one at the same moment (1.6s on EXPO), so a loading list breathes as one; the
+   whole loading view fades in a beat late, so a load under 150ms never shows it. Reduced motion: the fill alone. */
+html .sk { border-radius: 6px; }
+html :is(.sk, [data-slot="skeleton"]) { position: relative; overflow: hidden; background: color-mix(in srgb, var(--ink) 9%, transparent); }
+:root:not(.dark) :is(.sk, [data-slot="skeleton"]) { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+html :is(.sk, [data-slot="skeleton"])::after {
+  content: ""; position: absolute; inset: 0; translate: -100% 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / .06), transparent);
+  animation: ch-sk-sweep 1.6s var(--ch-expo) infinite;
+}
+:root:not(.dark) :is(.sk, [data-slot="skeleton"])::after { background: linear-gradient(90deg, transparent, rgb(255 255 255 / .7), transparent); }
+@keyframes ch-sk-sweep { 60%, 100% { translate: 100% 0; } }
+html :is(.sk-lines, .sk-cards, .sk-rows, .sk-code) { animation: ch-sk-in .3s ease .15s both; }
+@keyframes ch-sk-in { from { opacity: 0; } }
+html .sk-card { border: 0; border-radius: 10px; box-shadow: var(--aui-shadow-card, 0 0 0 1px var(--border)); }
+html .sk-row { border-bottom-color: var(--border); }
+@media (prefers-reduced-motion: reduce) {
+  html :is(.sk, [data-slot="skeleton"])::after { display: none; }
+  html :is(.sk-lines, .sk-cards, .sk-rows, .sk-code) { animation: none; }
+}
+
+/* ── A newer Friday (AppUpdate.tsx UpdateRailButton's card, in a menu): the kit's notice. A 28px tile at radius 7 on the card's ring,
+   the title 13/500/20 over the versions 12/16 muted, a 4px progress bar at radius 2 that glides on the SHEET curve, the one button
+   28px, and the notes as a quiet link. */
+html .upd-card { gap: 12px; padding: 8px 8px 6px; }
+html .upd-top { gap: 10px; }
+html .upd-mark { width: 28px; height: 28px; border-radius: 7px; background: var(--card); box-shadow: 0 0 0 .5px var(--border-strong), 0 1px 1px -1px rgb(0 0 0 / .1); color: var(--ink-2); }
+html .upd-title { font-size: 13px; line-height: 20px; font-weight: 500; }
+html .upd-sub { font-size: 12px; line-height: 16px; }
+html .upd-go { height: 28px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+html .upd-prog { height: 4px; border-radius: 2px; background: var(--ch-f6); }
+html .upd-prog > span { transition: width .6s var(--ch-sheet); }
+html .upd-notes { font-size: 12px; line-height: 16px; color: var(--text-muted); }
+html .upd-notes:hover { color: var(--ink); }

@@ -21,8 +21,9 @@ import {
 } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
 import { createContext, memo, useContext, useEffect, useState } from "react";
-import { Streamdown } from "streamdown";
+import { Streamdown, type Components } from "streamdown";
 import { hasMath, mathText, mediaText, useKatex } from "../../AnswerParts.js";
+import { LiveImage } from "../../LiveBlock.js";
 import { Guard } from "../../guard.js";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
@@ -311,6 +312,9 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
   math?: boolean;
 };
 
+/** Markdown shown without an answer's own parts (a pull request's words, a skill's) still holds a picture from the web until asked (LiveImage). */
+const PLAIN = { img: LiveImage } as Components;
+
 export const MessageResponse = memo(
   ({ className, math, children, ...props }: MessageResponseProps) => {
     const said = math && typeof children === "string" ? mathText(children) : children;
@@ -327,6 +331,7 @@ export const MessageResponse = memo(
             "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
             className
           )}
+          components={PLAIN}
           {...props}
         >
           {text}
@@ -377,7 +382,7 @@ export function MessageAttachment({
           {onRemove && (
             <Button
               aria-label="Remove attachment"
-              className="absolute top-2 right-2 size-6 rounded-full bg-background/80 p-0 opacity-0 backdrop-blur-sm transition-opacity hover:bg-background group-hover:opacity-100 [&>svg]:size-3"
+              className="absolute top-2 right-2 size-6 rounded-[8px] bg-background/80 p-0 opacity-0 backdrop-blur-sm transition-opacity hover:bg-background group-hover:opacity-100 [&>svg]:size-3"
               onClick={(e) => {
                 e.stopPropagation();
                 onRemove();
@@ -405,7 +410,7 @@ export function MessageAttachment({
           {onRemove && (
             <Button
               aria-label="Remove attachment"
-              className="size-6 shrink-0 rounded-full p-0 opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100 [&>svg]:size-3"
+              className="size-6 shrink-0 rounded-[8px] p-0 opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100 [&>svg]:size-3"
               onClick={(e) => {
                 e.stopPropagation();
                 onRemove();

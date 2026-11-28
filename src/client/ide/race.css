@@ -15,7 +15,7 @@
 .rcol-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .rcol-mark { display: grid; place-items: center; flex: none; width: 18px; height: 18px; }
 .rcol-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font: 600 13px/1.2 var(--font); }
-.rcol-chip { display: inline-flex; flex: none; align-items: center; gap: 5px; margin-left: auto; padding: 3px 8px; border-radius: 999px; background: var(--hover); color: var(--ink-2); font: 500 11px/1 var(--font); white-space: nowrap; }
+.rcol-chip { display: inline-flex; flex: none; align-items: center; gap: 5px; margin-left: auto; padding: 3px 8px; border-radius: var(--r-sm, 6px); background: var(--hover); color: var(--ink-2); font: 500 11px/1 var(--font); white-space: nowrap; }
 .rcol-chip.running { color: var(--ink); }
 .rcol-chip.error, .rcol-chip.waiting_for_human { color: var(--ink); background: var(--hover-strong); }
 .rcol-chip.lean { background: var(--ink); color: var(--bg); }
@@ -74,3 +74,33 @@
    name, and the tool's name is the one cut short. */
 .ide-agent .composer-bar:has(.race-trig) > .mode-pill { flex: none !important; max-width: none; }
 .ide-agent .composer-bar:has(.race-trig) > .mode-pill span { overflow: visible; }
+
+/* ── Measured to the shared kit (affect-pro SPEC.md §1 and "agent-lanes", 2026-11-27): the column a card at radius 10 on a ring, its
+   head 13/500/20 over 12/400/16, each racer a row with a 13/500/20 name and an 18px chip at radius 5, buttons 24 at radius 6 and 12/500
+   (the pick dark), the pickers' popovers at radius 10 with the menu shadow, their options 36px rows at radius 6, the check box 14 at
+   radius 4. Nothing heavier than 500. */
+.rcol { border: 0; box-shadow: var(--ia-ring, 0 0 0 .5px var(--border-strong)); }
+.rcol-head { min-height: 44px; box-sizing: border-box; padding: 8px 8px 8px 12px; }
+.rcol-title { font: 500 13px/20px var(--font); }
+.rcol-sub { font: 400 12px/16px var(--font); }
+.rcol-end { height: 24px; padding: 0 8px; font: 500 12px/20px var(--font); }
+.rcol-name { font: 500 13px/20px var(--font); }
+.rcol-chip { height: 18px; padding: 0 6px; border-radius: 5px; background: color-mix(in srgb, var(--ink) 6%, transparent); font: 500 11px/18px var(--font); }
+.rcol-chip.running { background: color-mix(in srgb, var(--live) 12%, transparent); color: var(--live); }
+.rcol-facts, .rcol-flag { font-size: 12px; line-height: 16px; }
+.rcol-btn { height: 24px; padding: 0 8px; border: 0; border-radius: 6px; box-shadow: var(--ia-ring, 0 0 0 .5px var(--border-strong)); font: 500 12px/20px var(--font); transition: background-color .14s ease, transform .14s cubic-bezier(.22, 1, .36, 1); }
+.rcol-btn.primary { background: var(--accent); color: var(--on-accent); box-shadow: 0 1px 2px rgb(0 0 0 / .16); }
+.rcol-btn:active:not(:disabled) { transform: scale(.98); }
+.rcol-verdict { font-size: 12px; line-height: 16px; }
+.rcol-note { font-size: 12px; line-height: 16px; }
+.race-trig { width: 28px; height: 28px; border-radius: 6px; }
+.race-pop, .later-pop { padding: 12px; border: 0; border-radius: 10px; box-shadow: 0 0 0 .5px var(--border-strong), 0 12px 28px -10px rgb(0 0 0 / .16), 0 1px 2px rgb(0 0 0 / .05); }
+html.dark :is(.race-pop, .later-pop) { box-shadow: 0 0 0 .5px rgb(255 255 255 / .12), 0 12px 28px -10px rgb(0 0 0 / .6); }
+.race-pop h3, .later-pop h3 { font: 500 13px/20px var(--font); }
+.race-pop p, .later-pop p { font-size: 12px; line-height: 16px; }
+.race-opt, .later-opt { height: 36px; border-radius: 6px; font: 400 13px/20px var(--font); transition: background-color .09s ease-out; }
+.race-opt .hint, .later-opt .hint { font-size: 12px; }
+.race-opt .box { width: 14px; height: 14px; border: 0; border-radius: 4px; box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .22), 0 1px 1px rgb(0 0 0 / .04); transition: background-color .14s ease; }
+html.dark .race-opt .box { box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .28); }
+.race-opt[aria-checked="true"] .box { background: var(--ink); box-shadow: none; }
+.race-opt .box svg { transition: transform .22s cubic-bezier(.34, 1.56, .64, 1); }

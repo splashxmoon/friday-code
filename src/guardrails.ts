@@ -66,6 +66,15 @@ const norm = (p: string, home: string, cwd?: string) => {
   if (cwd && s && !s.startsWith("/") && !s.startsWith("~") && !s.startsWith("$HOME") && !s.startsWith("${HOME}") && !/^[A-Za-z]:\//.test(s)) s = `${cwd.replace(/\\/g, "/").replace(/\/+$/, "")}/${s.replace(/^\.\//, "")}`;
   if (s === "~" || s.startsWith("~/")) s = home.replace(/\/$/, "") + s.slice(1);
   s = s.replace(/\$HOME|\$\{HOME\}/g, home.replace(/\/$/, ""));
+  // `..` and `.` taken out as the system would: a path that climbs back down into your keys is your keys (Security M1).
+  if (s.startsWith("/") && /\/\.\.?(\/|$)/.test(s)) {
+    const up: string[] = [];
+    for (const part of s.split("/")) {
+      if (part === "..") up.pop();
+      else if (part && part !== ".") up.push(part);
+    }
+    s = `/${up.join("/")}`;
+  }
   return s.replace(/\/+$/, "") || "/";
 };
 const under = (p: string, root: string) => {
@@ -75,10 +84,12 @@ const under = (p: string, root: string) => {
 
 /** Places nothing may write, whatever is said: keys, the shell's own startup, Friday's own data. */
 function sacred(p: string, home: string): string | null {
-  const h = home.replace(/\/$/, "");
+  // Whatever the case: ~/.SSH is ~/.ssh on a Mac's and a Windows disk.
+  const h = home.replace(/\/$/, "").toLowerCase();
+  p = p.toLowerCase();
   if (under(p, `${h}/.ssh`) || under(p, `${h}/.gnupg`) || under(p, `${h}/.aws`) || under(p, `${h}/.kube`)) return "your keys and credentials";
-  if (under(p, `${h}/.friday`) || under(p, `${h}/Library/Application Support/Friday`)) return "Friday's own data";
-  if (under(p, `${h}/Library/Keychains`)) return "your keychain";
+  if (under(p, `${h}/.friday`) || under(p, `${h}/library/application support/friday`)) return "Friday's own data";
+  if (under(p, `${h}/library/keychains`)) return "your keychain";
   return null;
 }
 /** Files that change how your computer or your accounts behave: a go-ahead to change. */
@@ -154,8 +165,55 @@ export function pieces(cmd: string): string[] {
 /** The words of a simple command, quotes taken off, a leading `sudo`, `env X=…`, `command` or `time` left in for the rules to see. */
 const words = (s: string) => (s.match(/(?:"[^"]*"|'[^']*'|[^\s"'])+/g) ?? []).map((w) => w.replace(/"([^"]*)"|'([^']*)'/g, "$1$2"));
 
+/**
+ * What a line has the shell run first and put in its place: `$(…)`, backticks and `<(…)`, innermost first. Not what sits where the
+ * shell reads nothing: between single quotes, and in a here-document whose word is quoted (a note written to a file may well
+ * say `npm publish`). An unquoted here-document is read as the shell reads it, quotes and all.
+ */
+function substitutions(cmd: string): string[] {
+  const read: string[] = [];
+  let main = cmd.replace(/<<-?[ \t]*(['"]?)(\w+)\1([^\n]*)\n([\s\S]*?)\n[ \t]*\2[ \t]*(?=\n|$)/g, (_, q: string, _word: string, rest: string, body: string) => {
+    if (!q) read.push(body);
+    return ` ${rest}`;
+  });
+  let plain = "";
+  let dq = false;
+  for (let i = 0; i < main.length; i++) {
+    const c = main[i]!;
+    if (c === "\\" && i + 1 < main.length) {
+      plain += c + main[++i];
+      continue;
+    }
+    if (c === '"') dq = !dq;
+    if (c === "'" && !dq) {
+      const end = main.indexOf("'", i + 1);
+      if (end < 0) break;
+      i = end;
+      plain += " ";
+      continue;
+    }
+    plain += c;
+  }
+  main = plain;
+  const out: string[] = [];
+  for (let text of [main, ...read]) {
+    for (let n = 0; n < 8; n++) {
+      let found = false;
+      text = text.replace(/[$<>]\(([^()]*)\)|`([^`]*)`/g, (_, a?: string, b?: string) => {
+        found = true;
+        out.push(a ?? b ?? "");
+        return " _ ";
+      });
+      if (!found) break;
+    }
+  }
+  return out.filter((x) => x.trim());
+}
+
 /** A shell command's verdict: the strictest of its parts. */
-export function guardCommand(cmd: string, at: GuardPlace): Verdict {
+export function guardCommand(cmd: string, at: GuardPlace, depth = 0): Verdict {
+  // A shell in a shell in a shell: nothing honest is written that way.
+  if (depth > 4) return CANT_READ("Wraps a command in more shells than can be read.");
   const whole = cmd.replace(/\s+/g, " ");
   // The floor, read on the whole line: a pipe into a shell is two pieces.
   if (/\b(curl|wget|fetch)\b[^|]*\|\s*(sudo\s+)?(ba|z|da|k)?sh\b/.test(whole) || /\b(curl|wget)\b[^|]*\|\s*(sudo\s+)?(python3?|node|perl|ruby)\b/.test(whole)) return never("It won't pipe something from the web straight into a shell. Download it, read it, then run it.");
@@ -167,22 +225,148 @@ export function guardCommand(cmd: string, at: GuardPlace): Verdict {
   if (/169\.254\.169\.254|metadata\.google\.internal|fd00:ec2::254/i.test(whole)) return never("It won't read the cloud's credentials address.");
   let worst: Verdict = RUN;
   const rank = (v: Verdict) => (v.kind === "never" ? 2 : v.kind === "ask" ? 1 : 0);
-  for (const piece of pieces(cmd)) {
-    const v = guardPiece(piece, at);
+  // What the shell runs inside the line (`echo $(gh pr merge 1)`) is judged as what it is (Security M1).
+  for (const inner of substitutions(cmd)) {
+    const v = guardCommand(inner, at, depth + 1);
+    if (rank(v) > rank(worst)) worst = v;
+    if (worst.kind === "never") return worst;
+  }
+  // Where each piece runs: a `cd` before it moves what a relative path means (`cd ~/.ssh && echo … >> authorized_keys`).
+  let here = at;
+  for (const raw of pieces(cmd)) {
+    // A subshell's or a group's brackets are not part of its first and last commands.
+    let piece = raw.replace(/^(?:[({]\s*)+/, "").replace(/\s+\}$/, "");
+    while (piece.endsWith(")") && piece.split(")").length > piece.split("(").length) piece = piece.slice(0, -1).trimEnd();
+    if (!piece) continue;
+    const v = guardPiece(piece, here, depth);
     if (rank(v) > rank(worst)) worst = v;
     if (worst.kind === "never") break;
+    const w = words(piece);
+    if (w[0] === "cd" || w[0] === "pushd") {
+      const to = w.slice(1).find((a) => !a.startsWith("-")) ?? "~";
+      // Somewhere only the shell knows (a variable, `cd -`): relative paths after it are read as before, from its own folder.
+      const known = to !== "-" && !/[`*?]|\$(?!HOME\b|\{HOME\})/.test(to);
+      const { cwd: _was, ...rest } = here;
+      here = known ? { ...here, cwd: norm(to, at.home, here.cwd) } : rest;
+    }
   }
   return worst;
 }
 
-function guardPiece(piece: string, at: GuardPlace): Verdict {
+/** Asked, because what would run can't be read from the line. */
+const CANT_READ = (why: string) => ask("safety", why);
+
+/** A shell, by its name or its path. */
+const SHELL = /^(sh|bash|zsh|dash|ksh|fish)$/;
+/** Tools handed a script on their command line, and the options that carry it. */
+const INLINE: Record<string, RegExp> = { python: /^-[a-zA-Z]*c$/, python3: /^-[a-zA-Z]*c$/, node: /^(-e|-p|-pe|--eval|--print)$/, bun: /^(-e|--eval|-p|--print)$/, deno: /^eval$/, perl: /^-[a-zA-Z]*[eE]$/, ruby: /^-[a-zA-Z]*e$/, php: /^-r$/, osascript: /^-e$/ };
+/** A script that starts other programs, or builds what it runs so that it can't be read: what the rules below would never see. */
+const STARTS_PROGRAMS =
+  /subprocess|os\.(system|popen|exec|spawn|posix_spawn)|pty\.spawn|child_process|execSync|spawnSync|execFile|\bspawn\s*\(|\bexec\s*\(|\beval\s*\(|\bsystem\s*\(|\bpopen\b|__import__|importlib|getattr\s*\(|b64decode|fromhex|\batob\s*\(|Buffer\.from|\bcompile\s*\(|Bun\.(spawn|\$)|Deno\.(run|Command)|process\.binding|IO\.popen|%x|\bqx\b|`|do shell script|shell_exec|passthru|proc_open/;
+
+/** Options that stand before a tool's subcommand and take a word of their own: skipped, so the subcommand is what is judged. */
+const BEFORE_SUB: Record<string, RegExp> = {
+  git: /^(-C|-c|--git-dir|--work-tree|--namespace|--config-env|--super-prefix)$/,
+  gh: /^(-R|--repo|--hostname)$/,
+  npm: /^(--prefix|-C|-w|--workspace|--registry|--userconfig)$/,
+  pnpm: /^(--prefix|-C|--dir|--filter|-F|--registry)$/,
+  yarn: /^(--cwd|--registry)$/,
+  bun: /^(--cwd|--filter|--registry)$/,
+  cargo: /^(-C|--config|--manifest-path)$/,
+  docker: /^(--context|-c|-H|--host|--config|-l|--log-level)$/,
+  kubectl: /^(-n|--namespace|--context|--kubeconfig|--cluster|--user|-s|--server|--as|--token)$/,
+  helm: /^(-n|--namespace|--kube-context|--kubeconfig)$/,
+  terraform: /^$/,
+  tofu: /^$/,
+  pulumi: /^(-C|--cwd|-s|--stack)$/,
+  fly: /^(-a|--app|-c|--config|-t|--access-token)$/,
+  flyctl: /^(-a|--app|-c|--config|-t|--access-token)$/,
+  firebase: /^(-P|--project|--token|--account)$/,
+  wrangler: /^(-c|--config|-e|--env)$/,
+};
+/** Options of the wrappers that only change how a command runs, which take a word of their own. */
+const WRAPPER_VALUE: Record<string, RegExp> = { env: /^(-u|--unset|-C|--chdir|-S|--split-string)$/, nice: /^(-n|--adjustment)$/, timeout: /^(-s|--signal|-k|--kill-after)$/, xargs: /^(-n|-I|-P|-L|-d|-E|-s|-a)$/, exec: /^-a$/, ionice: /^(-c|-n|-p)$/, stdbuf: /^(-i|-o|-e)$/, command: /^$/, time: /^(-o|-f)$/, nohup: /^$/, builtin: /^$/, setsid: /^$/, caffeinate: /^(-t|-w)$/, unbuffer: /^$/ };
+
+
+
+function guardPiece(piece: string, at: GuardPlace, depth = 0): Verdict {
   let w = words(piece);
-  // What actually runs, after the wrappers that only change how.
-  while (w.length && /^(env|command|time|nice|nohup|exec|xargs|then|do|else|\w+=\S*)$/.test(w[0]!)) w = w.slice(1);
+  const rank = (v: Verdict) => (v.kind === "never" ? 2 : v.kind === "ask" ? 1 : 0);
+  let worst: Verdict = RUN;
+  // What actually runs, after the wrappers that only change how, with the options of theirs that stand before it.
+  for (;;) {
+    const first = w[0] ?? "";
+    const set = /^(\w+)=([\s\S]*)$/.exec(first);
+    if (set) {
+      // A command kept in a variable to be run from it (`X='gh pr merge 1'; $X`) is judged where it is written.
+      if (/\s/.test(set[2]!.trim())) {
+        const v = guardCommand(set[2]!, at, depth + 1);
+        if (rank(v) > rank(worst)) worst = v;
+      }
+      w = w.slice(1);
+      continue;
+    }
+    if (/^(then|do|else|!)$/.test(first)) {
+      w = w.slice(1);
+      continue;
+    }
+    const takes = WRAPPER_VALUE[first];
+    if (!takes) break;
+    w = w.slice(1);
+    while (w[0]?.startsWith("-") && w[0] !== "-") w = w.slice(takes.test(w[0]) ? 2 : 1);
+    // `timeout 30 git push`: how long, then the command.
+    if (first === "timeout" && /^\d/.test(w[0] ?? "")) w = w.slice(1);
+  }
+  if (worst.kind === "never") return worst;
   const sudo = w[0] === "sudo" || w[0] === "doas";
   if (sudo) w = w.slice(1).filter((x, i) => i > 0 || !x.startsWith("-"));
+  // The tool by its name, however it was reached: /usr/bin/git and \git are git.
+  if (w[0] && /[\\/]/.test(w[0]) && !/^\.{0,2}$/.test(w[0])) w = [w[0].replace(/^\\/, "").replace(/^.*\//, "") || w[0], ...w.slice(1)];
+  // Options before the subcommand (git -C dir push, gh -R repo pr merge, kubectl -n prod delete) no longer hide it (Security M1).
+  const before = BEFORE_SUB[w[0] ?? ""];
+  if (before) {
+    // An alias made on the spot is a command by another name: `git -c alias.x=… x`.
+    if (w[0] === "git" && w.some((a, i) => (a === "-c" && /^alias\./i.test(w[i + 1] ?? "")) || /^--config-env=alias\./i.test(a))) return CANT_READ("Runs Git through an alias made on the spot, which can't be read as the command it is.");
+    let i = 1;
+    while (i < w.length && (w[i]!.startsWith("-") || w[i]!.startsWith("+"))) i += before.test(w[i]!) ? 2 : 1;
+    w = [w[0]!, ...w.slice(i)];
+  }
   const [cmd = "", sub = "", ...rest] = w;
   const args = [sub, ...rest];
+
+  // ── a command inside a command ──
+  // A shell handed its script (`bash -c "…"`, `sh -lc …`, `eval …`) runs that script: it is judged as if typed, and the answer
+  // is the stricter of the two. Read from the piece as written: the script is one quoted word.
+  const over = (v: Verdict): Verdict => (rank(v) > rank(worst) ? v : worst);
+  if (SHELL.test(cmd) || cmd === "su") {
+    const c = args.findIndex((a) => /^-[a-zA-Z]*c$/.test(a) || a === "--command");
+    if (c >= 0) return args[c + 1] ? over(guardCommand(args[c + 1]!, at, depth + 1)) : worst;
+    const hereString = args.indexOf("<<<");
+    if (hereString >= 0 && args[hereString + 1]) return over(guardCommand(args[hereString + 1]!, at, depth + 1));
+    const glued = args.find((a) => a.startsWith("<<<") && a.length > 3);
+    if (glued) return over(guardCommand(glued.slice(3), at, depth + 1));
+    // Its script from a file runs as any program does, and a here-document's lines are each judged as pieces. Handed nothing,
+    // it runs whatever is piped to it, which nobody can read ahead.
+    if (SHELL.test(cmd) && !args.some((a) => a && (!a.startsWith("-") || a.startsWith("<<")))) return over(CANT_READ("Runs whatever is piped into a shell, which can't be read ahead."));
+    return worst;
+  }
+  if (cmd === "eval") return over(guardCommand(args.join(" "), at, depth + 1));
+  // A command that is itself the outcome of another, or (inside a wrapper) a variable: nothing to judge.
+  if (/^(\$\(|`)/.test(cmd) || (depth > 0 && /^\$\{?\w+\}?$/.test(cmd))) return over(CANT_READ("Runs a command that is only known once another has run."));
+  // Another language's script on the command line: no shell to read, so asked only when it starts programs of its own.
+  const inline = INLINE[cmd.replace(/^(python3?|node|ruby|perl|php)[\d.]*$/, "$1")];
+  if (inline) {
+    const i = args.findIndex((a) => inline.test(a));
+    const script = i >= 0 ? (cmd === "deno" ? args.slice(i + 1).join(" ") : (args[i + 1] ?? "")) : "";
+    if (script && STARTS_PROGRAMS.test(script)) return over(CANT_READ(`Runs a ${cmd} script written on the command line that starts other programs, which can't be read ahead.`));
+  }
+  // find … -exec CMD … ; runs CMD.
+  if (cmd === "find") {
+    const i = args.findIndex((a) => /^-(exec|execdir|ok|okdir)$/.test(a));
+    if (i >= 0) return over(guardCommand(args.slice(i + 1).filter((a) => a !== "{}" && a !== "\\" && a !== "+").join(" "), at, depth + 1));
+  }
+  if (worst.kind !== "run") return worst;
+
   const has = (re: RegExp) => args.some((a) => re.test(a));
   const line = w.join(" ");
 
@@ -283,14 +467,13 @@ function guardPiece(piece: string, at: GuardPlace): Verdict {
     const t = m[1]!;
     if (/^\/dev\/(null|stdout|stderr|tty)$/.test(t) || t.startsWith("&")) continue;
     if (/^\/dev\//.test(t)) return never("It won't write straight to a device.");
-    if (t.startsWith("/") || t.startsWith("~") || t.startsWith("$HOME")) {
-      const v = guardPath(t, at);
-      if (v.kind !== "run") return v;
-    }
+    // A relative target too, read from where the piece runs (a `cd` before it counts: guardCommand).
+    const v = guardPath(t, at);
+    if (v.kind !== "run") return v;
   }
   if ((cmd === "tee" || cmd === "cp" || cmd === "mv" || cmd === "ln" || cmd === "install") && args.length) {
     const t = args.filter((a) => !a.startsWith("-")).at(-1);
-    if (t && (t.startsWith("/") || t.startsWith("~") || t.startsWith("$HOME"))) {
+    if (t) {
       const v = guardPath(t, at);
       if (v.kind !== "run") return v;
     }
@@ -358,7 +541,9 @@ export function guardTool(name: string, input: Record<string, unknown>, at: Guar
   const path = typeof input.file_path === "string" ? input.file_path : typeof input.path === "string" ? input.path : typeof input.notebook_path === "string" ? input.notebook_path : "";
   if (/^(write|edit|multiedit|notebookedit|apply_patch|create|str_replace_based_edit_tool)$/i.test(name) && path) return guardPath(path, at);
   if (/^(bash|shell|powershell|run_command|exec_command|local_shell)$/i.test(name)) {
-    const c = typeof input.command === "string" ? input.command : Array.isArray(input.command) ? (input.command as unknown[]).map(String).join(" ") : "";
+    // A command given as its words (Codex: ["bash", "-lc", "…"]) is put back as a line with each word whole, so a script handed
+    // to a shell is still one word.
+    const c = typeof input.command === "string" ? input.command : Array.isArray(input.command) ? (input.command as unknown[]).map((x) => (/^[\w@%+=:,./-]+$/.test(String(x)) ? String(x) : `'${String(x).replace(/'/g, "'\\''")}'`)).join(" ") : "";
     return c ? guardCommand(c, at) : RUN;
   }
   return RUN;

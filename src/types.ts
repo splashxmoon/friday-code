@@ -338,7 +338,7 @@ export const TOOL_INFO: Record<EngineTool, ToolInfo> = {
     docs: "https://aider.chat/docs/",
     install: { windows: 'powershell -ExecutionPolicy ByPass -c "irm https://aider.chat/install.ps1 | iex"', unix: "curl -LsSf https://aider.chat/install.sh | sh" },
     tint: "#14b014",
-    note: "Runs in Auto or Plan: it doesn't ask before each change. Set a provider's API key (Anthropic, OpenAI and others) where it runs.",
+    note: "Runs in Auto or Plan: it doesn't ask before each change. Set a provider's API key (Anthropic, OpenAI and others) where it runs. It has no MCP, so it can't use the tools for talking to the other agents.",
   },
   // Charm's coding agent, in plain text: one `crush run` a turn (runner/adapters.ts crush).
   crush: {
@@ -347,7 +347,7 @@ export const TOOL_INFO: Record<EngineTool, ToolInfo> = {
     docs: "https://github.com/charmbracelet/crush",
     install: { npm: "@charmland/crush" },
     tint: "#6b50ff",
-    note: "Runs only in Auto: a run approves its own tool calls.",
+    note: "Runs in Auto or Plan: a run approves its own tool calls, so Plan hides its editing and shell tools.",
   },
   // Augment Code's coding agent, over its ACP server (`auggie --acp`).
   auggie: {
@@ -398,6 +398,37 @@ export const CLI_ID = /^[A-Za-z0-9][\w-]{0,127}$/;
  * with nobody asked.
  */
 export type EngineMode = "plan" | "edits" | "full";
+
+/**
+ * The modes a coding tool can really be held to, when not all three, and why not the others: one place the runner (which
+ * refuses a turn in a mode the tool can't honour) and every mode picker (which says so beside the mode, rather than letting it
+ * be picked and then failing the turn) read alike (Arun, 2026-11-27: "fix uneven across tools").
+ *
+ * - Amp: `amp --execute` never asks before a tool runs (its docs: "Amp does not ask for approval before running tools") and has
+ *   no plan or read-only mode, so only Auto.
+ * - Aider: `aider --message` can't ask before each change; Plan is its own ask mode (`--chat-mode ask`), which changes nothing.
+ * - Crush: `crush run` approves every tool call itself; Plan hides its editing and shell tools from it (its `disabled_tools`),
+ *   so it can read and answer but not change anything.
+ */
+export const TOOL_MODES: Partial<Record<EngineTool, { modes: EngineMode[]; why: string }>> = {
+  amp: { modes: ["full"], why: "Amp can't ask before it acts and has no plan mode, so it runs only in Auto." },
+  aider: { modes: ["full", "plan"], why: "Aider can't ask before each change, so it runs in Auto, or in Plan (its ask mode, which changes nothing)." },
+  crush: { modes: ["full", "plan"], why: "Crush can't ask before each change, so it runs in Auto, or in Plan (its editing and shell tools hidden)." },
+};
+
+/** Why `tool` can't run in `mode`, said plainly; null when it can. */
+export function modeRefusal(tool: EngineTool | undefined, mode: EngineMode): string | null {
+  const m = tool ? TOOL_MODES[tool] : undefined;
+  return m && !m.modes.includes(mode) ? m.why : null;
+}
+
+/**
+ * Coding tools Friday's own MCP server (runner/friday-mcp.ts) can't reach, so they have none of the tools for talking to the
+ * other agents (ask_agent, post_tasks, claim_files…): Aider has no MCP client at all (checked on its main branch, November
+ * 2026), and Pi leaves MCP out by design. What reaches them from the other agents is said without naming those tools, and their
+ * last message is still their answer (mesh-note.ts).
+ */
+export const NO_AGENT_TOOLS: ReadonlySet<EngineTool> = new Set<EngineTool>(["aider", "pi"]);
 
 /**
  * One question, or one change, asked of the folder a connected machine has
@@ -581,6 +612,33 @@ export const ENGINE_MODEL_INFO: Record<EngineTool, EngineModelInfo[]> = {
   // Auggie's models depend on the Augment account; its picker over ACP lists them.
   auggie: [],
   acp: [],
+};
+
+/**
+ * Dollars per million tokens, in and out, of the models Friday knows a list price for: Anthropic's API prices (as of
+ * 2026-11-09), by Claude Code's aliases and ids. On a subscription this is what the work would have cost on the API, the only
+ * dollar figure there is. Smart routing, a tool's own default and every other tool: not known, so no dollar cap applies. Here
+ * beside the models, not in team-budget.ts: the Cost Waterfall's chunk needs them too, and a lazy chunk that imports one module of
+ * a bigger chunk splits it (esbuild groups modules by the entry points that reach them; test/client-bundle.test.ts).
+ */
+export const PRICES: Record<string, [number, number]> = {
+  fable: [8, 40],
+  "claude-fable-5-2": [8, 40],
+  "claude-fable-5-1": [10, 50],
+  "claude-fable-5": [10, 50],
+  opus: [4, 20],
+  "claude-opus-5-5": [4, 20],
+  "claude-opus-5": [5, 25],
+  "claude-opus-4-8": [5, 25],
+  "claude-opus-4-7": [5, 25],
+  "claude-opus-4-6": [5, 25],
+  sonnet: [2, 10],
+  "claude-sonnet-5-5": [2, 10],
+  "claude-sonnet-5": [2, 10],
+  "claude-sonnet-4-6": [3, 15],
+  haiku: [0.1, 0.5],
+  "claude-haiku-5-5": [0.1, 0.5],
+  "claude-haiku-4-5": [1, 5],
 };
 
 /**
@@ -1159,6 +1217,13 @@ export type EventBody =
       /** Only its machine's host may say yes, as a person: nobody else in the session, and none of Friday's own yeses (a room
        *  running on its own, commands allowed in advance). Using that person's screen, mouse and keyboard (computer.ts). */
       hostsOwn?: boolean;
+      /**
+       * A fingerprint of what the commands run in this project (its package scripts, Makefile, runner configs, Git's hooks), taken by
+       * the machine as it asks (runner/ask-facts.ts). A yes given in advance (Always allow) answers only for a state its host said yes to.
+       */
+      scripts?: string;
+      /** A secret, or a file outside the folder, the command would read through a link or a search of every file: never answered in advance. */
+      secretRead?: string;
     }
   // Anyone allowed to suggest who isn't driving. Never reaches the agent unless promoted.
   | { type: "suggestion"; text: string; mentions?: string[]; attachments?: Attachment[]; /** Raised at one step of a run: the tool call it is about, and the step's label. */ at?: { call: string; step: string } }
@@ -1269,6 +1334,16 @@ export type EventBody =
       interrupted?: boolean;
       /** What this step cost, as the provider counted it, for the usage meter. */
       tokens?: number;
+      /**
+       * On an own model: how full its context was for this step (the request's tokens, as its server counted them) and the window
+       * it has, for the composer's ring and the board's bar (agent/window.ts). Kept here, not in an agent.usage, which would count
+       * the step's tokens twice.
+       */
+      context?: number;
+      window?: number;
+      /** Of `context`, what the instructions and tools took; and the room kept free for the reply (the ring's breakdown, 1D). */
+      instr?: number;
+      reply?: number;
       /** Opaque provider reasoning blocks that must be replayed with tool calls. */
       reasoning?: unknown[];
     }
@@ -1428,7 +1503,25 @@ export type EventBody =
    * A coding tool's conversation compacted by its own /compact before a turn, its context having grown past COMPACT_AT: every
    * step of a turn reads the whole conversation again, so a long one costs that much on every step (engine/hub.ts).
    */
-  | { type: "context.compacted"; tool: EngineTool; before: number; window?: number }
+  | {
+      type: "context.compacted";
+      /** The coding tool whose own /compact ran; absent for Friday's agent on an own model (agent/compact.ts). */
+      tool?: EngineTool;
+      before: number;
+      window?: number;
+      /**
+       * Friday's agent on an own model (HANDOFF-local-models-2026-11-28, phase 2): what it came to after, in tokens; how many of
+       * its turns were summarised; the summary its model wrote (Goal, Done, Next, Files, Decisions), sent in their place from now
+       * on; the last event it covers; and the model that wrote it. The turns themselves stay in the log.
+       */
+      after?: number;
+      turns?: number;
+      summary?: string;
+      upTo?: number;
+      model?: string;
+    }
+  /** A compaction undone (agent/compact.ts): the full history is sent again from the next turn. `of`: the context.compacted's seq. */
+  | { type: "context.restored"; of: number }
   /** This session's agent wrote to another session (peers.ts). `held`: it waits there for someone who can steer that agent to say yes. */
   /** The answer to an agent's ask_agent (agent-mesh.ts), on the asker's lane. `auto`: taken from the end of the turn that handled it. */
   | { type: "mesh.replied"; id: string; fromLane: string; fromName: string; toLane: string; toName: string; text: string; auto?: boolean; /** The work stopped before it was done (a stop, an error, a usage limit, its agent gone): a report on that, not a result. */ short?: boolean }

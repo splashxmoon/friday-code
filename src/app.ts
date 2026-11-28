@@ -1,3 +1,5 @@
+import { editsOf } from "./thread-edits.js";
+import { turnsOf } from "./cost-fall.js";
 import { Terminals, type TermIn } from "./runner/terminals.js";
 import { CommandError, CommandRegistry } from "./commands.js";
 import { TemplateError, TemplateRegistry } from "./templates-store.js";
@@ -9,19 +11,21 @@ import { cleanFeed, isPageAction, type PaletteFeed } from "./vscode-palette.js";
 import { mergeTasks } from "./vscode-board.js";
 import { prRoute as prIdeRoute } from "./runner/pr-ide.js";
 import { ciCheckLog, ciFixText, ciOverview } from "./runner/ci-checks.js";
-import { fetchPreview, PREVIEW_FETCH_MS, previewHeadersFrom, previewLocation, previewOptions, previewStatus, previewTrouble, previewStatusLive, startPreview, stopPreview } from "./runner/preview.js";
+import { fetchPreview, reachableAt, PREVIEW_FETCH_MS, previewHeadersFrom, previewLocation, previewOptions, previewStatus, previewTrouble, previewStatusLive, startPreview, stopPreview } from "./runner/preview.js";
 import { closeSaying, heartbeat } from "./heartbeat.js";
 import { PHONE_PAGE, phoneLog, phonePage } from "./phone-log.js";
 import { PhonePush, relayFromEnv, type PushTarget } from "./local/phone-push.js";
 import { lightDiffs, lightener } from "./session/patches.js";
 import { EARLIER_PIECE, slowly } from "./slow.js";
 import { packJson, shellFor, shellRoute, withVary, type ShellRoute } from "./fast-load.js";
+import { appCsp, FRAME_CSP, FRAME_PAGE, FRAME_PATH } from "./page-csp.js";
 import { readdirSync, readFileSync, statSync, watch } from "node:fs";
 import { readdir, readFile, rm, stat } from "node:fs/promises";
+import net from "node:net";
 import http from "node:http";
 import path from "node:path";
 import { EngineHub, projectAllowKey } from "./engine/hub.js";
-import { entryFor } from "./command-allow.js";
+import { allowWith, alwaysOffer, entryFor } from "./command-allow.js";
 import { callHost } from "./runner/local-api.js";
 import { stackOp } from "./runner/stack-pr.js";
 import { serversOp } from "./runner/dev-servers.js";
@@ -70,7 +74,7 @@ type ProofClipsSetting = { on: boolean; auto: boolean; before: boolean; phone: b
 /** How one session takes them: as Settings say, or its own word. */
 type ClipMode = "auto" | "ask" | "off";
 import type { FoundWork } from "./runner/found-work.js";
-import { AutomationStore, cleanAutomation, describeWhen, describeWho, dueAutomation, promptFor as automationPrompt, WAIT_FOR_COMPUTER_MS, type Automation, type AutomationRun } from "./automations.js";
+import { AutomationStore, cleanAutomation, describeWhen, describeWho, dueAutomation, githubKeys, githubNews, GITHUB_LOOK_MS, promptFor as automationPrompt, WAIT_FOR_COMPUTER_MS, type Automation, type AutomationRun, type GithubLook } from "./automations.js";
 import { ProviderError, type LLM } from "./agent/llm.js";
 import { OwnModelLLM } from "./agent/own-model.js";
 import { isOwnModel, ownModelParts } from "./own-model-id.js";
@@ -78,7 +82,7 @@ import { AgentRuntime } from "./agent/runtime.js";
 import { defaultTools, type AgentTool } from "./agent/tools.js";
 import { SESSION_COOKIE, SESSION_MAX_AGE_S, clearSessionCookie, readCookie, sessionCookie, signActor, signInvite, signSession, verifyActor, verifyInvite, verifySession, signReplay, verifyReplay } from "./auth.js";
 import { hideSecrets, hideSecretsIn } from "./secrets.js";
-import { applyPrStatus, boardCards, putOffCards, reviewFacts, sortCards, summaryOf, waitingOn, weekOf, type BoardCard, type SessionSummary } from "./board.js";
+import { applyPrStatus, boardCards, putOffCards, reviewFacts, sortCards, summaryOf, waitingOn, weekFacts, weekOf, weekStats, type BoardCard, type SessionSummary, type WeekFacts } from "./board.js";
 import { checkStateOf, checkWords } from "./check-state.js";
 import { explainRun } from "./explain.js";
 import { riskOf } from "./review-risk.js";
@@ -142,9 +146,8 @@ import type { ImportedTurn, Member, PresenceMember, RepoCall, SessionEvent } fro
 import { NoLinks } from "./local/no-links.js";
 import { computerDetail, LocalLinks } from "./local/computers.js";
 import { parseComputerLink } from "./local/join.js";
-import { checkNumber } from "./local/nearby.js";
 import { handOff } from "./hand-off-run.js";
-import { liveIn, reattachAll } from "./reattach.js";
+import { liveIn, reattachAll, reattachParams } from "./reattach.js";
 import { backBrief as backBriefOf, TeamLooks } from "./team-views.js";
 import { learnedFrom, learnedView, revisionOf, type Learned } from "./route-learning.js";
 import { burn, signInOf } from "./forecast.js";
@@ -170,7 +173,9 @@ import { mkdir as mkdirAt, open as openAt, rename as renameAt, writeFile as writ
 import { ownModelId } from "./own-model-id.js";
 import { handoffBrief } from "./handoff.js";
 import { ENGINE_MODEL_INFO } from "./types.js";
-import { hubOf } from "./agents-hub.js";
+import { hubOf, type HubAgent } from "./agents-hub.js";
+import { subTasksOf, type SubTask } from "./sub-tasks.js";
+import { boardLanes, lanesSince, type SessionLanes } from "./board-lanes.js";
 import { distinctLook } from "./teammate-look.js";
 import { budgetPatch, clockIn, cleanRunBudget, CrewBudget, runOver, type RunBudget } from "./team-budget.js";
 import { movedSince, NUDGE_GAP_MS, QUIET_MS, saysGoalReached, selfRunAnswer, selfRunNote, selfRunNudge, STALL_NUDGES, leadSaid } from "./team-selfrun.js";
@@ -193,10 +198,11 @@ import { validateSchedule } from "./agents.js";
 import { localEdition } from "./local-edition.js";
 import { OutsideAgents } from "./outside-agents.js";
 import { outsideCommand, outsideSetup } from "./local/outside-mcp.js";
+import { enterPage, hasKey, keyCookieHeader, keylessRoute, Tickets } from "./local/local-key.js";
 import { openInTerminal } from "./runner/terminal.js";
 import { rankTools, taskTier } from "./routing.js";
 import { reposOf } from "./session-repos.js";
-import { ManagerStore, NEAR_LIMIT, askLane, askOfLane, cleanManager, enqueue, inQuiet, deleteChat, logged, newChat, openAsks, openChat, type Manager } from "./managers.js";
+import { ManagerStore, NEAR_LIMIT, recordText, askLane, askOfLane, cleanManager, enqueue, inQuiet, deleteChat, logged, newChat, openAsks, openChat, type Manager } from "./managers.js";
 import { managersRun, newSid } from "./managers-run.js";
 import { folderKey } from "./folder-key.js";
 import { cutOff } from "./ide-restore.js";
@@ -224,6 +230,8 @@ const TYPES: Record<string, string> = {
 const compressors = { br: promisify(brotliCompress), gzip: promisify(gzip) };
 const COMPRESSIBLE = /^(text\/|application\/(javascript|json)|image\/svg)/;
 const packed = new Map<string, Promise<{ out: Buffer; etag: string }>>();
+/** What a page's policy is made from besides the page (page-csp.ts): the host it was asked on and the preview origin, kept per response for serveStatic. */
+const pageSources = new WeakMap<http.ServerResponse, { host?: string; preview?: string }>();
 /**
  * Which build a bundled file came from, for its key in `packed`: a hot rebuild makes new files under the same names (app.js),
  * and keyed by path alone the first build's app.js was served beside the new build's chunks, which 404'd (2026-10-19).
@@ -374,6 +382,8 @@ export interface AppOptions {
   redisUrl: string;
   prefix: string;
   secret: string;
+  /** Listen on this computer's own address only: a server signing with the public development secret (server.ts, session-secret.ts). */
+  onlyThisComputer?: boolean;
   llm: LLM;
   tools?: AgentTool[];
   driverGraceMs: number;
@@ -444,15 +454,26 @@ export interface AppOptions {
     };
     /** Your other Fridays on this network, found and offered a link in two clicks (local/nearby.ts). */
     nearby?: {
-      find(ms?: number): Promise<{ id: string; name: string; platform: string; version: string; address: string; pairedWith: string | null }[]>;
+      /** This computer's page is open: listen on the network for a few minutes more (it does not otherwise). */
+      need(): void;
+      find(ms?: number, mine?: string | null): Promise<{ id: string; name: string; platform: string; version: string; address: string; pairedWith: string | null }[]>;
       offer(to: { id: string; name: string; platform: string; version: string; address: string; pairedWith: string | null }, link: string): Promise<void>;
-      pending(): { from: string; name: string; check: string; until: number }[];
+      pending(): { from: string; name: string; until: number }[];
       /** Set by the app: an offer came (appChanged "offers"). */
       onChange?: (() => void) | null;
-      take(from: string): { link: string; name: string } | null;
+      drop(from: string): boolean;
+      /** The code typed for an offer: the offer it proves, "wrong", or null when the offer has run out. */
+      accept(from: string, code: unknown): Promise<{ link: string; name: string } | "wrong" | null>;
     };
     /** Agents outside Friday, over its MCP server (outside-agents.ts): this install's token, and the script they start (local/outside-mcp.ts). */
     outside?: { token: string; shim: string };
+    /**
+     * This install's key (local/local-key.ts): every request and socket must carry it, as a header or the page's cookie, so a
+     * program on this computer that isn't this person's can't drive Friday. Always set by startLocal; unset, nothing is asked for.
+     */
+    key?: string;
+    /** Hosts (local/hosts.ts): your Fridays on other machines, opened here over SSH; Settings › Other computers. */
+    hosts?: import("./local/hosts.js").Hosts;
     /** Where voice input's model is kept once downloaded (voice-models.ts): `<FRIDAY_HOME>/models`. Without it, no voice routes. */
     models?: string;
     /** The folder backdrops are kept in (backdrops.ts): `<FRIDAY_HOME>/backdrops`. Without it, none. */
@@ -964,7 +985,7 @@ export async function createApp(o: AppOptions) {
     }
     return t;
   }
-  const boardCache = new Map<string, { cards: BoardCard[]; week: ReturnType<typeof weekOf> }>();
+  const boardCache = new Map<string, { cards: BoardCard[]; week: ReturnType<typeof weekOf>; facts: WeekFacts }>();
   /** A session's board cards for this person, remembered until its log moves on. */
   const cardsFor = async (state: SessionState, meId: string) => {
     // What each lane is streaming now (never logged, so not in lastSeq): a card says "Writing its answer" as the reply does.
@@ -973,12 +994,16 @@ export async function createApp(o: AppOptions) {
     let made = boardCache.get(key);
     if (!made) {
       const events = await store.events(state.id);
-      made = { cards: boardCards(state, events, meId, (l) => streaming.get(l) ?? null), week: weekOf(events) };
+      made = { cards: boardCards(state, events, meId, (l) => streaming.get(l) ?? null), week: weekOf(events), facts: weekFacts(events, meId) };
       boardCache.set(key, made);
       if (boardCache.size > 600) boardCache.delete(boardCache.keys().next().value!);
     }
     return made;
   };
+  /** Each thread of the project overview, by session, person, log position and what is streaming: read again only when it moves. */
+  const overviewCache = new Map<string, { agents: HubAgent[]; subs: SubTask[] }>();
+  /** Each session of the board's Timeline (board-lanes.ts) over its whole log, by session and log position: cut to the window asked for on every poll. */
+  const lanesCache = new Map<string, SessionLanes>();
   const prCache = new Map<string, { at: number; status: PrStatus | null }>();
   /** A pull request in full for the Pull request panel (pr-detail.ts), by session and link, for half a minute. */
   const prDetailCache = new Map<string, { at: number; detail: PrDetail | null }>();
@@ -4435,7 +4460,46 @@ export async function createApp(o: AppOptions) {
           if (sent.ok) void bus.wake(sid, lane);
           return sent.ok;
         },
-        startTool: (sid, me, p) => startTool(sid, me, { tool: p.tool, cwd: p.cwd, mode: "full", copy: false, project: p.project, ...(p.model ? { model: p.model } : {}), ...(p.lane ? { lane: p.lane } : {}) }),
+        // `newLane`: a Captain's agent, a lane of its own named for it in the Captain's session (managers-run.ts startTask).
+        startTool: (sid, me, p) => startTool(sid, me, { tool: p.tool, cwd: p.cwd, mode: "full", copy: !!p.copy, project: p.project, ...(p.model ? { model: p.model } : {}), ...(p.lane ? { lane: p.lane } : {}), ...(p.newLane ? { newLane: p.newLane } : {}) }),
+        // A Captain's lane, or one of its agents', whose tool detached (a restart, an update): started again on it as the page's own
+        // quiet reconnect does (reattach.ts), its tool, model and folder as they were, its conversation carried on.
+        revive: async (sid, lane) => {
+          const st = await store.state(sid).catch(() => null);
+          const e = st?.engines[lane];
+          if (!st || !e?.tool || !e.cwd) return { ok: false, why: "it has no coding tool to start" };
+          if (e.online) return { ok: true };
+          const me = await localNamed();
+          const params = reattachParams(sid, linkToken(sid, st, st.members[me.id]?.role ?? "owner"), lane, e, signActor(o.secret, sid, me.id));
+          try {
+            const token = links.tokenFor(me.id);
+            if (!token && !localHost()) return { ok: false, why: "the computer with the folder isn't connected" };
+            const r = (token ? await links.call(token, "start", params, 10 * 60_000) : await callHost("start", params, hostCtx(me))) as { error?: unknown } | undefined;
+            return r && typeof r === "object" && r.error ? { ok: false, why: String(r.error) } : { ok: true };
+          } catch (err) {
+            return { ok: false, why: (err as Error).message };
+          }
+        },
+        // A message queued for a Captain's lane and not delivered yet taken back, as the person's own Take back does.
+        withdraw: async (sid, lane, seq) => {
+          const me = await localNamed();
+          return (await core.handle(sid, { id: me.id, name: me.name }, { type: "instruction.withdraw", seq, lane })).ok;
+        },
+        // A Captain's agent's copy brought into the project folder (core folder.apply), as a hub brings its parts together.
+        apply: async (sid, lane) => {
+          const me = await localNamed();
+          const before = (await store.events(sid)).length;
+          const r = await core.handle(sid, { id: me.id, name: me.name }, { type: "folder.apply", lane });
+          const applied = (await store.events(sid)).slice(before).findLast((e) => e.body.type === "folder.applied");
+          if (!r.ok && !/nothing new/i.test(r.error ?? "")) throw new Error(r.error ?? "Couldn't bring it over.");
+          return applied?.body.type === "folder.applied" ? { files: applied.body.files, conflicts: applied.body.conflicts ?? [] } : { files: 0, conflicts: [] };
+        },
+        // What a mission's thread has spent, at list prices (spend.ts), every lane of it.
+        spent: async (sid) => {
+          const st = await store.state(sid).catch(() => null);
+          if (!st) return 0;
+          return spendOf([{ sid, lanes: Object.keys(st.engines), events: await store.events(sid), engines: Object.fromEntries(Object.entries(st.engines).map(([l, e]) => [l, { tool: e.tool, model: e.model }])) }], 0).usd;
+        },
         stop: (sid, me, lane) => stopOnMachine(sid, me, lane),
         me: () => localNamed(),
         sessions: async (me) => (await store.mine(me.id, 60).catch(() => [])).map((x) => x.sid),
@@ -4534,6 +4598,41 @@ export async function createApp(o: AppOptions) {
           const me = await localNamed();
           void testWork({ sid, lane, owner: { id: me.id, name: me.name }, folder: "", key: null }).catch((e) => console.error("[managers] check", e));
           return true;
+        },
+        // A criterion's check run by Friday itself in the project folder (the Captain's lane), as Check it runs a project's tests: its
+        // verdict read the same way (checkVerdict), never the agent's word for it. The command was safeCheck'd by the caller.
+        run: async (sid, lane, command) => {
+          const out = (await mesh.repo!(sid, lane, { op: "shell", command, timeoutSec: CHECK_SECONDS } as RepoCall).catch((e: Error) => `Couldn't run it: ${e.message}`)) ?? "";
+          const verdict = checkVerdict(out);
+          // Couldn't run here, or ran out of time: no word either way, so it stays the Captain's to prove.
+          if (verdict === "skipped") return null;
+          return { ok: verdict === "passed", out: clipText(out.slice(-4000), 1200) };
+        },
+        // A finished plan's UI work recorded on the Captain's own lane (the project folder, where its agents' work was brought).
+        prove: async (sid, lane, key, how) => {
+          const st = await store.state(sid);
+          if (!hasUiChange(st.diffs?.[lane]?.files ?? [])) return false;
+          const me = await localNamed();
+          void proveRun({ sid, lane, owner: { id: me.id, name: me.name }, folder: "", key: `${o.prefix}clip-plan:${key}${how.asked ? `:${Date.now()}` : ""}`, ...(how.asked ? { asked: true } : {}), captain: { ...(how.summary ? { summary: how.summary } : {}) } }).catch((e) => console.error("[managers] proof clip", e));
+          return true;
+        },
+        // A finished goal out as its Captain's settings say: only the crew's files committed to its friday/ branch in the project
+        // folder, then pushed or a pull request opened by the folder's own publish (the person chose this in the Captain's settings).
+        ship: async (sid, lane, how) => {
+          const parse = (out: string) => {
+            try {
+              return JSON.parse(out) as Record<string, unknown>;
+            } catch {
+              return { error: out.slice(0, 300) };
+            }
+          };
+          const message = `${how.title}\n\n${how.body}`;
+          const c = parse((await openFolder(sid, { op: "commit", message, branch: how.branch, only: how.only }, lane)).output) as { sha?: string; branch?: string; error?: string };
+          if (!c.sha) return { error: c.error || "Couldn't commit it." };
+          const at = { sha: c.sha, branch: c.branch || how.branch };
+          if (how.how === "branch") return at;
+          const p = parse((await openFolder(sid, { op: "publish", message, pr: how.how === "pr", approved: true }, lane)).output) as { pushed?: boolean; prUrl?: string; error?: string };
+          return { ...at, ...(p.pushed ? { pushed: true as const } : {}), ...(p.prUrl ? { prUrl: p.prUrl } : {}), ...(p.error ? { error: p.error } : {}) };
         },
         readyOf: async (sid, lane) => {
           const st = await store.state(sid);
@@ -4914,6 +5013,59 @@ export async function createApp(o: AppOptions) {
   };
   const automationLoop = setInterval(() => void tickAutomations().catch((e) => console.error("[automations]", e)), 30_000);
   automationLoop.unref();
+  /**
+   * Every two minutes: automations watching a GitHub repository look at it through their owner's computer (gh.watch), and each new
+   * issue, pull request or failing check starts a run (automations.ts githubNews). The first look that works only notes what is
+   * there. Looking needs the owner's computer, so while it is off nothing is looked at and nothing is missed: the next look sees it.
+   */
+  let githubBusy = false;
+  const tickGithub = async (): Promise<number> => {
+    if (githubBusy) return 0;
+    githubBusy = true;
+    let started = 0;
+    try {
+      for (const ws of await redis.smembers(automations.workspacesKey()).catch(() => [] as string[])) {
+        for (const a of await automations.list(ws).catch(() => [] as Automation[])) {
+          if (!a.on || a.when.kind !== "github" || !a.when.repo || a.paused || !computerHere(a.ownerId)) continue;
+          const w = a.when;
+          const ctx = hostCtx({ id: a.ownerId, name: a.ownerName });
+          const look = (await callHost("gh.watch", { repo: w.repo, event: w.event }, ctx).catch((e: Error) => ({ error: e.message }))) as GithubLook | { error: string };
+          if ("error" in look) {
+            await automations.looked(ws, a.id, look.error);
+            continue;
+          }
+          const seen = await automations.seen(ws, a.id);
+          if (!seen) {
+            await automations.baseline(ws, a.id, githubKeys(w, look));
+            await automations.looked(ws, a.id, "");
+            continue;
+          }
+          const news = githubNews(w, look, seen);
+          await automations.looked(ws, a.id, "");
+          if (!news.length) continue;
+          // Noted before it starts, so a slow start or a second look at the same moment never starts it twice.
+          await automations.addSeen(ws, a.id, news.map((n) => n.key));
+          // Its own folder if it has one; else the repository's clone on that computer, in a copy; else a new folder it clones into.
+          let run = a;
+          if (!a.folder) {
+            const found = ((await callHost("repo.local", { repo: w.repo }, ctx).catch(() => null)) as { folder: { path: string } | null } | null)?.folder;
+            if (found?.path) run = { ...a, folder: found.path, copy: true };
+          }
+          for (const n of news) {
+            const event = run.folder ? n.event : `${n.event}\n\n(${w.repo} isn't cloned on this computer: clone it here first with gh repo clone ${w.repo}.)`;
+            await runAutomation(ws, run, n.trigger, event).catch((e) => console.error("[automations github]", e));
+            started++;
+          }
+        }
+      }
+    } finally {
+      githubBusy = false;
+    }
+    return started;
+  };
+  // FRIDAY_GITHUB_LOOK_MS: sooner for the end-to-end walk, which can't wait two minutes a look.
+  const githubLoop = setInterval(() => void tickGithub().catch((e) => closingOr("[automations github]", e)), Number(process.env.FRIDAY_GITHUB_LOOK_MS) > 0 ? Number(process.env.FRIDAY_GITHUB_LOOK_MS) : GITHUB_LOOK_MS);
+  githubLoop.unref();
   // ── Run later (later.ts): a task from Code's box kept with its time, started then as a Code chat, only while Friday is running ──
   const later = o.local && localEdition() ? new LaterStore(redis, o.prefix) : null;
   /** A task of the person's, started now: a chat of its own in its folder, told what to do once its coding tool is there (the way Code's box starts one). */
@@ -5036,12 +5188,14 @@ export async function createApp(o: AppOptions) {
    * Who a clip is for and where it was made: the session, the lane that worked, its person (whose Settings decide), and the folder.
    * `key` is where Today keeps it (a queued task's chat) or null for a clip only the chat shows.
    */
-  type ClipJob = { sid: string; lane: string; owner: { id: string; name: string }; folder: string; key: string | null; /** Pressed for (Record a proof clip): made whatever the mode, but off. */ asked?: boolean; /** A team's board finished: the lead sends it, saying what the team did. */ team?: { lead: string; name: string; summary: string; files: string[] } };
+  type ClipJob = { sid: string; lane: string; owner: { id: string; name: string }; folder: string; key: string | null; /** Pressed for (Record a proof clip): made whatever the mode, but off. */ asked?: boolean; /** A team's board finished: the lead sends it, saying what the team did. */ team?: { lead: string; name: string; summary: string; files: string[] }; /** A Captain's plan finished (or its Recap's Record): in its own hidden session, on whenever proof clips are on in Settings, with what the plan did. */ captain?: { summary?: string } };
   const proveRun = async (j: ClipJob): Promise<void> => {
     // Off in Settings: nothing recorded (and nothing kept, so turning it back on later doesn't leave a hole saying why).
     // How the session takes clips: off records nothing; "when I ask" only what was asked for (j.asked: Record a proof clip); automatic,
     // at most one every ten minutes in a session by itself (a queued task's own clip, for Today, isn't held back by that).
-    const mode = (await sessionClipsOf(j.sid, j.owner.id)).mode;
+    // A Captain's work isn't an IDE chat, but its UI work is proved too (Arun, 2026-11-28: "proof clips when dealing and working with
+    // UI work"): by itself when proof clips are on in Settings, and always when its Recap's Record is pressed.
+    const mode: ClipMode = j.captain ? (clipModeOf(await proofClipsOf(j.owner.id)) !== "off" ? "auto" : j.asked ? "ask" : "off") : (await sessionClipsOf(j.sid, j.owner.id)).mode;
     if (mode === "off") return;
     // Pre-approved, or asked for (Test it); a queued task's own, for Today, either way: nobody was there to press anything.
     if (!j.asked && !j.key && mode !== "auto") return;
@@ -5114,7 +5268,7 @@ export async function createApp(o: AppOptions) {
       const ev = await proofClipBody(j.sid, done, "queued", j.lane);
       // A team's: from its lead, in the lead's lane, with what the whole team did rather than the last agent's words.
       if (ev && j.team) await store.append(j.sid, { id: `agent:${j.team.lead}`, name: j.team.name, kind: "agent" }, { ...ev, summary: j.team.summary, ...(j.team.files.length ? { files: j.team.files } : {}) }, { lane: j.team.lead });
-      else if (ev) await store.append(j.sid, { id: "friday", name: "Friday", kind: "system" }, ev, { lane: j.lane });
+      else if (ev) await store.append(j.sid, { id: "friday", name: "Friday", kind: "system" }, { ...ev, ...(j.captain?.summary ? { summary: j.captain.summary.slice(0, 400) } : {}) }, { lane: j.lane });
       // Its file gone before it could be shown: the card said "Keeping the clip", and ends here rather than staying on it.
       else if (said) await say("failed", "The clip was made but couldn't be kept.");
     } catch (e) {
@@ -5298,6 +5452,18 @@ export async function createApp(o: AppOptions) {
       return "";
     }
   })();
+  /**
+   * Whether this server may not show previews at all yet. With no address of their own they are served on Friday's, where a
+   * previewed page's script is Friday's own page to the browser and can act as whoever opened the link (2026-11-27 security
+   * review). That is as it always was on a server only its own computer reaches (a laptop, a test); a server people reach by
+   * a name of its own, or one run for production, refuses to make a preview link until PREVIEW_ORIGIN names a second address.
+   */
+  const previewsNeedOrigin = (() => {
+    if (previewBase || o.local) return false;
+    const host = appOrigin ? new URL(appOrigin).hostname : "localhost";
+    return process.env.NODE_ENV === "production" || !/^(localhost|127(\.\d{1,3}){3}|\[::1\])$/.test(host);
+  })();
+  if (previewsNeedOrigin) console.warn("[preview] off: PREVIEW_ORIGIN is not set. Previews need an address of their own (a second hostname that reaches this server), so a previewed page can't act as whoever is looking at it.");
   const previewHost = previewBase ? new URL(previewBase).host.toLowerCase() : "";
   // Host, or the proxy's X-Forwarded-Host: either naming the preview host makes it one. Spoofing that only takes things away.
   const onPreviewHost = (req: http.IncomingMessage): boolean =>
@@ -5322,11 +5488,124 @@ export async function createApp(o: AppOptions) {
   // Downloaded from Hugging Face and jsDelivr, unless stand-ins are named (FRIDAY_VOICE_MODEL_HOST, FRIDAY_VOICE_ENGINE_HOST).
   const voiceModels = o.local?.models ? new VoiceModels({ dir: o.local.models, hosts: { ...(process.env.FRIDAY_VOICE_MODEL_HOST ? { model: process.env.FRIDAY_VOICE_MODEL_HOST } : {}), ...(process.env.FRIDAY_VOICE_ENGINE_HOST ? { engine: process.env.FRIDAY_VOICE_ENGINE_HOST } : {}) } }) : null;
 
+  /** The preview on this machine whose page was last served (its ticket): where a live-reload socket at a bare path goes. */
+  let lastPreview = "";
+  /**
+   * A websocket from a previewed page, carried to its dev server on this machine as it is (spec 15: "hot reload included"): only
+   * on the preview's own loopback address, only from that address's pages, only to a ticket's port here that is still good. The
+   * ticket in its path, else the preview last opened (a dev server's client opens its socket at its own root, not the prefix).
+   */
+  const previewSocket = (req: http.IncomingMessage, socket: import("node:stream").Duplex, head: Buffer): void => {
+    const refuse = () => void socket.destroy();
+    if (!/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(String(req.headers.host ?? ""))) return refuse();
+    const origin = req.headers.origin;
+    if (origin !== undefined && origin !== previewBase) return refuse();
+    const raw = req.url ?? "/";
+    const m = /^\/api\/preview\/([\w-]{6,40})(\/.*)?$/.exec(raw.split("?")[0]!);
+    const id = m ? m[1]! : lastPreview;
+    const t = id ? previewTickets.get(id) : undefined;
+    const now = Date.now();
+    if (!t || !(t.here || t.local) || now - t.iat > PREVIEW_TICKET_MAX_MS || now - t.at > PREVIEW_TICKET_IDLE_MS) return refuse();
+    const rest = m ? (m[2] || "/") + (raw.includes("?") ? raw.slice(raw.indexOf("?")) : "") : raw;
+    void reachableAt(t.port).then((at) => {
+      if (!at || socket.destroyed) return refuse();
+      const up = net.connect(t.port, at);
+      const close = () => (up.destroy(), socket.destroy());
+      up.on("error", close);
+      socket.on("error", close);
+      up.on("connect", () => {
+        const lines = [`${req.method ?? "GET"} ${rest} HTTP/${req.httpVersion}`];
+        for (let i = 0; i < req.rawHeaders.length; i += 2) {
+          const k = req.rawHeaders[i]!;
+          const lk = k.toLowerCase();
+          if (lk === "host") lines.push(`Host: localhost:${t.port}`);
+          else if (lk === "origin") lines.push(`Origin: http://localhost:${t.port}`);
+          else lines.push(`${k}: ${req.rawHeaders[i + 1]}`);
+        }
+        up.write(`${lines.join("\r\n")}\r\n\r\n`);
+        if (head.length) up.write(head);
+        up.pipe(socket);
+        socket.pipe(up);
+      });
+    }, refuse);
+  };
+
+  /** How many agents are at work here, for /api/host/status: lanes running, in this person's sessions; read at most every 10 s. */
+  let runningRead: { at: number; n: Promise<number> } | null = null;
+  const hostRunning = (): Promise<number> => {
+    if (runningRead && Date.now() - runningRead.at < 10_000) return runningRead.n;
+    const n = (async () => {
+      if (!o.local) return 0;
+      const rows = await store.mine(o.local.user.id, 200).catch(() => []);
+      const counts = await mapLimit(rows, 16, async (r) => {
+        const state = await store.state(r.sid).catch(() => null);
+        return state ? Object.keys(state.engines).filter((lane) => runOf(state, lane).status === "running").length : 0;
+      });
+      return counts.reduce((a, b) => a + (b ?? 0), 0);
+    })().catch(() => 0);
+    runningRead = { at: Date.now(), n };
+    return n;
+  };
+
+  // ── this install's key (local/local-key.ts) ──────────────────────
+  const keyPort = (() => {
+    try {
+      return new URL(o.appUrl ?? "").port || String(o.port);
+    } catch {
+      return String(o.port);
+    }
+  })();
+  /** Whether a request carries this install's key. Code's own extension carries the token Friday started it with instead, for its routes only. */
+  const keyed = (req: http.IncomingMessage): boolean => {
+    const key = o.local?.key;
+    if (!key || hasKey(req, key, keyPort)) return true;
+    const given = req.headers["x-friday-vscode"];
+    if (typeof given !== "string" || !(req.url ?? "").startsWith("/api/vscode/")) return false;
+    const want = Buffer.from(vscodeToken() ?? "");
+    const got = Buffer.from(given);
+    return want.length > 0 && got.length === want.length && timingSafeEqual(got, want);
+  };
+  const enterTickets = o.local?.key ? new Tickets(o.local.key) : null;
+  /**
+   * A request without the key. The few routes that hold a credential of their own, or nothing private, go on as they were
+   * (keylessRoute); a browser's pass is traded for the cookie; a browser asking for a page is told how to get in; the rest is refused.
+   */
+  const unkeyed = (req: http.IncomingMessage, res: http.ServerResponse): void => {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    const method = req.method ?? "GET";
+    if (keylessRoute(method, url.pathname, url.searchParams)) return void serve(req, res);
+    if (method === "POST" && url.pathname === "/api/local/enter") {
+      // From Friday's own page only (the one below): a pass is no use to another site's page.
+      if (req.headers.origin !== appOrigin) return json(res, 403, { error: "Not from this page." });
+      return void readJson(req).then(
+        (body) => {
+          if (!enterTickets?.take(body.k)) return json(res, 401, { error: "That link was used already or is too old." });
+          res.setHeader("Set-Cookie", keyCookieHeader(o.local!.key!, keyPort));
+          res.setHeader("Cache-Control", "no-store");
+          json(res, 200, { ok: true });
+        },
+        () => json(res, 400, { error: "That body is not JSON." }),
+      );
+    }
+    if (method === "GET" && !url.pathname.startsWith("/api/")) {
+      const page = enterPage();
+      res.writeHead(200, page.headers);
+      return void res.end(page.html);
+    }
+    json(res, 401, { error: "Friday only answers this person's own pages and programs on this computer." });
+  };
+
   // ── HTTP ─────────────────────────────────────────────────────────
   const server = http.createServer((req, res) => {
     if (closing) return json(res, 503, { error: "Server is shutting down" });
     // The open-source edition has no sign-in, so only this computer's own pages may talk to it (localOnly).
     if (o.local && !localOnly(req, appOrigin)) return json(res, 403, { error: "Friday only answers its own pages on this computer." });
+    // And only what carries this install's key (local/local-key.ts): a program on this computer is not a page, and says whatever
+    // it likes about where it comes from, so another account here, or an app kept in a sandbox, could otherwise drive Friday.
+    if (o.local?.key && !onPreviewHost(req) && !keyed(req)) return void unkeyed(req, res);
+    serve(req, res);
+  });
+  const serve = (req: http.IncomingMessage, res: http.ServerResponse): void => {
     // A JSON body bigger than readJson reads (256 KB) is refused before it is read, with a 413 rather than a dropped
     // connection (Testing API-12). Uploads aren't JSON, and the routes that read larger JSON themselves keep their limits.
     if (/application\/json/i.test(String(req.headers["content-type"] ?? "")) && Number(req.headers["content-length"]) > JSON_MAX && !BIG_JSON.test((req.url ?? "").split("?")[0]!)) {
@@ -5350,7 +5629,7 @@ export async function createApp(o: AppOptions) {
         if (!res.headersSent) json(res, 500, { error: "Internal error" });
       }),
     );
-  });
+  };
 
   // Who is connected right now, for the admin console: sockets by account, and what is running.
   const online = new Map<WebSocket, string>();
@@ -5443,8 +5722,16 @@ export async function createApp(o: AppOptions) {
       res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
       if (String(req.headers["x-forwarded-proto"] ?? "").split(",")[0]!.trim() === "https") res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
       if (!onPreviewHost(req)) {
+        // The app's own pages replace this with their whole policy (page-csp.ts appCsp, in serveStatic and for /admin).
         res.setHeader("Content-Security-Policy", "frame-ancestors 'self'");
         res.setHeader("X-Frame-Options", "SAMEORIGIN");
+        pageSources.set(res, { host: String(req.headers.host ?? ""), preview: previewBase });
+        // The frame an agent's page is drawn in (a live block, a Work page): a page of its own with its own policy, since a
+        // srcdoc frame would take the app's and run none of the agent's scripts. Nothing in it is anyone's: no account needed.
+        if (req.method === "GET" && url.pathname === FRAME_PATH) {
+          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": FRAME_CSP, "Cache-Control": "public, max-age=3600" });
+          return void res.end(FRAME_PAGE);
+        }
       }
     }
     if (previewHost) {
@@ -6289,6 +6576,9 @@ export async function createApp(o: AppOptions) {
         return json(res, 404, { error: "This preview link expired. Reopen the preview." }, previewHeaders());
       }
       t.at = Date.now();
+      // The preview on this machine last opened: its dev server's live-reload socket, opened at the server's own path, is sent
+      // there (upgrade, below: previewSocket).
+      if (t.here || t.local) lastPreview = ticketed[1]!;
       const rest = (ticketed[2] || "/") + (url.search || "");
       const prefix = `/api/preview/${ticketed[1]}`;
       try {
@@ -6384,6 +6674,7 @@ export async function createApp(o: AppOptions) {
       if (crossSite(req)) return json(res, 403, { error: "Cross-site requests can't open a preview." });
       const me = await identity(req);
       if (!me) return json(res, 401, { error: "Sign in to open a preview." });
+      if (previewsNeedOrigin) return json(res, 503, { error: "Previews are off on this server until they have an address of their own. Whoever runs it sets PREVIEW_ORIGIN to a second hostname that reaches this server." });
       const picked = await pickedMachine(req);
       if ("error" in picked) return json(res, picked.status, { error: picked.error });
       const token = picked.token ?? str(req.headers["x-friday-link"], 200);
@@ -6435,6 +6726,8 @@ export async function createApp(o: AppOptions) {
     if (url.pathname.startsWith("/api/runner/")) {
       if (crossSite(req)) return json(res, 403, { error: "Cross-site requests can't reach a machine." });
       const method = url.pathname.slice("/api/runner/".length);
+      // A model's window or context choices changed in Settings: every own model's window is asked again before its next step.
+      if (method === "models.own.context.save" || method === "models.own.save") runtime.forgetWindows();
       const params: Record<string, unknown> = req.method === "POST" ? ((await readJson(req)) as Record<string, unknown>) : Object.fromEntries(url.searchParams);
       // Your other computers (local/computers.ts): a session's agent is started and stopped again only on the computer it runs on,
       // whatever computer the page has picked for new work. Opening a session whose agent was on another computer used to start
@@ -6489,7 +6782,9 @@ export async function createApp(o: AppOptions) {
           const ctx = { serverUrl: selfUrl, user: user ?? { id: "local", name: "You" }, runners: localRunners, log: (l: string) => console.log(`[runner] ${l}`) };
           const value = (await callHost(method, params, ctx)) as object;
           // Say which machine answered, so the UI can never claim the wrong one.
-          return json(res, ok, method === "tools" ? { ...value, where: "local" } : value);
+          // A host (local/hosts.ts) is looked at from another computer, through a tunnel to Friday's port alone: its page mustn't
+          // load this machine's dev servers straight from localhost, which there is that computer's own (Preview.tsx loadsDirectly).
+          return json(res, ok, method === "tools" ? { ...value, where: "local", ...(process.env.FRIDAY_HOST === "1" ? { remote: true } : {}) } : value);
         }
         // Cloning can take minutes on a big repo, and so can starting: a worktree of a big repo is a minute of git before the
         // agent attaches. Told "didn't answer in time" at 30 seconds, the person set it up again while the first one joined.
@@ -6582,9 +6877,18 @@ export async function createApp(o: AppOptions) {
       if (!inv || inv.sid !== sid) return json(res, 403, { error: "Invalid invite for this session" });
       const user = await identity(req);
       if (!user) return json(res, 401, { error: "Missing user identity" });
-      const body = (await readJson(req)) as { lane?: unknown; id?: unknown; approve?: unknown; task?: unknown };
+      const body = (await readJson(req)) as { lane?: unknown; id?: unknown; approve?: unknown; task?: unknown; always?: unknown };
       const approve = body.approve === true;
       const lane = str(body.lane, 80) || MAIN_LANE;
+      // Always allow ticked (the Agents page's card): its commands onto the allow list first, as the thread's card does; the
+      // command only runs once the list has them.
+      if (approve && body.always === true) {
+        const state = await store.state(sid);
+        const entries = state.approvals[lane]?.id === str(body.id, 80) ? alwaysOffer(state, user.id, lane) : null;
+        if (!entries) return json(res, 403, { error: "Only the session's owner can let commands like this through from now on." });
+        const set = await core.handle(sid, { id: user.id, name: user.name }, { type: "settings.update", allow: allowWith(state, entries) });
+        if (!set.ok) return json(res, 400, { error: set.error ?? "Couldn't add that to the allow list." });
+      }
       // An answer, not an instruction: writing to the lane would hand the wheel to whoever answered when nobody was driving.
       const r = await core.handle(sid, { id: user.id, name: user.name }, { type: "approval.answer", lane, id: str(body.id, 80), approve, ...(approve && body.task === true ? { task: true } : {}) });
       return r.ok ? json(res, 201, { seq: r.seq }) : json(res, 400, { error: r.error ?? "Could not send that." });
@@ -7491,11 +7795,11 @@ export async function createApp(o: AppOptions) {
       }
       if (req.method !== "POST") return json(res, 405, { error: "Use POST." });
       if (!req.headers.origin || crossSite(req)) return json(res, 403, { error: "Not from Friday." });
-      const body = (await readJson(req)) as { id?: unknown; answer?: unknown; edited?: unknown };
+      const body = (await readJson(req)) as { id?: unknown; answer?: unknown; edited?: unknown; always?: unknown };
       const id = str(body.id, 300);
       if (!id) return json(res, 400, { error: "Which one?" });
       if (url.pathname === "/api/needs-you/dismiss") return (await needsYou.dismiss(me, id), json(res, 200, { ok: true }));
-      const r = await needsYou.answer(me, ctx.workspace.id, id, typeof body.answer === "string" ? body.answer : "", body.edited === true);
+      const r = await needsYou.answer(me, ctx.workspace.id, id, typeof body.answer === "string" ? body.answer : "", body.edited === true, body.always === true);
       return r.ok ? json(res, 200, r) : json(res, r.status, { error: r.error });
     }
 
@@ -7605,6 +7909,65 @@ export async function createApp(o: AppOptions) {
      * come from the client, and each is checked against the person's membership before anything about it is read.
      * What a session's cards say only changes when its log does, so they are remembered by the last event.
      */
+    // The project overview (client/ProjectOverview.tsx; Arun, 2026-11-27: "a agent overview of thread(s) in one view for a project"):
+    // each thread asked for, with its agents as the thread card has them (agents-hub.ts hubOf) and the subagents each sent off.
+    if (req.method === "POST" && url.pathname === "/api/overview") {
+      const me = await identity(req);
+      if (!me) return json(res, 401, { error: "Not signed in." });
+      const body = (await readJson(req)) as { sids?: unknown };
+      const sids = listedSids(body.sids).slice(0, 40);
+      const threads = await mapLimit(sids, READ_AT_ONCE, async (sid) => {
+        const state = await store.state(str(sid, 200)).catch(() => null);
+        if (!state) return null;
+        const m = state.members[me.id];
+        if (!m || m.removed) return null;
+        const streaming = (lane: string) => bus.streaming(state.id, lane);
+        const key = `${state.id}|${me.id}|${state.lastSeq}|${[MAIN_LANE, ...state.lanes.map((l) => l.id)].map((l) => streaming(l) ?? "").join()}`;
+        let made = overviewCache.get(key);
+        if (!made) {
+          const events = await store.events(state.id);
+          // Subagents seen starting, not background commands (the thread card's own rule, ThreadCard.tsx subsOf).
+          made = { agents: hubOf(state, events, me.id, streaming).agents, subs: subTasksOf(events).filter((t) => t.opened && t.agentType !== "command") };
+          overviewCache.set(key, made);
+          if (overviewCache.size > 300) overviewCache.delete(overviewCache.keys().next().value!);
+        }
+        // And what it carries, as its sidebar row says it: the change, its branch, its pull request (attention.ts).
+        const facts = rowFactsOf(state);
+        const pr = prOf(state);
+        return { sid: state.id, title: state.title, lead: state.lead ?? null, ...(facts ? { facts: { files: facts.files, added: facts.added, removed: facts.removed, ...(facts.branch ? { branch: facts.branch } : {}) } } : {}), ...(pr ? { pr: { url: pr.url, merged: pr.merged } } : {}), ...made };
+      });
+      return json(res, 200, { threads: threads.filter(Boolean) });
+    }
+
+    // A Captain's threads' file edits over time, for its page's Changes (CaptainPage.tsx, thread-edits.ts): only threads you're in.
+    if (req.method === "POST" && url.pathname === "/api/edits") {
+      const me = await identity(req);
+      if (!me) return json(res, 401, { error: "Not signed in." });
+      const body = (await readJson(req)) as { sids?: unknown; folder?: unknown; split?: unknown };
+      const folder = typeof body.folder === "string" ? str(body.folder, 1000) : undefined;
+      const sids = listedSids(body.sids).slice(0, 40);
+      const threads = await mapLimit(sids, READ_AT_ONCE, async (sid) => {
+        const state = await store.state(str(sid, 200)).catch(() => null);
+        if (!state) return null;
+        const m = state.members[me.id];
+        if (!m || m.removed) return null;
+        const events = await store.events(state.id);
+        // A Captain's own session (`split`): one entry per agent's lane, its main lane (the Captain itself) left out.
+        // Its own main lane first, marked `captain`, so the page's Cost counts the Captain's turns with its agents' (the header's total).
+        if (body.split === true)
+          return [...(state.lanes.some((l) => l.id === MAIN_LANE) ? [] : [{ id: MAIN_LANE, name: "Captain" }]), ...state.lanes].map((l) => {
+            // An agent's lane works in a copy: its copy's root counts as the project's, so its files read as the project's.
+            const copy = state.engines[l.id]?.copyOf ? state.engines[l.id]!.cwd : undefined;
+            const { start, edits } = editsOf(events, copy ? [...(folder ? [folder] : []), copy] : folder, l.id);
+            return { sid: state.id, lane: l.id, title: l.id === MAIN_LANE ? "Captain" : l.name, ...(l.id === MAIN_LANE ? { captain: true } : {}), start, edits, turns: turnsOf(events, state.engines, [], [l.id]) };
+          });
+        const { start, edits } = editsOf(events, folder);
+        // And its turns' tokens, for the page's Cost (CostWaterfall.tsx CaptainFall), by agent turn as the thread card counts them.
+        return [{ sid: state.id, title: state.title, start, edits, turns: turnsOf(events, state.engines) }];
+      });
+      return json(res, 200, { threads: threads.flat().filter(Boolean) });
+    }
+
     if (req.method === "POST" && url.pathname === "/api/board") {
       const me = await identity(req);
       if (!me) return json(res, 401, { error: "Not signed in." });
@@ -7615,6 +7978,7 @@ export async function createApp(o: AppOptions) {
       // Sessions are read side by side: the first look at a long list is the slow one, and it is the sum of them otherwise.
       const workspaceOf = new Map<string, string>();
       const weeks: ReturnType<typeof weekOf>[] = [];
+      const facts: WeekFacts[] = [];
       const perSession = await mapLimit(
         sids,
         READ_AT_ONCE,
@@ -7625,7 +7989,7 @@ export async function createApp(o: AppOptions) {
           if (!m || m.removed) return [];
           const made = await cardsFor(state, me.id);
           if (state.workspaceId) workspaceOf.set(state.id, state.workspaceId);
-          if (!codeSids.has(state.id)) weeks.push(made.week);
+          if (!codeSids.has(state.id)) (weeks.push(made.week), facts.push(made.facts));
           // Who is in the room now is not in the log, so it is read fresh each time and never cached with the cards.
           const here = await store.presence(state.id).catch(() => ({}) as Record<string, number>);
           const waiting = waitingOn(state);
@@ -7637,7 +8001,9 @@ export async function createApp(o: AppOptions) {
       );
       // The week in three numbers: sessions that began, sessions that shipped something, runs. Over every session listed, up to
       // LISTED_SESSIONS of the newest, so it counts what this week had, not the first sixty the list happened to send.
-      const week = { sessions: weeks.filter((w) => w.created).length, shipped: weeks.filter((w) => w.shipped).length, runs: weeks.reduce((n, w) => n + w.runs, 0) };
+      // With them, each day of the week and the week before (board.ts weekStats), cut at this moment from what each session did,
+      // for the board's stat cards; the three numbers stay the ones the foot has always said.
+      const week = { ...weekStats(facts), sessions: weeks.filter((w) => w.created).length, shipped: weeks.filter((w) => w.shipped).length, runs: weeks.reduce((n, w) => n + w.runs, 0) };
       const more = listedCount(body.sids) - sids.length;
       // What GitHub says about each pull request, at the same time; a card whose pull request nobody could ask about stays as the log left it.
       const cards = await Promise.all(
@@ -7649,6 +8015,32 @@ export async function createApp(o: AppOptions) {
       // `more`: older sessions past what one look reads, said rather than left out silently.
       const off = await needsYou.offOf({ id: me.id, name: me.name }).catch(() => new Set<string>());
       return json(res, 200, { cards: sortCards(putOffCards(cards, off)), week, ...(more > 0 ? { more } : {}) });
+    }
+
+    // The board's Timeline (client/BoardTimeline.tsx): each listed session's agents as lanes of blocks since `since`, and the
+    // hand-offs between them. The same ids, membership check and limits as the board; a day back at most.
+    if (req.method === "POST" && url.pathname === "/api/board/lanes") {
+      const me = await identity(req);
+      if (!me) return json(res, 401, { error: "Not signed in." });
+      const body = (await readJson(req)) as { sids?: unknown; since?: unknown };
+      const now = Date.now();
+      const since = Math.min(now, Math.max(now - 86_400_000, Math.floor(Number(body.since)) || now - 30 * 60_000));
+      const made = await mapLimit(listedSids(body.sids), READ_AT_ONCE, async (sid) => {
+        const state = await store.state(str(sid, 200)).catch(() => null);
+        if (!state) return null;
+        const m = state.members[me.id];
+        if (!m || m.removed) return null;
+        const key = `${state.id}|${state.lastSeq}`;
+        let all = lanesCache.get(key);
+        if (!all) {
+          all = boardLanes(state, await store.events(state.id));
+          lanesCache.set(key, all);
+          if (lanesCache.size > 600) lanesCache.delete(lanesCache.keys().next().value!);
+        }
+        return lanesSince(all, since);
+      });
+      const found = made.filter((x): x is SessionLanes => !!x);
+      return json(res, 200, { now, since, lanes: found.flatMap((x) => x.lanes), handoffs: found.flatMap((x) => x.handoffs) });
     }
 
 
@@ -7774,9 +8166,12 @@ export async function createApp(o: AppOptions) {
         ...(a.paused && a.ownerId !== me.id ? { mayHand: await isAdmin() } : {}),
         runs: await automations.runs(ws, a.id, 6),
         today: await automations.runsToday(ws, a.id),
+        // Watching GitHub: when it last looked, and what stopped it if anything (gh signed out, no such repository).
+        ...(a.when.kind === "github" ? { look: await automations.lastLook(ws, a.id) } : {}),
       });
       // A session's events are only for someone in it: watching one hands its agent's last words to the new run.
       const inSession = async (c: ReturnType<typeof cleanAutomation>) => {
+        if (c.when.kind === "github" && !c.when.repo) throw new Error("Say which GitHub repository it watches, as owner/name (or paste its link).");
         if (c.when.kind !== "session") return c;
         const st = await store.state(c.when.sessionId).catch(() => null);
         const m = st?.members[me.id];
@@ -7798,11 +8193,11 @@ export async function createApp(o: AppOptions) {
           await automations.put(ws, made);
           return json(res, 201, { automation: await view(made) });
         }
-        const one = url.pathname.match(/^\/api\/automations\/([\w-]{4,40})(\/run|\/runs|\/hand)?$/);
+        const one = url.pathname.match(/^\/api\/automations\/([\w-]{4,40})(\/run|\/runs|\/hand|\/look)?$/);
         if (!one) return json(res, 404, { error: "Not found" });
         const a = await automations.get(ws, one[1]!);
         if (!a) return json(res, 404, { error: "That automation isn't there any more." });
-        if (req.method === "GET" && one[2] === "/runs") return json(res, 200, { runs: await automations.runs(ws, a.id, 30) });
+        if (req.method === "GET" && one[2] === "/runs") return json(res, 200, { runs: await automations.runs(ws, a.id, 30), ...(a.when.kind === "github" ? { look: await automations.lastLook(ws, a.id) } : {}) });
         if (a.ownerId !== me.id) return json(res, 403, { error: `This is ${a.ownerName}'s automation: only they can change or run it.` });
         // From the phone (local/phone.ts): run as it asks before it edits, like everything a phone starts; only turned on or off.
         const viaPhoneHere = !!o.local && req.headers["x-friday-via"] === "phone";
@@ -7811,6 +8206,15 @@ export async function createApp(o: AppOptions) {
           const asked = viaPhoneHere && a.who.mode === "full" ? { ...a, who: { ...a.who, mode: "edits" as const } } : a;
           const run = await runAutomation(ws, asked, "Run now", typeof body.event === "string" ? body.event.slice(0, 8000) : "");
           return json(res, 202, { run });
+        }
+        // Check again: the same look at GitHub the two-minute loop makes (tickGithub), now, for this one, so a fix like gh auth login
+        // shows at once. It only says how the look went; noting what's there and starting runs stay the loop's.
+        if (req.method === "POST" && one[2] === "/look") {
+          if (a.when.kind !== "github" || !a.when.repo) return json(res, 400, { error: "Only an automation that watches GitHub looks at it." });
+          if (!computerHere(a.ownerId)) return json(res, 409, { error: "Your computer isn't connected, so it can't look just now." });
+          const look = (await callHost("gh.watch", { repo: a.when.repo, event: a.when.event }, hostCtx({ id: a.ownerId, name: a.ownerName })).catch((e: Error) => ({ error: e.message }))) as GithubLook | { error: string };
+          await automations.looked(ws, a.id, "error" in look ? look.error : "");
+          return json(res, 200, { look: await automations.lastLook(ws, a.id) });
         }
         if (req.method === "PATCH" && !one[2]) {
           const patch = (await readJson(req)) as Record<string, unknown>;
@@ -7861,6 +8265,20 @@ export async function createApp(o: AppOptions) {
 
 
 
+    // Compact now and Undo, for Friday's agent on an own model (agent/compact.ts; the mock's 1B and 1D): its older turns summarised
+    // by its model, or the full history sent again from the next turn. A member of the session only, from Friday's own page.
+    const compactPath = url.pathname.match(/^\/api\/sessions\/([\w-]+)\/compact$/);
+    if (req.method === "POST" && compactPath) {
+      const sid = compactPath[1]!;
+      if (!(await memberOnly(req, res, sid))) return;
+      const b = (await readJson(req)) as { lane?: unknown; undo?: unknown };
+      const lane = typeof b.lane === "string" && /^[\w-]{1,40}$/.test(b.lane) ? b.lane : MAIN_LANE;
+      if (typeof b.undo === "number") return json(res, 200, { ok: await runtime.uncompact(sid, lane, b.undo) });
+      const done = await runtime.compactNow(sid, lane).catch((e: Error) => e);
+      if (done instanceof Error) return json(res, 502, { error: `Couldn't compact: ${done.message}` });
+      if (done === null) return json(res, 400, { error: "Compacting here is for your own models; a coding tool compacts its own." });
+      return json(res, 200, { ok: done, ...(done ? {} : { why: "There isn't enough older conversation to compact yet." }) });
+    }
     const audit = url.pathname.match(/^\/api\/sessions\/([\w-]+)\/audit$/);
     if (req.method === "GET" && audit) {
       const sid = audit[1]!;
@@ -7962,10 +8380,12 @@ export async function createApp(o: AppOptions) {
       if (!ctx) return json(res, 401, { error: "Sign in first." });
       const view = (m: Manager) => ({ ...m, log: m.log.slice(0, 30) });
       // Each with its threads (managerRun.threadsOf): the project's own, newest first, for the Captain's window.
-      const all = async () => {
+      const all = async (extra: Record<string, unknown> = {}) => {
         const list = await managers.list();
         const threads = await managerRun.threadsOf(list, ctx.me).catch((e: Error) => (console.warn(`[managers] threads: ${e.message}`), new Map()));
-        return json(res, 200, { managers: list.map((m) => ({ ...view(m), threads: threads.get(m.id) ?? [] })) });
+        // Captain v2: its agents as their lanes really are, its line from facts, each plan's counts (managers-run liveOf).
+        const live = await managerRun.liveOf(list).catch((e: Error) => (console.warn(`[managers] live: ${e.message}`), new Map()));
+        return json(res, 200, { managers: list.map((m) => ({ ...view(m), threads: threads.get(m.id) ?? [], ...((l) => (l ? { agents: l.agents, plans: l.plans, now: l.now, ...(l.captain ? { captain: l.captain } : {}) } : {}))(live.get(m.id)) })), ...extra });
       };
       try {
         if (req.method === "GET" && url.pathname === "/api/managers") return all();
@@ -7983,14 +8403,15 @@ export async function createApp(o: AppOptions) {
         }
         if (req.method === "POST" && url.pathname === "/api/managers") {
           const body = (await readJson(req)) as Record<string, unknown>;
-          const made = cleanManager(body, null, (f) => folderKey(f));
+          // A new Captain asks before bringing work together unless another autonomy was chosen (the UX review, 2026-11-27).
+          const made = cleanManager({ autonomy: "merge", ...body }, null, (f) => folderKey(f));
           if (typeof made === "string") return json(res, 400, { error: made });
           if (await managers.forProject(made.project.key)) return json(res, 409, { error: `${made.project.name} has a Captain already.` });
           await managers.put(logged(made, { at: Date.now(), kind: "on", text: made.on ? "Turned on" : "Set up, off" }));
           if (made.on) void managerRun.ensure(made).catch((e: Error) => console.error(`[managers] ${made.project.name}: ${e.message}`));
           return all();
         }
-        const m = url.pathname.match(/^\/api\/managers\/([\w-]+)(?:\/(queue|answer|next|ready|away|say|goals|chat)(?:\/([\w-]+))?)?$/);
+        const m = url.pathname.match(/^\/api\/managers\/([\w-]+)(?:\/(queue|answer|next|ready|away|say|goals|chat|missions|plans|agents|clips)(?:\/([\w-]+))?(?:\/(start|cancel|save|merge|seen|proof|record))?(?:\/tasks\/([\w-]+)\/(retry|skip))?)?$/);
         if (!m) return json(res, 404, { error: "Not found." });
         const had = await managers.get(m[1]!);
         if (!had) return json(res, 404, { error: "That Captain isn't there any more." });
@@ -8005,11 +8426,13 @@ export async function createApp(o: AppOptions) {
         }
         // The person speaks to it: {text}. Its reply comes back in its conversation (m.chat); on Run, work asked for becomes a goal.
         if (m[2] === "say" && req.method === "POST") {
-          const body = (await readJson(req)) as { text?: unknown };
+          const body = (await readJson(req)) as { text?: unknown; done?: unknown; parallel?: unknown; budgetUsd?: unknown; prs?: unknown };
           const text = typeof body.text === "string" ? body.text.trim() : "";
           if (!text) return json(res, 400, { error: "Say something to it." });
           if (!had.on) return json(res, 409, { error: "Turn it on first." });
-          if (!(await managerRun.sayTo(had, text))) return json(res, 502, { error: "It couldn't be reached just now. Try again." });
+          // On Run, work it's asked for is a mission (one way in): what done means, if said, and the box's settings for it.
+          const opts = { ...(typeof body.done === "string" ? { done: body.done } : {}), ...(Number(body.parallel) > 0 ? { parallel: Number(body.parallel) } : {}), ...(Number(body.budgetUsd) > 0 ? { budgetUsd: Number(body.budgetUsd) } : {}), ...(body.prs === true ? { prs: true } : {}) };
+          if (!(await managerRun.sayTo(had, text, opts))) return json(res, 502, { error: "It couldn't be reached just now. Try again." });
           return all();
         }
         // Its conversation (2026-11-25, "make this feel like a chat"): {new: true} puts this one away and starts empty; {open: at}
@@ -8022,6 +8445,92 @@ export async function createApp(o: AppOptions) {
           else return json(res, 400, { error: "New, or which one to open?" });
           return all();
         }
+        // Missions (missions.ts): POST starts one {ask, done, parallel, budgetUsd, prs}; POST /:id {pause: bool} pauses or carries it
+        // on, {budgetUsd} changes its budget; DELETE /:id stops it, its running threads' tools stopped.
+        if (m[2] === "missions" && req.method === "POST" && !m[3]) {
+          const r = await managerRun.startMission(had, (await readJson(req)) as Record<string, unknown>);
+          if (!r.ok) return json(res, 400, { error: r.error });
+          return all();
+        }
+        if (m[2] === "missions" && m[3] && req.method === "POST") {
+          const body = (await readJson(req)) as { pause?: unknown; budgetUsd?: unknown };
+          if (typeof body.budgetUsd === "number" && body.budgetUsd >= 0) {
+            const usd = Math.min(10_000, Math.round(body.budgetUsd * 100) / 100);
+            // A new budget lifts a pause its old one made.
+            await managers.update(had.id, (cur) => (cur.goals?.some((g) => g.id === m[3] && g.mission) ? { ...cur, goals: cur.goals!.map((g) => (g.id === m[3] && g.mission ? { ...g, mission: (({ paused, ...rest }) => ({ ...rest, budgetUsd: usd, ...(paused && !(paused.by === "budget" && (!usd || rest.spent < usd)) ? { paused } : {}) }))(g.mission) } : g)) } : null));
+          }
+          if (typeof body.pause === "boolean") await managerRun.pauseMission((await managers.get(had.id)) ?? had, m[3], body.pause);
+          return all();
+        }
+        if (m[2] === "missions" && m[3] && req.method === "DELETE") {
+          if (!(await managerRun.stopMission(had, m[3]))) return json(res, 404, { error: "That mission is over or gone." });
+          return all();
+        }
+        // Captain v2 (docs/plans/captain-v2.md, Contract v1). A plan started, its tasks optionally edited first: {tasks?: [{id?, text,
+        // role?, after?}]}; a plan cancelled, its agents' lanes stopped; one of its agents saved into the project's roster.
+        if (m[2] === "plans" && m[3] && m[4] === "start" && req.method === "POST") {
+          const body = (await readJson(req).catch(() => ({}))) as { tasks?: unknown };
+          const r = await managerRun.startPlan(had, m[3], { ...(body.tasks !== undefined ? { tasks: body.tasks } : {}), byYou: true });
+          if (!r.ok) return json(res, r.status, { error: r.error });
+          return all();
+        }
+        // Its agents' work held to be brought together (Ask or Merge autonomy): the person's Go.
+        if (m[2] === "plans" && m[3] && m[4] === "merge" && req.method === "POST") {
+          if (!(await managerRun.goBring(had, m[3]))) return json(res, 409, { error: "Nothing is waiting to be brought together." });
+          return all();
+        }
+        // Stopped: {apply?: true} brings finished steps' work in first, {discard?: true} throws it away; otherwise it stays in its
+        // copies and `unapplied` says which.
+        if (m[2] === "plans" && m[3] && m[4] === "cancel" && req.method === "POST") {
+          const body = (await readJson(req).catch(() => ({}))) as { apply?: unknown; discard?: unknown };
+          const r = await managerRun.cancelPlan(had, m[3], { apply: body.apply === true, discard: body.discard === true });
+          if (!r.ok) return json(res, 404, { error: "That plan is over or gone." });
+          return all({ unapplied: r.unapplied });
+        }
+        // The Recap's Record: a proof clip of what the plan changed, now.
+        if (m[2] === "plans" && m[3] && m[4] === "proof" && req.method === "POST") {
+          if (!(await managerRun.provePlan(had, m[3]))) return json(res, 409, { error: "Nothing this plan changed draws a page to record." });
+          return all();
+        }
+        // The whole record of a plan's goal, every round, as Markdown (recordText): read for Copy, or saved to Downloads.
+        if (m[2] === "plans" && m[3] && m[4] === "record" && (req.method === "GET" || req.method === "POST")) {
+          const gid = had.plans?.find((p) => p.id === m[3])?.goal;
+          const text = gid ? recordText(had, gid) : null;
+          if (!text) return json(res, 404, { error: "That plan isn't there any more." });
+          if (req.method === "GET") return json(res, 200, { text });
+          const title = had.goals?.find((g) => g.id === gid)?.title ?? "captain";
+          const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "captain";
+          const dir = path.join(osHome(), "Downloads");
+          await mkdirAt(dir, { recursive: true });
+          const file = path.join(dir, `${slug}-record-${new Date().toISOString().slice(0, 10)}.md`);
+          await writeFileAt(file, text, "utf8");
+          return json(res, 200, { file, text });
+        }
+        // The Recap page's clips: its own session's proof clips and how the one being made is going, newest last.
+        if (m[2] === "clips" && !m[3] && req.method === "GET") {
+          if (!had.sid) return json(res, 200, { sid: null, clips: [] });
+          const evs = await store.events(had.sid).catch(() => [] as SessionEvent[]);
+          // The clips' progress is on its own lane; other lanes' proof.status lines are the steps' test checks, not clips.
+          const own = had.lane ?? MAIN_LANE;
+          const clips = evs.filter((e) => e.body.type === "proof.clip" || (e.body.type === "proof.status" && (e.lane ?? MAIN_LANE) === own)).slice(-40);
+          return json(res, 200, { sid: had.sid, clips });
+        }
+        // Its finished work looked over: no longer "Ready for you".
+        if (m[2] === "plans" && m[3] && m[4] === "seen" && req.method === "POST") {
+          if (!(await managerRun.seenPlan(had, m[3]))) return json(res, 404, { error: "That plan isn't there any more." });
+          return all();
+        }
+        if (m[2] === "agents" && m[3] && m[4] === "save" && req.method === "POST") {
+          if (!(await managerRun.keepAgent(had, m[3]))) return json(res, 404, { error: "That agent is gone or saved already." });
+          return all();
+        }
+        // A plan's failed (or held-up) step run again on a fresh agent with its last error, or skipped by the person.
+        if (m[2] === "plans" && m[3] && m[5] && m[6] && req.method === "POST") {
+          const r = await managerRun.redoTask(had, m[3], m[5], m[6] as "retry" | "skip");
+          if (!r.ok) return json(res, 409, { error: r.error });
+          return all();
+        }
+        if (m[4] || m[5]) return json(res, 404, { error: "Not found." });
         // A goal given up: its queued tasks go; its threads stay as they are.
         if (m[2] === "goals" && m[3] && req.method === "DELETE") {
           if (!(await managerRun.cancelGoal(had, m[3]))) return json(res, 404, { error: "That goal is over or gone." });
@@ -8935,6 +9444,12 @@ export async function createApp(o: AppOptions) {
     if (req.method === "GET" && url.pathname === "/api/version") {
       return json(res, 200, { version: await ourVersion() });
     }
+    // How this Friday is, for another computer that has it as a host (local/hosts.ts), asked through its SSH tunnel: what it is,
+    // and how many agents are at work here. Never from a page (no Origin): a program on this computer, or through the tunnel.
+    if (o.local && req.method === "GET" && url.pathname === "/api/host/status") {
+      if (req.headers.origin !== undefined) return json(res, 403, { error: "Not from a page." });
+      return json(res, 200, { version: await ourVersion(), name: process.env.FRIDAY_MACHINE_NAME || hostname().replace(/\.local$/i, ""), host: process.env.FRIDAY_HOST === "1", running: await hostRunning() });
+    }
     if (req.method === "GET" && url.pathname === "/api/me") {
       const me = await identity(req);
       // The desktop app asks this as it opens, signed in or not: its launch, its first one, and who the install is (analytics.ts).
@@ -9022,6 +9537,52 @@ export async function createApp(o: AppOptions) {
     }
     // Backdrops (backdrops.ts): listed, watched, served walled off, added and put away, from this computer's own page only.
     if (backdrops && url.pathname.startsWith("/api/local/backdrops") && (await backdropsHttp(backdrops, req, res, url, (tell) => (appTell.add(tell), () => void appTell.delete(tell))))) return;
+    // Hosts (local/hosts.ts, spec 15): your Fridays on other machines, run there as a service and opened here through SSH. Added
+    // as a job Settings › Other computers follows; renamed, reconnected, updated (installed again, kept) and removed from their rows.
+    const hosts = o.local?.hosts;
+    // A host itself, or a linked extra machine, keeps no hosts of its own: its page's switcher asks, and is told there are none.
+    // No hosts here (a host itself, or a computer helping another): none, and none to add (Other computers hides "Run on its own").
+    if (o.local && !hosts && req.method === "GET" && url.pathname === "/api/hosts") return json(res, 200, { hosts: [], ssh: [], available: false });
+    if (hosts && (url.pathname === "/api/hosts" || url.pathname.startsWith("/api/hosts/"))) {
+      if (req.method === "GET" && url.pathname === "/api/hosts") return json(res, 200, { hosts: await hosts.list(), ssh: await hosts.sshHosts() });
+      if (req.method === "POST" && url.pathname === "/api/hosts") {
+        const b = (await readJson(req)) as { ssh?: unknown; label?: unknown };
+        const got = hosts.add(typeof b.ssh === "string" ? b.ssh : "", typeof b.label === "string" ? b.label : undefined);
+        return json(res, "error" in got ? 400 : 200, got);
+      }
+      const job = /^\/api\/hosts\/jobs\/([0-9a-f]{16})$/.exec(url.pathname);
+      if (req.method === "GET" && job) {
+        const j = hosts.job(job[1]!);
+        return j ? json(res, 200, j) : json(res, 404, { error: "No such job." });
+      }
+      const one = /^\/api\/hosts\/([0-9a-f]{12})(?:\/(reconnect|update|enter|open))?$/.exec(url.pathname);
+      const h = one ? (await hosts.list()).find((x) => x.id === one[1]) : undefined;
+      if (one && !h) return json(res, 404, { error: "There's no such host." });
+      // A host's Friday answers only what carries its own key (local/local-key.ts): opened here with a pass made from it, good
+      // once. `enter` says the address, for the desktop app's window; `open` goes there, for a browser's new tab.
+      if (one && h && req.method === "GET" && (one[2] === "enter" || one[2] === "open")) {
+        const to = (await hosts.enterUrl(h.id)) ?? h.url;
+        if (one[2] === "enter") return (res.setHeader("Cache-Control", "no-store"), json(res, 200, { url: to }));
+        res.writeHead(302, { Location: to, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+        return void res.end();
+      }
+      if (one && h && req.method === "PATCH" && !one[2]) {
+        const label = String((await readJson(req)).label ?? "");
+        try {
+          await hosts.rename(h.id, label);
+        } catch (e) {
+          return json(res, 400, { error: (e as Error).message });
+        }
+        return json(res, 200, { hosts: await hosts.list() });
+      }
+      if (one && h && req.method === "POST" && one[2] === "reconnect") return (hosts.kick(h.id), json(res, 200, { ok: true }));
+      if (one && h && req.method === "POST" && one[2] === "update") {
+        const got = hosts.add(h.ssh, h.label, h.id);
+        return json(res, "error" in got ? 400 : 200, got);
+      }
+      if (one && h && req.method === "DELETE" && !one[2]) return json(res, 200, await hosts.remove(h.id, { forget: url.searchParams.get("forget") === "1" }));
+      return json(res, 404, { error: "Not found." });
+    }
     if (o.local && localLinks && (url.pathname === "/api/computers" || url.pathname.startsWith("/api/computers/"))) {
       const join = o.local.join;
       type Paired = { id: string; name: string; kind?: string; at: number; seen: number; host?: string; platform?: string; address?: string; version?: string; fp?: string; port?: number };
@@ -9138,28 +9699,35 @@ export async function createApp(o: AppOptions) {
       // Nearby (local/nearby.ts): the Fridays on this network, a link offered to one, and the offers waiting here for a yes.
       const nearby = o.local.nearby;
       if (nearby && req.method === "GET" && url.pathname === "/api/computers/nearby") {
+        nearby.need();
         const st = (phone ? await phone.state() : {}) as { computers?: { fingerprint?: string } };
         const mine = st.computers?.fingerprint ?? null;
-        const found = await nearby.find(1200);
+        const found = await nearby.find(1200, mine);
         return json(res, 200, { found: found.map((f) => ({ id: f.id, name: f.name, platform: f.platform, version: f.version, address: f.address, linked: !!mine && f.pairedWith === mine, usedFromAnother: !!f.pairedWith && f.pairedWith !== mine })) });
       }
       if (nearby && phone && req.method === "POST" && url.pathname === "/api/computers/nearby/link") {
         const b = (await readJson(req)) as { id?: unknown };
         const found = (await nearby.find(1200)).find((f) => f.id === b.id);
         if (!found) return json(res, 404, { error: "It isn't answering on this network now. Is Friday open there?" });
-        const code = (await phone.pairCode("computer")) as { link?: string; until?: number; error?: string };
-        if (!code.link) return json(res, 400, { error: code.error ?? "This computer can't take another one now." });
-        await nearby.offer(found, code.link);
-        const fp = parseComputerLink(code.link)?.hub.fingerprint ?? "";
-        return json(res, 200, { name: found.name, check: checkNumber(fp), until: code.until });
+        const code = (await phone.pairCode("computer")) as { code?: string; link?: string; until?: number; error?: string };
+        if (!code.link || !code.code) return json(res, 400, { error: code.error ?? "This computer can't take another one now." });
+        // The other computer is sent where to pair and a proof made from the code, never the code: it is shown here, for the
+        // person to type there, and is what tells that computer the offer is this one's (local/nearby.ts).
+        try {
+          await nearby.offer(found, code.link);
+        } catch (e) {
+          return json(res, 400, { error: (e as Error).message });
+        }
+        return json(res, 200, { name: found.name, code: code.code, until: code.until });
       }
-      if (nearby && req.method === "GET" && url.pathname === "/api/computers/offers") return json(res, 200, { offers: nearby.pending() });
+      if (nearby && req.method === "GET" && url.pathname === "/api/computers/offers") return (nearby.need(), json(res, 200, { offers: nearby.pending() }));
       const answer = /^\/api\/computers\/offers\/([0-9a-f]{8,64})$/.exec(url.pathname);
       if (nearby && join && req.method === "POST" && answer) {
-        const b = (await readJson(req)) as { allow?: unknown };
-        const offer = nearby.take(answer[1]!);
+        const b = (await readJson(req)) as { allow?: unknown; code?: unknown };
+        if (b.allow !== true) return (nearby.drop(answer[1]!), json(res, 200, { ok: true }));
+        const offer = await nearby.accept(answer[1]!, b.code);
         if (!offer) return json(res, 410, { error: "That offer has run out. Press Link there again." });
-        if (b.allow !== true) return json(res, 200, { ok: true });
+        if (offer === "wrong") return json(res, 400, { error: "That code doesn't match. Type the code the other computer is showing now.", wrong: true });
         return json(res, 200, await join.join(offer.link));
       }
       if (url.pathname === "/api/computers/join" && join) {
@@ -9312,7 +9880,13 @@ export async function createApp(o: AppOptions) {
   const LOCAL_LINK_BEAT_MS = Number(process.env.FRIDAY_LINK_BEAT_MS) || 10_000;
   const stopBeats = ([[wss, "page"], [runnerWss, "runner"], [linkWss, "link"], [termWss, "term"]] as const).map(([w, name]) => heartbeat(w, name === "link" && o.local ? LOCAL_LINK_BEAT_MS : undefined, name));
   server.on("upgrade", (req, socket, head) => {
+    // A dev server's live-reload socket (Vite's, Next's webpack-hmr), from a page previewed through Friday on this machine: a
+    // host looked at from another computer (local/hosts.ts), whose previews can't load from localhost directly. Before the check
+    // that only Friday's own page may open a socket: this one comes from the preview's own address, and goes only to that port.
+    if (o.local && onPreviewHost(req)) return void previewSocket(req, socket, head);
     if (o.local && !localOnly(req, appOrigin)) return void socket.destroy();
+    // Nor a socket without this install's key (local/local-key.ts): the terminal's is a shell on this computer.
+    if (o.local?.key && !keyed(req)) return void socket.destroy();
     const p = new URL(req.url ?? "/", "http://localhost").pathname;
     const target = p === "/ws" ? wss : p === "/runner" ? runnerWss : p === "/link" ? linkWss : p === "/term" ? termWss : null;
     if (!target || closing || onPreviewHost(req)) return void socket.destroy();
@@ -9862,7 +10436,7 @@ export async function createApp(o: AppOptions) {
   });
 
   // On someone's own computer, nobody else's: this computer's own address only, never the network it is on.
-  await new Promise<void>((resolve) => (o.local ? server.listen(o.port, "127.0.0.1", resolve) : server.listen(o.port, resolve)));
+  await new Promise<void>((resolve) => (o.local || o.onlyThisComputer ? server.listen(o.port, "127.0.0.1", resolve) : server.listen(o.port, resolve)));
   const port = (server.address() as { port: number }).port;
   selfUrl = `http://127.0.0.1:${port}`;
   // The open-source edition: what this computer had going when Friday last closed comes back as it starts, after the server
@@ -9989,6 +10563,8 @@ export async function createApp(o: AppOptions) {
     tenant,
     files,
     shepherds: { tick: tickShepherds },
+    /** Automations watching GitHub: for tests to look now rather than on the two-minute clock. */
+    githubWatch: { tick: tickGithub },
     resumes: { tick: tickResumes },
     boards: { tick: tickBoards },
     mesh,
@@ -10004,6 +10580,7 @@ export async function createApp(o: AppOptions) {
       clearInterval(usageLoop);
       clearInterval(shepherdLoop);
       clearInterval(autopilotLoop);
+      clearInterval(githubLoop);
       if (tidyLoop) clearInterval(tidyLoop);
       if (tidyStart) clearTimeout(tidyStart);
       if (retiring.timer) clearTimeout(retiring.timer);
@@ -10349,6 +10926,18 @@ function shellHtml(file: string, key: string, route: ShellRoute = "app"): Promis
   return html;
 }
 
+/** A shell's policy, worked out once per page and host: the page is the same bytes for every request until the bundle changes. */
+const shellPolicies = new WeakMap<Buffer, Map<string, string>>();
+function shellPolicy(html: Buffer, from: { host?: string; preview?: string } = {}): string {
+  let by = shellPolicies.get(html);
+  if (!by) shellPolicies.set(html, (by = new Map()));
+  const key = `${from.host ?? ""} ${from.preview ?? ""}`;
+  let policy = by.get(key);
+  // A Host header is the client's to choose: a handful kept per page, never one per made-up name.
+  if (!policy) (policy = appCsp(html.toString("utf8"), from)), by.size < 8 && by.set(key, policy);
+  return policy;
+}
+
 /**
  * Live updates while developing (FRIDAY_HOT=1, the "multiplayer-ai-hot" launch): a change to the client or a stylesheet
  * rebuilds the bundle and reloads every open window, the desktop app's included. A change to the server restarts it (tsx
@@ -10419,6 +11008,9 @@ async function serveStatic(req: http.IncomingMessage, pathname: string, res: htt
     const info = await stat(file);
     const route: ShellRoute = "app";
     let data = rel === "index.html" ? await shellHtml(file, `${info.mtimeMs}:${info.size}`, route) : await readFile(file);
+    // The app's page says what may run on it (page-csp.ts): its own script files and the inline scripts it was sent with.
+    const policy = (html: Buffer) => rel === "index.html" && res.setHeader("Content-Security-Policy", shellPolicy(html, pageSources.get(res)));
+    policy(data);
     // Revalidated every load so a stylesheet can never drift from the freshly bundled client, but a reload that finds nothing changed is a "not modified".
     // The bare address's page carries an absolute address, which without appUrl is the host it was asked on: kept apart by it.
     // A stylesheet the build packed already (src/pack-built.ts) goes as packed.

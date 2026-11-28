@@ -15,7 +15,6 @@ import { Lightbox } from "./Lightbox.js";
 import { recordProofClip } from "./proof-clips.js";
 import { Icon, type IconName } from "./icons.js";
 import type { Identity } from "./storage.js";
-import { preferredAccount } from "./Accounts.js";
 import { useToolLimits } from "./toolLimits.js";
 import { cancelLater, queueLater, runLaterNow, zoneName } from "./ide/later.js";
 import type { LaterBox } from "./ide/RunLater.js";
@@ -96,8 +95,9 @@ export function Today({ identity, tool, mode, fullAccess, model, box = {} }: { i
     setBusy(f.id);
     setErr("");
     try {
-      const ac = box.account || preferredAccount(tool as EngineTool, box.accounts);
-      const account = ac !== "default" && box.accounts?.some((x) => x.id === ac) ? ac : "";
+      // One picked in the box goes with it, the tool's own sign-in too; none, and it starts on whichever the computer has for
+      // new sessions when its time comes (runner/accounts.ts preferredAccount).
+      const account = box.account && box.accounts?.some((x) => x.id === box.account) ? box.account : "";
       const effort = box.effort && box.levels?.includes(box.effort) ? box.effort : null;
       const at = now ? Date.now() : (tonight[0]?.at ?? tonightAt(Date.now(), tz, 1));
       const { task } = await queueLater(identity, {

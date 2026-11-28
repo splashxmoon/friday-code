@@ -493,8 +493,17 @@ export function MateTitle({ identity, lane, notify }: { identity: Identity; lane
   }, [m?.id, here?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!t || !m) return null;
   const say = (text: string) => (notify ? notify(text) : dispatchEvent(new CustomEvent("friday:notice", { detail: text })));
-  const fresh = () =>
+  // A thread nobody has written in yet: nothing said and nothing at work.
+  const blank = (r: RoomView) => !r.last && !r.working;
+  // A new thread reuses one still blank rather than starting another, so empty "New thread"s don't pile up in the menu (Arun,
+  // 2026-11-27: "this should only be there if the user has worked in them not just blank ones that are getting saved").
+  const fresh = () => {
+    // In a blank one already: that is the new thread.
+    if (here && blank(here)) return;
+    const spare = threads.find((r) => blank(r) && r.id !== here?.id);
+    if (spare) return void (openTab(m.id, spare.id, readOpen(m.id) ?? openIds), openThread(spare, m.id));
     void startThread(identity, m.id, (id) => openTab(m.id, id, readOpen(m.id) ?? openIds)).catch((e: Error) => say(e.message || "That thread didn't start. Try again."));
+  };
   const tabs = openIds.map((id) => threads.find((r) => r.id === id)).filter((r): r is RoomView => !!r);
   if (here && !tabs.includes(here)) tabs.push(here);
   const home = readHome(m.id);
@@ -535,7 +544,8 @@ export function MateTitle({ identity, lane, notify }: { identity: Identity; lane
   const items = (): MenuItem[] => [
     { heading: "Threads" },
     { label: homeName, icon: "chat", checked: !here, onSelect: goHome },
-    ...threads.slice(0, 20).map((r): MenuItem => ({ label: r.name, icon: "chat", checked: here?.id === r.id, ...(r.working ? { live: true } : {}), onSelect: () => (openTab(m.id, r.id, openIds), openThread(r, m.id)) })),
+    // Only threads worked in, and the one you are in: a blank one is no thread to go back to.
+    ...threads.filter((r) => !blank(r) || r.id === here?.id).slice(0, 20).map((r): MenuItem => ({ label: r.name, icon: "chat", checked: here?.id === r.id, ...(r.working ? { live: true } : {}), onSelect: () => (openTab(m.id, r.id, openIds), openThread(r, m.id)) })),
     { label: "Start a new thread", icon: "plus", onSelect: fresh },
     ...(!here
       ? [

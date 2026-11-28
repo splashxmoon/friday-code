@@ -1,0 +1,46 @@
+/* What a reply changed (RunReview.tsx ReviewCard) and a second agent's read of it, measured to the shared kit (affect-pro SPEC.md §1
+   and "review-center", 2026-11-27): a card at radius 10 drawn by a ring, its 44px head 13/500/20, chips 18 tall at radius 5 (never a
+   pill), buttons 28 tall at radius 6 and 13/500 with the secondary on a ring, file rows of 36 with the folder quiet and the name in ink
+   in 13/400/20, a few changed lines in 12/20 mono on 6-7% tints, a 44px foot; the second review's levels as 20px chips at radius 5 and
+   its waiting block a well at radius 8 with an amber ring, not a tinted border. Nothing heavier than 500. Loaded with the session
+   screen as CSS only (no script), so the first screen's budget is untouched; app.css comes before style.css, so each rule is one
+   class stronger than the one it measures. */
+.change-card.change-card {
+  --cc-ring: 0 0 0 .5px var(--border-strong), 0 1px 1px -1px rgb(0 0 0 / .1), 0 1px 2px rgb(0 0 0 / .05);
+  border: 0; border-radius: 10px; box-shadow: var(--cc-ring); font-variant-numeric: tabular-nums;
+}
+html.dark .change-card.change-card { --cc-ring: 0 0 0 .5px rgb(255 255 255 / .1), 0 1px 2px rgb(0 0 0 / .4); }
+.change-card.change-card.settled { box-shadow: 0 0 0 .5px var(--border); }
+.change-set > .change-card.change-card { box-shadow: none; }
+.change-card .cc-head { padding: 8px 8px 8px 12px; font-size: 13px; line-height: 20px; }
+.change-card .cc-head > b, .change-card .cc-toggle > b { font-weight: 500; }
+.change-card .cc-toggle { border-radius: 6px; transition: background-color .14s ease; }
+.change-card .cc-tests, .change-card .cc-warn, .change-card .cc-also { height: 18px; padding: 0 6px; border-radius: 5px; font-size: 11px; font-weight: 500; line-height: 18px; }
+.change-card .cc-outcome { font-size: 12px; line-height: 16px; }
+.change-card .cc-btn { height: 28px; padding: 0 10px; border-radius: 6px; font-size: 13px; font-weight: 500; line-height: 20px; transition: background-color .14s ease, color .14s ease, transform .14s cubic-bezier(.22, 1, .36, 1); }
+.change-card .cc-btn:active:not(:disabled) { transform: scale(.98); }
+.change-card .cc-btn.line { background: var(--card); box-shadow: var(--cc-ring, 0 0 0 .5px var(--border-strong)); }
+.change-card .cc-btn.pri:not(.cc-split > *) { box-shadow: 0 1px 2px rgb(0 0 0 / .16); }
+.change-card .cc-split, .change-card .cc-split > .cc-btn:first-child { border-radius: 6px 0 0 6px; }
+.change-card .cc-split { border-radius: 6px; }
+.change-card .cc-split > .cc-split-more { border-radius: 0 6px 6px 0; }
+.change-card .cc-row { gap: 8px; padding: 0 12px 0 16px; transition: background-color .14s ease; }
+.change-card .cc-path { color: var(--text-muted); font: 400 13px/20px var(--font); }
+.change-card .cc-n, .change-card .cc-n .diff-add, .change-card .cc-n .diff-del { font: 400 12px/20px var(--font); font-variant-numeric: tabular-nums; }
+.change-card .cc-st { font-weight: 500; }
+.change-card .cc-car { transition: transform .22s cubic-bezier(.22, 1, .36, 1); }
+.change-card .cc-ln.add { background: color-mix(in srgb, var(--green) 7%, transparent); }
+.change-card .cc-ln.del { background: color-mix(in srgb, var(--red) 6%, transparent); }
+.change-card .cc-mini-foot, .change-card .cc-more { font-size: 12px; }
+.change-card .cc-mini-foot .link-btn { font-weight: 500; }
+.change-card .cc-foot { min-height: 44px; box-sizing: border-box; padding: 8px 8px 8px 16px; font-size: 12px; line-height: 16px; }
+.change-card .cc-foot > .cc-btn { height: 28px; }
+.change-card .cc-explain { padding: 0 16px 12px; font-size: 13px; line-height: 20px; }
+/* The second review. */
+.sr-block .sr-line { font-size: 13px; line-height: 20px; }
+.sr-block.sr-open { padding: 10px 12px; border: 0; border-radius: 8px; background: color-mix(in srgb, var(--amber) 6%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--amber) 45%, transparent); }
+.sr-block .sr-sev { width: 58px; min-width: 58px; height: 20px; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 500; line-height: 20px; }
+.sr-block .sr-findings li { font-size: 13px; line-height: 20px; }
+.sr-block .sr-body b { font-weight: 500; }
+.sr-block .sr-act { width: 28px; height: 28px; border-radius: 6px; transition: background-color .14s ease, color .14s ease; }
+.sr-block .sr-done, .sr-block .sr-hidden { font-size: 12px; line-height: 16px; }

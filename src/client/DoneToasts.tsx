@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from "react";
 import { doneChime } from "./chime.js";
 import { doneChimeOn } from "./prefs.js";
 import { isLocal } from "./edition.js";
@@ -6,6 +6,8 @@ import { Icon } from "./icons.js";
 import { openOutside } from "./openOutside.js";
 import { REPO_URL } from "./whats-new.js";
 import "./done-toasts.css";
+
+const Notices = lazy(() => import("./components/affect/notification-stack.js").then((m) => ({ default: m.NotificationStack })));
 
 /**
  * An agent finished somewhere you weren't looking (Herdr's "done" toast and sound, 2026-11-01): a soft sound, and while Friday's
@@ -129,35 +131,45 @@ export function DoneToasts({ activeSid }: { activeSid: string | null }) {
   // being read, or every toast after it stayed until hovered and left (2026-11-02 review).
   if (!shown.length) held.current = false;
   if (!shown.length && !star) return null;
+  // Newest in front at the foot of the stack; the ones behind it step back and peek out above it, and the pointer on the stack
+  // (or the keyboard in it) fans them out into a list (the kit's toaster).
+  const n = shown.length;
   return (
-    <section className="done-toasts" aria-label="Finished" aria-live="polite" onPointerEnter={() => (held.current = true)} onPointerLeave={() => (held.current = false)}>
-      {shown.map((d) => (
-        <button key={d.id} type="button" className="done-toast" onClick={() => (window.dispatchEvent(d.sid ? new CustomEvent("friday:open-session", { detail: { sid: d.sid } }) : new Event("friday:open-needs")), setShown((s) => s.filter((x) => x.id !== d.id)))}>
-          <span className="done-toast-dot" aria-hidden="true" />
-          <span className="done-toast-text">
-            <span className="done-toast-title">{d.title}</span>
-            {/* A lane by its name; the session's own agent ("Main") goes without saying. */}
-            <span className="done-toast-what">{d.plain ? d.what : `Finished${d.what && d.what !== "Main" ? ` · ${d.what}` : ""}`}</span>
-          </span>
-        </button>
-      ))}
-      {star && (
-        <div className="done-toast star-ask" role="group" aria-label="Star Friday on GitHub">
-          <span className="star-ask-mark" aria-hidden="true">
-            <Icon name="star" size={14} />
-          </span>
-          <span className="done-toast-text">
-            <span className="done-toast-title">Like Friday?</span>
-            <span className="done-toast-what">A star helps others find it.</span>
-          </span>
-          <button type="button" className="btn small star-ask-go" onClick={() => (openOutside(REPO_URL), setStar(false))}>
-            Star
-          </button>
-          <button type="button" className="star-ask-x" aria-label="Not now" title="Not now" onClick={() => setStar(false)}>
-            <Icon name="x" size={12} />
-          </button>
-        </div>
+    <div className="done-corner">
+      {n > 0 && (
+        <section className="done-toasts" aria-label="Finished" aria-live="polite" style={{ "--n": n } as CSSProperties} onPointerEnter={() => (held.current = true)} onPointerLeave={() => (held.current = false)}>
+          {shown.map((d, at) => (
+            <div key={d.id} className="done-toast" data-front={at === n - 1 || undefined} style={{ "--i": n - 1 - at } as CSSProperties}>
+              <button type="button" className="done-toast-main" onClick={() => (window.dispatchEvent(d.sid ? new CustomEvent("friday:open-session", { detail: { sid: d.sid } }) : new Event("friday:open-needs")), setShown((s) => s.filter((x) => x.id !== d.id)))}>
+                <span className="done-toast-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="6.2" />
+                    <path className="done-toast-tick" d="M5.4 8.2l1.8 1.8 3.4-3.6" pathLength={1} />
+                  </svg>
+                </span>
+                <span className="done-toast-text">
+                  <span className="done-toast-title">{d.title}</span>
+                  {/* A lane by its name; the session's own agent ("Main") goes without saying. */}
+                  <span className="done-toast-what">{d.plain ? d.what : `Finished${d.what && d.what !== "Main" ? ` · ${d.what}` : ""}`}</span>
+                </span>
+              </button>
+              <button type="button" className="done-toast-x" aria-label={`Dismiss ${d.title}`} title="Dismiss" onClick={() => setShown((s) => s.filter((x) => x.id !== d.id))}>
+                <Icon name="x" size={10} />
+              </button>
+            </div>
+          ))}
+        </section>
       )}
-    </section>
+      {/* The star, asked once: the kit's notice card (its line art, the ask, Star), loaded only when it is asked. */}
+      {star && (
+        <Suspense fallback={null}>
+          <Notices
+            className="star-ask"
+            notices={[{ id: "star", badge: "Friday", title: "Like Friday?", text: "A star helps others find it.", pattern: "rays", action: { label: "Star", onClick: () => (openOutside(REPO_URL), setStar(false)) } }]}
+            onDismiss={() => setTimeout(() => setStar(false), 320)}
+          />
+        </Suspense>
+      )}
+    </div>
   );
 }

@@ -1,0 +1,85 @@
+/* The Captain's Recap page (captain-recap-page.tsx): in the crew's pane, the app's tokens and motion. */
+.crp { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; background: var(--bg); animation: crp-in var(--t-open) var(--ease-out); }
+@keyframes crp-in { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .crp { animation: none; } }
+.crp-head { flex: none; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 20px; }
+.crp-head .cch-btn { height: 26px; padding: 0 9px 0 6px; }
+.crp-crumb { font-size: 12px; color: var(--faint); }
+.crp-crumb::before { content: "/"; margin-right: 8px; color: var(--border-strong); }
+.crp-body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; padding: 8px 20px 40px; }
+.crp-body > * { max-width: 920px; margin-inline: auto; }
+.crp-top { padding: 12px 0 18px; border-bottom: 1px solid var(--border); }
+.crp-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.crp-title h1 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+.crp-chip { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; background: var(--hover); color: var(--text-muted); }
+.crp-chip.done { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); }
+.crp-chip.run { background: color-mix(in srgb, var(--live) 14%, transparent); color: var(--live); }
+.crp-chip.stop { color: var(--faint); }
+.crp-facts { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 14px 0 0; }
+.crp-facts div { display: grid; gap: 2px; }
+.crp-facts dt { font-size: 11.5px; color: var(--faint); }
+.crp-facts dd { margin: 0; font-size: 14px; font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.crp-facts .add { color: var(--green); font-weight: 500; }
+.crp-facts .del { color: var(--red); font-weight: 500; }
+.crp-facts .ok { color: var(--green); }
+.crp-facts .bad { color: var(--red); }
+.crp-sec { padding: 18px 0 4px; }
+.crp-sec-head { display: flex; align-items: center; gap: 8px; min-height: 26px; margin-bottom: 10px; }
+.crp-sec-head h2 { margin: 0 auto 0 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+.crp-clips { display: grid; gap: 12px; }
+.crp-empty { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px dashed var(--border-strong); border-radius: 12px; }
+.crp-empty.big { flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 24px; }
+.crp-empty > div { flex: 1; min-width: 0; }
+.crp-empty-ic { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--hover); color: var(--text-muted); }
+.crp-empty-t { margin: 0; font-size: 13px; font-weight: 500; color: var(--ink); }
+.crp-empty-s { margin: 2px 0 0; font-size: 12.5px; line-height: 18px; color: var(--text-muted); }
+.crp-err { margin: 8px 0 0; font-size: 12.5px; color: var(--red); }
+.crp-report { font-size: 13.5px; line-height: 21px; color: var(--ink); }
+.crp-report > :first-child { margin-top: 0; }
+.crp-what { border-top: 1px solid var(--border); margin-top: 14px; }
+@media (max-width: 560px) { .crp-empty { flex-wrap: wrap; } }
+/* The morning report's parts (2026-11-28): the verdict, where the work went, the criteria with their proof, what it decided. */
+.crp-chip.wait { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+.crp-round { font-size: 12px; color: var(--faint); }
+.crp-why { margin: 6px 0 0; font-size: 13px; line-height: 19px; color: var(--text-muted); }
+.crp-facts .warn { color: var(--amber); }
+.crp-ship { display: flex; align-items: flex-start; gap: 8px; margin-top: 16px; padding: 10px 12px; border-radius: 10px; background: var(--hover); font-size: 13px; line-height: 19px; color: var(--ink); }
+.crp-ship > svg { flex: none; margin-top: 2px; color: var(--text-muted); }
+.crp-ship > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.crp-ship > .cch-btn { flex: none; margin: -3px 0; }
+.crp-ship a { color: var(--accent, var(--live)); text-decoration: none; }
+.crp-ship a:hover { text-decoration: underline; }
+.crp-ship-err { font-style: normal; color: var(--amber); }
+.crp-count { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.crp-crit, .crp-assume { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.crp-crit li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; padding: 7px 0; }
+.crp-tick { display: grid; place-items: center; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--border-strong); color: #fff; }
+.crp-crit li.ok .crp-tick { background: var(--green); box-shadow: none; }
+.crp-crit-t { font-size: 13px; line-height: 20px; color: var(--ink); }
+.crp-crit-t em { display: block; font-style: normal; font-size: 12.5px; line-height: 18px; color: var(--text-muted); }
+.crp-assume li { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.crp-assume li:last-child { border-bottom: 0; }
+.crp-assume p { flex: 1; min-width: 0; margin: 0; font-size: 13px; line-height: 19px; color: var(--ink); }
+.crp-assume-acts { flex: none; display: inline-flex; gap: 4px; }
+.crp-kept { flex: none; font-size: 12px; color: var(--faint); }
+.crp-change { flex: 1 1 260px; display: flex; gap: 6px; }
+.crp-change input { flex: 1; min-width: 0; height: 28px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--card); color: var(--ink); font: inherit; font-size: 13px; }
+.crp-change input:focus-visible { outline: 2px solid var(--border-focus, var(--live)); outline-offset: 1px; }
+@media (max-width: 560px) { .crp-assume li { flex-wrap: wrap; } }
+/* The record's Copy and Save (2026-11-28): on the header's right. */
+.crp-acts { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.crp-acts .cch-btn { gap: 5px; padding: 0 9px 0 7px; }
+.crp-saved { font-size: 12px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+@container (max-width: 470px) { .crp-saved { display: none; } }
+/* Friday's own run of a criterion's check, and the crew's notebook (2026-11-28). */
+.crp-ran { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; margin-top: 4px; padding: 1px 7px 1px 6px; border-radius: 6px; font-size: 11.5px; line-height: 18px; background: var(--hover); color: var(--text-muted); }
+.crp-ran code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px var(--mono, ui-monospace, monospace); color: var(--ink); }
+.crp-ran.ok { color: var(--green); }
+.crp-ran.bad { color: var(--red); }
+.crp-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.crp-notes li { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.crp-notes li:last-child { border-bottom: 0; }
+.crp-notes-by { font-size: 12px; line-height: 19px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crp-notes p { margin: 0; font-size: 13px; line-height: 19px; color: var(--ink); overflow-wrap: anywhere; }
+@media (max-width: 560px) { .crp-notes li { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+.crp-crit-t .crp-ran { display: flex; width: fit-content; }

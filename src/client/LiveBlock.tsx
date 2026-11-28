@@ -30,8 +30,9 @@ const CSP = [
   `script-src 'unsafe-inline' 'unsafe-eval' ${CDNS}`,
   `style-src 'unsafe-inline' ${CDNS} https://fonts.googleapis.com`,
   "font-src https://fonts.gstatic.com data:",
-  `img-src data: blob: https:`,
-  "media-src data: blob: https:",
+  // Nothing from the web: a picture or a clip asked of any address is a way to send something there (audit M2, 2026-11-27).
+  "img-src data: blob:",
+  "media-src data: blob:",
   "connect-src 'none'",
   "form-action 'none'",
 ].join("; ");
@@ -94,7 +95,7 @@ p{margin:0 0 10px}small,.muted{color:var(--muted)}a{color:var(--accent)}code{fon
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
 .stat .label{font-size:12px;color:var(--muted)}.stat .value{margin-top:2px;font-size:26px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums}.stat .delta{font-size:12px;font-weight:500}.up{color:var(--good)}.down{color:var(--bad)}
 table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;font-weight:500;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--border)}td{padding:8px 10px;border-bottom:1px solid var(--grid)}tr:last-child td{border-bottom:0}.num{text-align:right;font-variant-numeric:tabular-nums}
-.badge{display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:500;background:var(--surface);border:1px solid var(--border)}.badge.good{color:var(--good)}.badge.warn{color:var(--warn)}.badge.bad{color:var(--bad)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border-radius:6px;font-size:12px;font-weight:500;background:var(--surface);border:1px solid var(--border)}.badge.good{color:var(--good)}.badge.warn{color:var(--warn)}.badge.bad{color:var(--bad)}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--series-1)}
 button{font:500 13px var(--font);padding:7px 13px;border-radius:9px;border:1px solid var(--border);background:var(--surface);color:var(--fg);cursor:pointer}button:hover{border-color:var(--muted)}button.primary{background:var(--fg);border-color:var(--fg);color:${t.inverse}}
 input,select,textarea{font:13px var(--font);padding:7px 10px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--fg)}input[type=range]{padding:0;accent-color:var(--accent)}
@@ -126,7 +127,8 @@ const mermaidInit = (t: Theme, dark: boolean) =>
 export function liveDocument(kind: LiveKind, code: string, dark: boolean, big = false): string {
   const scheme = dark ? "dark" : "light";
   const t = dark ? THEME.dark : THEME.light;
-  const base = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CSP}"><meta name="color-scheme" content="${scheme}"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"><style>${kitCss(t)}</style>${chartTheme(t)}`;
+  const policy = `<meta http-equiv="Content-Security-Policy" content="${CSP}">`;
+  const base = `<meta charset="utf-8">${kind === "html" ? "" : policy}<meta name="color-scheme" content="${scheme}"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"><style>${kitCss(t)}</style>${chartTheme(t)}`;
   // Opened large, a drawing or a diagram fills the space it is given, keeping its shape, and follows that space as it changes:
   // drawn at its own size it sat small in a corner of a window-sized frame.
   const fill = "html,body{height:100%}body{display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;overflow:hidden}";
@@ -145,10 +147,15 @@ export function liveDocument(kind: LiveKind, code: string, dark: boolean, big = 
       : `const fit=()=>{const g=p.querySelector("svg");if(!g)return;const w=g.viewBox.baseVal.width;if(!w)return;const narrow=w*0.7>document.body.clientWidth;g.style.maxWidth=narrow?"none":w+"px";g.style.width=narrow?Math.round(w*0.7)+"px":"";g.style.flex=narrow?"none":"";document.body.style.overflowX=narrow?"auto":"";p.style.justifyContent=narrow?"flex-start":"center"};fit();new ResizeObserver(fit).observe(document.body);`;
     return `<!doctype html><html><head>${base}<style>${big ? `${fill}.mermaid{width:100%;height:100%}.mermaid svg{width:100%!important;height:100%!important;max-width:none!important}` : ""}.mermaid{display:flex;justify-content:center;margin:0;font:inherit}.mermaid svg{height:auto}.mermaid .node rect,.mermaid .node polygon,.mermaid .cluster rect{rx:9px;ry:9px}.mermaid .edgeLabel{font-size:12px;color:var(--muted)}</style></head><body><pre class="mermaid">${src}</pre><script type="module">import m from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";m.initialize(${mermaidInit(t, dark)});${draw}${fit}addEventListener("message",e=>{if(e.data&&e.data.friday==="live-export")parent.postMessage({friday:"live-svg",svg:(p.querySelector("svg")||{}).outerHTML||""},"*")});parent.postMessage({friday:"live-drawn"},"*");</script>${panZoom(big)}${SIZER}</body></html>`;
   }
-  // A page: the agent's own, with Friday's policy first in its head (a policy can only be narrowed by another, never widened).
+  // A page: the agent's own, with Friday's policy first in it, straight after the doctype (a policy can only be narrowed by
+  // another, never widened). First in the page, not first in its <head>: a script written above the head ran before the
+  // policy was read, and a <header> was taken for the head, where a policy in the body counts for nothing (audit M2).
   const doc = /<html[\s>]/i.test(code) ? code : `<!doctype html><html><head></head><body>${code}</body></html>`;
-  const withHead = /<head[^>]*>/i.test(doc) ? doc.replace(/<head[^>]*>/i, (h) => `${h}${base}`) : doc.replace(/<html[^>]*>/i, (h) => `${h}<head>${base}</head>`);
-  return /<\/body>/i.test(withHead) ? withHead.replace(/<\/body>/i, `${SIZER}</body>`) : `${withHead}${SIZER}`;
+  const doctype = /^\s*<!doctype[^>]*>/i.exec(doc)?.[0] ?? "";
+  const rest = doc.slice(doctype.length);
+  // Friday's kit goes after it, wherever the page's own head is: a parser gathers what comes before the body into the head.
+  const page = `${doctype}${policy}${base}${rest}`;
+  return /<\/body>/i.test(page) ? page.replace(/<\/body>/i, `${SIZER}</body>`) : `${page}${SIZER}`;
 }
 
 /** The height a block is drawn from, before it says its own: a page is usually taller than a diagram. */
@@ -290,7 +297,10 @@ function LiveFrame({ kind, code, tall, exporter }: { kind: LiveKind; code: strin
       f.title = KINDS[kind].label;
       // Scripts, and nothing else: no origin of its own, no forms, no popups, no navigating the app.
       f.setAttribute("sandbox", "allow-scripts");
-      f.srcdoc = doc;
+      // Friday's frame page (page-csp.ts), which carries the policy an agent's page is held to as a header and writes the page
+      // it is handed in its name. Not srcdoc: that takes the policy of the app around it, under which no script of the agent's runs.
+      f.name = doc;
+      f.src = "/api/frame";
       at.append(f);
     }
     // The same scheme as the page around it, or the browser paints the frame's own opaque canvas behind it.
@@ -467,6 +477,11 @@ export function LiveImage(props: React.ImgHTMLAttributes<HTMLImageElement> & { /
   // is said to be missing, and then with a way to ask again (Arun, 2026-10-28: "iron everything and ensure we are good").
   const [tries, setTries] = useState(0);
   const [gone, setGone] = useState(false);
+  // One from the web waits to be asked for, as in a document (WorkPanels DocImage): an answer can be steered by what the agent
+  // read, and a picture fetched the moment it is drawn tells whoever wrote its address who is watching, and whatever the
+  // address was made to carry (audit M1, 2026-11-27). Friday's own, a data: or blob: one and one from the folder show at once.
+  const [asked, setAsked] = useState(false);
+  const far = typeof rest.src === "string" && /^https?:/i.test(rest.src) && !rest.src.startsWith(`${location.origin}/`) ? rest.src : "";
   const own = src ?? (typeof rest.src === "string" && rest.src.startsWith("/api/") ? rest.src : null);
   if (own) (rest as { src?: string }).src = tries ? `${own}${own.includes("?") ? "&" : "?"}try=${tries}` : own;
   // Named in passing, and not there: the name stands alone, with nothing said about a picture nobody asked to see.
@@ -474,6 +489,16 @@ export function LiveImage(props: React.ImgHTMLAttributes<HTMLImageElement> & { /
     if (gone && quiet) onMissing?.();
   }, [gone, quiet]); // eslint-disable-line react-hooks/exhaustive-deps
   if (gone && quiet) return null;
+  if (far && !asked)
+    return (
+      <span className="chat-media-gone">
+        {/* The host it would be asked of: what follows an "@", never the name put before one. */}
+        {props.alt || "A picture"} from {far.split("/")[2]!.replace(/.*@/, "")}.{" "}
+        <button type="button" className="link-btn" onClick={() => setAsked(true)}>
+          Show it
+        </button>
+      </span>
+    );
   if (gone)
     return (
       <span className="chat-media-gone">

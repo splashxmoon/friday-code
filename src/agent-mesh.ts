@@ -6,6 +6,9 @@ import type { Bus } from "./bus.js";
 import { CUT_OFF_CHECK, resolveTarget, type Resolved } from "./handoff.js";
 import { limitHit, planLimitHit, signedOut } from "./limit-reset.js";
 /** Other sessions an agent can reach (peers.ts on the hosted service; none on someone's own computer). */
+/** The longest a timed wake waits: a day. */
+export const WAKE_MAX_MINUTES = 1440;
+
 export interface Peers {
   list(sid: string, lane: string): Promise<string>;
   read(sid: string, lane: string, to: string): Promise<{ ok: true; text: string } | { ok: false; error: string }>;
@@ -227,7 +230,7 @@ export const MESH_TOOLS: MeshToolDef[] = [
       {
         agent: { type: "string", description: "The agent you're waiting on: wakes you when its current turn ends." },
         task: { type: "string", description: "A board task's id: wakes you when it is done or stuck." },
-        minutes: { type: "number", description: "Wake you after this many minutes (1 to 240) whatever else: to check on something running." },
+        minutes: { type: "number", description: "Wake you after this many minutes (1 to 1440, a day) whatever else: to check on something running, or to come back to it tomorrow (a deploy settling, a review you asked for)." },
         then: { type: "string", description: "What you'll do when woken, in a sentence: it comes back to you with the wake." },
       },
       ["then"],
@@ -1209,7 +1212,9 @@ export class AgentMesh {
       if (!t) return { output: `There's no board task "${req.task}". list_tasks has their ids.`, isError: true };
       on.task = t.id;
     }
-    if (req.minutes) on.at = Date.now() + Math.round(Math.min(240, Math.max(1, req.minutes)) * 60_000);
+    // Up to a day (Arun, 2026-11-27, agents that start themselves): "look again tomorrow morning" is a wake too. Kept in Redis and the
+    // session, so it outlasts a restart; while Friday is closed it goes off once it runs again.
+    if (req.minutes) on.at = Date.now() + Math.round(Math.min(WAKE_MAX_MINUTES, Math.max(1, req.minutes)) * 60_000);
     if (!on.lane && !on.task && !on.at) return { output: "Say what to wake you on: agent, task or minutes.", isError: true };
     const then = clip(req.then.trim() || "Carry on with the task.", 600);
     await this.store.append(sid, agentActor(laneName(state, lane)), { type: "wake.set", id: randomBytes(5).toString("hex"), on, then }, { lane });

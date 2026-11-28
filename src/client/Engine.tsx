@@ -5,7 +5,7 @@ import { attributionOf } from "../attribution.js";
 import { parseRepo } from "../runner/repo.js";
 import type { FolderInfo } from "../runner/workspace.js";
 import { can, canDriveLane, driverOf, runOf, type SessionState } from "../session/projection.js";
-import { ENGINE_MODELS, ENGINE_NAMES, ENGINE_TOOLS, MAIN_LANE, type DiffFile, type EngineMode, type EngineTool, type Member, type SessionEvent } from "../types.js";
+import { ENGINE_MODELS, ENGINE_NAMES, ENGINE_TOOLS, MAIN_LANE, modeRefusal, type DiffFile, type EngineMode, type EngineTool, type Member, type SessionEvent } from "../types.js";
 import { DiffCard, reviewVia } from "./Activity.js";
 import { ChangeBar } from "./DiffView.js";
 import { EngineMark } from "./BrandMarks.js";
@@ -81,6 +81,11 @@ export function ConnectDialog({
   const [tool, setTool] = useState<EngineTool | "">(initialTool !== undefined ? initialTool : existing ? (existing.tool ?? "") : "claude");
   // The mode picked by hand: reconnecting a lane that had switched to Plan for a question made that Plan its own for good.
   const [mode, setMode] = useState<EngineMode>(existing?.handMode ?? existing?.mode ?? "full");
+  // A tool picked that can't be held to the mode chosen (Amp's Manual): Auto, which every tool runs in, rather than a lane whose
+  // every turn is refused.
+  useEffect(() => {
+    if (modeRefusal(tool || undefined, mode)) setMode("full");
+  }, [tool, mode]);
   const [moreTools, setMoreTools] = useState(false);
   const [model, setModel] = useState(existing?.model ?? "");
   /**
@@ -243,7 +248,7 @@ export function ConnectDialog({
           mode: clash ? "plan" : mode,
           // An own model is the lane's model; a coding tool's is that tool's.
           ...(ownPicked ? { model: ownPicked.choice } : tool && model.trim() ? { model: model.trim() } : {}),
-          ...((ac) => (tool && ac !== "default" && found?.accounts?.some((a) => a.id === ac) ? { account: ac } : {}))(account || (tool && found ? preferredAccount(tool, found.accounts) : "default")),
+          ...((ac) => (tool && found?.accounts?.some((a) => a.id === ac) ? { account: ac } : {}))(account || (tool && found ? preferredAccount(tool, found.accounts) : "default")),
           ...(folder ? { cwd: folder.path } : { noFolder: true }),
           ...(folder && tool && dirs ? { dirs } : {}),
           ...(own ? { worktree: "lane" } : shares ? { share: true } : {}),
@@ -497,7 +502,8 @@ export function ConnectDialog({
                 <span className="cd-k" id="cd-access">Access</span>
                 <span className="cd-seg" role="radiogroup" aria-labelledby="cd-access">
                   {MODES.map((m) => (
-                    <button key={m.id} type="button" role="radio" aria-checked={mode === m.id} aria-label={m.label} title={blurbFor(m, tool ?? "")} data-risky={(m.id === "full" && shares) || undefined} className={mode === m.id ? "on" : ""} onClick={() => setMode(m.id)}>
+                    // A mode the tool can't be held to is shown, greyed, with why (types.ts TOOL_MODES), never picked and then refused.
+                    <button key={m.id} type="button" role="radio" aria-checked={mode === m.id} aria-label={m.label} title={modeRefusal(tool || undefined, m.id) ?? blurbFor(m, tool ?? "")} disabled={!!modeRefusal(tool || undefined, m.id)} data-risky={(m.id === "full" && shares) || undefined} className={mode === m.id ? "on" : ""} onClick={() => setMode(m.id)}>
                       {m.id === "full" && <Icon name="zap" size={11} />}
                       {m.id === "plan" ? "Read" : m.id === "full" ? "Full" : m.label}
                     </button>

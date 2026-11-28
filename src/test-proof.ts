@@ -143,3 +143,23 @@ export function countsLine(r: Pick<TestRun, "passed" | "failed" | "skipped" | "m
   const secs = r.ms === undefined ? "" : r.ms < 1000 ? `${r.ms}ms` : r.ms < 60_000 ? `${(r.ms / 1000).toFixed(1)}s` : `${Math.floor(r.ms / 60_000)}m ${Math.round((r.ms % 60_000) / 1000)}s`;
   return [r.passed !== undefined ? `${r.passed} passed` : "", r.failed ? `${r.failed} failed` : "", r.skipped ? `${r.skipped} skipped` : "", secs].filter(Boolean).join(" · ");
 }
+
+/**
+ * What a failing test expected and what it got, from the output its runner printed, for the check card's line under the test (the
+ * redesign of 2026-11-27: "expected 10, got 10.004" tells rounding from a real bug). Node's assert ("10.004 !== 10": got, then
+ * expected), Jest and Vitest's "Expected:" and "Received:", and a runner that says it in a sentence; null when the output doesn't.
+ */
+export function expectedGot(tail: string): { expected: string; got: string } | null {
+  const t = tail.replace(ANSI, "");
+  // A message quoted in a stack ('expected 10.00, got 10.004') keeps none of its quotes or a trailing comma.
+  const cut = (raw: string) => ((s) => (s.length > 60 ? `${s.slice(0, 59)}…` : s))(raw.trim().replace(/^['"`]+|['"`,;]+$/g, ""));
+  // Node's strictEqual says "10.004 !== 10" on a line of its own, or after "AssertionError:" for a short one.
+  const node = /^(?:\s*AssertionError[^:\n]*:)?\s*(\S.*?)\s+!==\s+(.+)$/m.exec(t);
+  if (node) return { expected: cut(node[2]!), got: cut(node[1]!) };
+  // Jest and Vitest, capitalised: node's own error object lists "expected: true" for assert.ok, which says nothing.
+  const exp = /^\s*Expected(?: value)?:\s*(.+)$/m.exec(t);
+  const rec = /^\s*Received(?: value)?:\s*(.+)$/m.exec(t);
+  if (exp && rec) return { expected: cut(exp[1]!), got: cut(rec[1]!) };
+  const said = /\bexpected\s+(.+?),?\s+(?:but\s+)?got\s+(.+)/i.exec(t);
+  return said ? { expected: cut(said[1]!), got: cut(said[2]!) } : null;
+}

@@ -8,10 +8,13 @@ import { createApp } from "../app.js";
 import { localKV } from "./kv.js";
 import { NO_MODELS } from "./no-models.js";
 import { outsideToken, writeOutsideShim } from "./outside-mcp.js";
+import { keptKey, localKey } from "./local-key.js";
+import { keyServer } from "../runner/dial.js";
 import { PhoneAccess } from "./phone.js";
 import { relayBase } from "./reach.js";
 import { JoinHub } from "./join.js";
 import { Nearby } from "./nearby.js";
+import { Hosts } from "./hosts.js";
 import { endTools } from "../runner/spawn-cli.js";
 
 /**
@@ -120,6 +123,11 @@ export async function takeLock(home: string): Promise<() => void> {
 export interface Started {
   url: string;
   home: string;
+  /**
+   * This install's key (local-key.ts), for whoever started it to let its own window or a browser in. Never logged, and never
+   * put in an address as it is. "" for a Friday already running that is older than the key and asks for none.
+   */
+  key: string;
   /** Another Friday was already running on this folder: this is its address, and nothing was started. */
   already?: boolean;
   /** That other Friday's process, when `already`. */
@@ -246,7 +254,7 @@ export async function startLocal(o: { home?: string; port?: number; /** A link f
   process.env.FRIDAY_EDITION = "local";
   const home = path.resolve(o.home || process.env.FRIDAY_HOME || path.join(os.homedir(), ".friday"));
   const running = await runningOn(home);
-  if (running) return { url: running.url, pid: running.pid, home, already: true, close: async () => {} };
+  if (running) return { url: running.url, pid: running.pid, home, key: keptKey(home), already: true, close: async () => {} };
   // One Friday per folder, first thing, before anything in it is read or written (two once wrote over each other's work).
   mkdirSync(home, { recursive: true, mode: 0o700 });
   const unlock = await takeLock(home);
@@ -270,12 +278,14 @@ export async function startLocal(o: { home?: string; port?: number; /** A link f
 
   // Agents outside Friday reach it through a script beside the data, with a token only this person can read (outside-mcp.ts).
   const outside = { token: outsideToken(home), shim: writeOutsideShim(home) };
+  // And everything else only with this install's key (local-key.ts): no other account or sandboxed program on this computer drives Friday.
+  const key = localKey(home);
 
   const port = await freePort(o.port ?? Number(process.env.PORT ?? 4321));
   const url = `http://127.0.0.1:${port}`;
   // Your phone (phone.ts): its own listener, off until turned on in Settings, handing what it may ask to this server.
   const version = fridayVersion();
-  const phone = new PhoneAccess({ kv: kv.redis, home, appPort: port, computer: thisComputer, names: networkNames, version, relay: relayBase(process.env) });
+  const phone = new PhoneAccess({ kv: kv.redis, home, appPort: port, key, computer: thisComputer, names: networkNames, version, relay: relayBase(process.env) });
   // This computer used from another one's Friday (join.ts): a link it holds there, once paired from Settings › Your computers.
   // Known there by this install's own id (from its secret, so the same each time and nobody else's): pairing it again replaces its row.
   const machineId = createHash("sha256").update(`friday-machine:${secret}`).digest("hex").slice(0, 32);
@@ -284,7 +294,11 @@ export async function startLocal(o: { home?: string; port?: number; /** A link f
   const nearbyPorts = (process.env.FRIDAY_NEARBY_PORTS ?? "").split(",").map(Number).filter((n) => n > 0 && n < 65536);
   const myName = thisComputer;
   const nearby = new Nearby({ id: machineId, name: () => process.env.FRIDAY_MACHINE_NAME || myName, version, pairedWith: () => join.hubCertificate(), ...(Number(process.env.FRIDAY_NEARBY_PORT) > 0 ? { port: Number(process.env.FRIDAY_NEARBY_PORT) } : {}), ...(nearbyPorts.length ? { ask: nearbyPorts } : {}), log: (l) => console.log(`[computers] ${l}`) });
-  await nearby.start();
+  // It listens only while this computer's page is open (nearby.ts need): a Friday nobody is at is found by nobody.
+  // Your Fridays on other machines (hosts.ts): kept and opened here over SSH. Not on a host itself, nor a joined extra machine.
+  const hosts = process.env.FRIDAY_HOST === "1" || o.join ? null : new Hosts({ home, log: (l) => console.log(l) });
+  // The runners Friday starts in this process dial back to it with the key (runner/dial.ts).
+  keyServer(url, key);
   const app = await createApp({
     port,
     // Friday at 127.0.0.1, where the runner it starts connects back too; previews at localhost, which a browser counts as another
@@ -300,7 +314,7 @@ export async function startLocal(o: { home?: string; port?: number; /** A link f
     // Project memory (brain.ts): each finished run read by the coding tool that did it, on this computer, for what it taught.
     decisionLog: true,
     dataDir: path.join(home, "uploads"),
-    local: { redis: kv.redis, sub: kv.sub, saves: kv.saves, user: { id: "local", name }, ...(o.atComputer ? { atComputer: o.atComputer } : {}), ...(o.restoreAfter ? { restoreAfter: o.restoreAfter } : {}), phone, outside, join, nearby, models: path.join(home, "models"),
+    local: { redis: kv.redis, sub: kv.sub, saves: kv.saves, user: { id: "local", name }, ...(o.atComputer ? { atComputer: o.atComputer } : {}), ...(o.restoreAfter ? { restoreAfter: o.restoreAfter } : {}), phone, outside, key, join, nearby, ...(hosts ? { hosts } : {}), models: path.join(home, "models"),
       backdrops: path.join(home, "backdrops"), // Backdrops (backdrops.ts).
       // The coding tools on this computer kept up to date, a while after it starts and every six hours (tool-updates.ts).
       toolUpdates: true,
@@ -314,6 +328,8 @@ export async function startLocal(o: { home?: string; port?: number; /** A link f
   });
   // Turned on before, so on again: the phone stays connected through a restart.
   void phone.resume();
+  // Every host's tunnel opened, so the switcher and Settings say how each is, and opening one is instant.
+  void hosts?.start();
   // Started to be another computer's extra machine (`--join`): paired with that link the first time, and the pairing it keeps
   // held after that (a service restarting). A link it wasn't paired with (added again by SSH or a command, after a removal
   // there) pairs anew, replacing the pairing kept: it used to be skipped for the old one, which was refused, so the service
@@ -331,14 +347,17 @@ export async function startLocal(o: { home?: string; port?: number; /** A link f
   return {
     url,
     home,
+    key,
     awake: () => app.teammates.awake(),
     restored: app.restored,
     close: () =>
       (closed ??= (async () => {
         rmSync(runningFile, { force: true });
+        keyServer(url, "");
         await phone.stop().catch(() => {});
         nearby.stop();
         join.stop();
+        hosts?.stop();
         // Saved as it closes: the desktop app gives all of this five seconds (desktop.ts), and the store used to be written last,
         // after the coding tools' three, so a slow close lost the last changes. Written right after the app has closed (which marks
         // each run a restart cut off, to carry on next time: hub.ts instructions.requeued), and halfway through a close that is

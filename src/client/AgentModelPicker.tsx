@@ -15,6 +15,7 @@ import { floating, placeCard, Switch, uiZoom, useDismiss } from "./ui.js";
 import { splitTools, toolOrder } from "./engines.js";
 import { costMark, type RouteHint } from "./RouteWhy.js";
 import { forValue } from "../routing.js";
+import "./model-picker.css";
 
 /**
  * Friday Code's own side of the picker: its models, the person's own models it can run on, and how hard it reasons. The hosted
@@ -296,6 +297,15 @@ export function AgentModelPicker({
     // Design D (Arun, 2026-11-05: "i kinda like D"): the choices as rows, Tool, Account, Model, one open at a time; the model's
     // first, as the one changed most. Effort is always shown, as a row of its own.
     const [row, setRow] = useState<"tool" | "account" | "model">("model");
+    // The account menu, open from the list's head (design A, Arun 2026-11-26): over the models, never pushing them down.
+    const [acctOpen, setAcctOpen] = useState(false);
+    const acctMenu = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+      if (!acctOpen) return;
+      const away = (e: MouseEvent) => !acctMenu.current?.parentElement?.contains(e.target as Node) && setAcctOpen(false);
+      document.addEventListener("mousedown", away);
+      return () => document.removeEventListener("mousedown", away);
+    }, [acctOpen]);
     // What the rail shows (Favourites, your keys and local models, or the chosen tool's models) and your starred models.
     const [browse, setBrowse] = useState<"fav" | "own" | "more" | EngineTool | "">(engine);
     const [favs, setFavs] = useState<Set<string>>(loadFavs);
@@ -650,7 +660,9 @@ export function AgentModelPicker({
 
     const railItem = (key: string, label: string, mark: ReactElement, on: boolean, pick: () => void, state?: ToolState) => {
       const off = !!state && (state.disabled || !!state.absent || state.ready === false);
-      const lim = key !== "fav" && key !== "own" && key !== "auto" ? limitOf(key as EngineTool) : null;
+      // The tool with more than one account here, on the one it runs as: that account's reading, not its own sign-in's.
+      const own = key === engine && accounts && accounts.rows.length > 1 ? accounts.rows.find((a) => a.id === accounts.now) : undefined;
+      const lim = own ? (own.out ? { used: 100 } : own.used !== undefined ? { used: Math.round(own.used * 100) } : null) : key !== "fav" && key !== "own" && key !== "auto" ? limitOf(key as EngineTool) : null;
       const tip = [label, state ? (state.disabled || state.absent ? "Not installed" : state.ready === false ? "Not set up" : "") : "", lim ? `${lim.used}% of its limit used` : ""].filter(Boolean).join(" · ");
       return (
         <button key={key} type="button" className="mpc-tab" data-on={on || undefined} data-off={off || undefined} disabled={!!state?.disabled} aria-pressed={on} aria-label={tip} title={tip} onClick={pick}>
@@ -692,10 +704,80 @@ export function AgentModelPicker({
             </div>
           )}
           <div ref={list} className="mpc-list" role="menu" aria-label="Models">
-            <div className="mpc-head">
-              <span>{listHead}</span>
-              {!query && headLimit && <span className={`mpc-head-lim ${headLimit.used >= 90 ? "hot" : headLimit.used >= 70 ? "warm" : ""}`}>{headLimit.used >= 100 ? "Out of usage" : `${headLimit.used}% used`}</span>}
-            </div>
+            {acct && engine && accounts && accounts.rows.length > 1 && !query && shownKey === engine ? (
+              /*
+               * The account in the list's head (design A, Arun 2026-11-26: "make it cleaner and doesn't crowd the models"): who it
+               * runs as and their email where the tool's name was, and how much is used, or when it's back, at the right; with the
+               * picked one out and another free, that one is the right's press. The rest of the accounts open over the models.
+               */
+              <div className="mpc-head mpc-ahead">
+                <button type="button" className="mpc-ahead-btn" aria-haspopup="listbox" aria-expanded={acctOpen} aria-label={`${ENGINE_NAMES[engine]} account: ${acct.label}${acct.email ? `, ${acct.email}` : ""}`} onClick={() => setAcctOpen((o) => !o)}>
+                  <i className="mpc-av" data-i={accounts.rows.indexOf(acct) % 4} aria-hidden>
+                    {acct.label.trim()[0]?.toUpperCase() ?? "?"}
+                  </i>
+                  <b>{acct.label}</b>
+                  {acct.email && <span className="mpc-ahead-mail">{acct.email}</span>}
+                  <Icon name="chevronDown" size={12} className="mpc-ahead-caret" />
+                </button>
+                {(() => {
+                  const free = acct.out && !accounts.disabled ? accounts.rows.find((a) => a.id !== accounts.now && !a.out && !a.off) : undefined;
+                  if (free)
+                    return (
+                      <button type="button" className="mpc-ahead-go" title={`${acct.label} is ${acct.note?.replace(/^Out/, "out") ?? "out of usage"}`} onClick={() => accounts.set(free.id)}>
+                        Use {free.label}
+                      </button>
+                    );
+                  if (acct.out) return <span className="mpc-head-lim hot">{acct.note?.startsWith("Out until ") ? `Back ${acct.note.slice(10)}` : "Out of usage"}</span>;
+                  // This account's own reading: the tool's (headLimit) is its own sign-in's, another account's.
+                  if (acct.used === undefined) return null;
+                  const u = Math.round(acct.used * 100);
+                  return <span className={`mpc-head-lim ${u >= 90 ? "hot" : u >= 70 ? "warm" : ""}`}>{u}% used</span>;
+                })()}
+              </div>
+            ) : (
+              <div className="mpc-head">
+                <span>{listHead}</span>
+                {!query && headLimit && <span className={`mpc-head-lim ${headLimit.used >= 90 ? "hot" : headLimit.used >= 70 ? "warm" : ""}`}>{headLimit.used >= 100 ? "Out of usage" : `${headLimit.used}% used`}</span>}
+              </div>
+            )}
+            {acctOpen && acct && engine && accounts && (
+              <div ref={acctMenu} className="mpc-amenu" role="listbox" aria-label={`${ENGINE_NAMES[engine]} accounts`} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setAcctOpen(false))}>
+                {accounts.rows.map((a, i) => {
+                  const side = a.out ? (a.note?.startsWith("Out until ") ? `Back ${a.note.slice(10)}` : "Out of usage") : a.off ? "Signed out" : a.used !== undefined ? `${Math.round(a.used * 100)}% used` : "";
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      role="option"
+                      aria-selected={a.id === accounts.now}
+                      className="mpc-arow"
+                      disabled={!!a.off || !!accounts.disabled}
+                      onClick={() => (a.id !== accounts.now && accounts.set(a.id), setAcctOpen(false))}
+                    >
+                      <i className={`mpc-av${a.out || a.off ? " dim" : ""}`} data-i={i % 4} aria-hidden>
+                        {a.label.trim()[0]?.toUpperCase() ?? "?"}
+                      </i>
+                      <span className="mpc-arow-who">
+                        <b>
+                          {a.label}
+                          {a.main && <span className="mpc-arow-tag">New sessions</span>}
+                        </b>
+                        {a.email && <span>{a.email}</span>}
+                      </span>
+                      {side && <span className={`mpc-arow-side${a.out ? " out" : ""}`}>{side}</span>}
+                      <span className="mpc-arow-check" aria-hidden>
+                        {a.id === accounts.now && <Icon name="check" size={13} />}
+                      </span>
+                    </button>
+                  );
+                })}
+                {(accounts.disabled || accounts.note) && <p className="mpc-amenu-note">{accounts.disabled || accounts.note}</p>}
+                <button type="button" className="mpc-arow mpc-arow-add" onClick={() => (setAcctOpen(false), setOpen(false), dispatchEvent(new Event("friday:usage")))}>
+                  <Icon name="plus" size={13} />
+                  Add or manage accounts
+                </button>
+              </div>
+            )}
             {query ? (
               modelOnly ? (engine ? toolList(engine) : ownList(false)) : everywhere()
             ) : shownKey === "more" ? (
@@ -743,21 +825,6 @@ export function AgentModelPicker({
             )}
           </div>
         </div>
-        {/* A tool's subscriptions side by side, when it has more than one here: which one it runs as, a press to change. */}
-        {accounts && engine && accounts.rows.length > 1 && (
-          <div className="mpc-foot" title={accounts.disabled || accounts.note || undefined}>
-            <span className="mpc-foot-k">Plan</span>
-            <div className="mpc-seg" role="radiogroup" aria-label={`${ENGINE_NAMES[engine]} account`}>
-              {accounts.rows.map((a) => (
-                <button key={a.id} type="button" role="radio" aria-checked={a.id === accounts.now} data-on={a.id === accounts.now || undefined} disabled={!!a.off || !!accounts.disabled} title={[a.email, a.note].filter(Boolean).join(" · ") || undefined} onClick={() => a.id !== accounts.now && accounts.set(a.id)}>
-                  <i className={`ampd-dot${a.out ? " out" : a.off ? " off" : ""}`} aria-hidden />
-                  {a.label}
-                </button>
-              ))}
-            </div>
-            {acct?.out && <span className="mpc-foot-note">Out</span>}
-          </div>
-        )}
         {levels && (
           <div className="mpc-foot">
             <span className="mpc-foot-k">{reasoning ? "Reasoning" : "Effort"}</span>

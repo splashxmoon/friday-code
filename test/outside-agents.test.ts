@@ -142,11 +142,11 @@ test("only an agent on this computer with this install's token gets in: not a pa
   assert.deepEqual(JSON.parse(JSON.parse((await ok.text()).trim()).output), { sessions: [] });
 
   // Settings' lines, for Friday's own page.
-  const setup = (await (await fetch(`${friday.url}/api/outside/setup`, { headers: { "x-friday-local": "1" } })).json()) as { claude: { line: string }; codex: { toml: string }; shim: string };
+  const setup = (await (await fetch(`${friday.url}/api/outside/setup`, { headers: { "x-friday-local": "1", "x-friday-key": friday.key } })).json()) as { claude: { line: string }; codex: { toml: string }; shim: string };
   assert.equal(setup.shim, path.join(home, "outside-mcp.mjs"));
   assert.ok(setup.claude.line.startsWith("claude mcp add friday --scope user -- "), setup.claude.line);
   assert.ok(setup.claude.line.replace(/["']$/, "").endsWith(path.join(home, "outside-mcp.mjs")), setup.claude.line);
-  const add = await fetch(`${friday.url}/api/outside/setup`, { method: "POST", headers: { "content-type": "application/json", "x-friday-local": "1" }, body: JSON.stringify({ tool: "cursor" }) });
+  const add = await fetch(`${friday.url}/api/outside/setup`, { method: "POST", headers: { "content-type": "application/json", "x-friday-local": "1", "x-friday-key": friday.key }, body: JSON.stringify({ tool: "cursor" }) });
   assert.equal(add.status, 400, "Cursor has no mcp add: its file only");
 });
 

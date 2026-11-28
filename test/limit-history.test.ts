@@ -1,7 +1,7 @@
 // The Usage hub's reading of the coding tools' limits over time (limitHistory.ts).
 import assert from "node:assert/strict";
 import test from "node:test";
-import { crossedEighty, cyclesOf, forecastOf, listPrice, mostRoom, rightSize, windowsOf, withReading, type Win } from "../src/client/limitHistory.js";
+import { crossedEighty, cyclesOf, forecastOf, listPrice, mostRoom, rightSize, shortName, dailyPeaks, windowsOf, withReading, type Win } from "../src/client/limitHistory.js";
 
 const NOW = Date.UTC(2026, 9, 15, 12, 0, 0);
 const inH = (h: number) => Math.round((NOW + h * 3600_000) / 1000);
@@ -76,4 +76,36 @@ test("the most room, prices, right-sizing and the 80% alert", () => {
   const before = withReading({}, [five(70)], NOW - 120_000);
   assert.equal(crossedEighty(before, [five(83)]).length, 1, "70 then 83: said once");
   assert.equal(crossedEighty(withReading(before, [five(83)], NOW), [five(88)]).length, 0, "and not again in the same window");
+});
+
+test("each of a tool's windows has its own name: a group said without a '·' is still its group (two '5-hour' rows on Antigravity's card)", () => {
+  const w = (label: string, minutes: number | null): Win => ({ tool: "antigravity" as Win["tool"], key: label, label, minutes, used: 0, resetsAt: null });
+  // Readings kept from before issue #30 label Antigravity's groups alone.
+  assert.equal(shortName(w("Gemini models", 300)), "Gemini 5-hour");
+  assert.equal(shortName(w("Claude and GPT models", 300)), "Claude and GPT 5-hour");
+  // As the runner says them now, and the tool's own windows.
+  assert.equal(shortName(w("5h · Gemini", 300)), "Gemini 5-hour");
+  assert.equal(shortName(w("5h", 300)), "5-hour");
+  assert.equal(shortName(w("Weekly", 10_080)), "Week");
+  assert.equal(shortName(w("Weekly · Opus", 10_080)), "Opus week");
+  // Cursor's two weekly allowances.
+  assert.equal(shortName(w("Cursor models", 10_080)), "Cursor week");
+  assert.equal(shortName(w("Monthly", 43_200)), "Month");
+  assert.equal(shortName(w("Premium requests", null)), "Premium requests");
+});
+
+test("the strip of days: each local day's highest reading, today last, a day without one empty", () => {
+  const now = new Date(2026, 10, 27, 15, 0).getTime();
+  const at = (daysAgo: number, h: number) => new Date(2026, 10, 27 - daysAgo, h, 0).getTime();
+  const s = [
+    { at: at(3, 9), used: 20, resetsAt: null },
+    { at: at(3, 13), used: 64.4, resetsAt: null },
+    { at: at(1, 23), used: 100, resetsAt: null },
+    { at: at(0, 10), used: 7, resetsAt: null },
+    { at: at(9, 10), used: 50, resetsAt: null },
+  ];
+  const days = dailyPeaks(s, 7, now);
+  assert.equal(days.length, 7);
+  assert.deepEqual(days.map((d) => d.peak), [null, null, null, 64, null, 100, 7]);
+  assert.equal(days.at(-1)!.label, "Today");
 });

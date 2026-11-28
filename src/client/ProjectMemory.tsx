@@ -3,7 +3,8 @@ import type { BrainEntry, BrainKind, BrainRepo } from "../brain.js";
 import { api } from "./api.js";
 import { Icon } from "./icons.js";
 import type { Identity } from "./storage.js";
-import { Segmented, Switch, relTime, useConfirm } from "./ui.js";
+import { relTime, useConfirm } from "./ui.js";
+import { Choice, Switch } from "./settings-kit.js";
 import { RuleForm, RuleHow, type RuleDraft } from "./RuleForm.js";
 
 const KINDS: [BrainKind, string][] = [
@@ -59,15 +60,19 @@ export function ProjectMemory({ identity }: { identity: Identity }) {
       {confirmUI}
       <div className="set-row">
         <div>
-          <div className="set-label">Project memory</div>
-          <div className="muted small">
+          {/* Its title with how many lessons it holds, as the kit's memory panel counts its memories. */}
+          <div className="set-label">
+            Project memory
+            {state.repos.length > 0 && <span className="mem-count">{state.repos.reduce((n, r) => n + r.count, 0)}</span>}
+          </div>
+          <div className={`muted small${state.enabled ? "" : " mem-off"}`}>
             {state.enabled
               ? "What agents learned working on each repository: decisions, pitfalls and their fixes, conventions. Every agent starting on one, in any tool, is told what bears on its task. Agents add to it as they work; put anything wrong right here."
               : "Agents learn nothing from their runs, and nobody is briefed. What is listed is kept until you delete it."}
             {state.mayToggle === false && " Only admins and owners turn learning off or on."}
           </div>
         </div>
-        <Switch label="Learn from every run" on={state.enabled} disabled={state.mayToggle === false} onChange={(on) => void act(() => api(identity, "/api/brain/settings", { method: "POST", body: JSON.stringify({ enabled: on }) }))} />
+        <Switch aria-label="Learn from every run" checked={state.enabled} disabled={state.mayToggle === false} onCheckedChange={(on) => void act(() => api(identity, "/api/brain/settings", { method: "POST", body: JSON.stringify({ enabled: on }) }))} />
       </div>
       {state.repos.length === 0 ? (
         <p className="mem-empty">Nothing learned yet. It fills in as agents finish work in a repository.</p>
@@ -165,7 +170,7 @@ export function ProjectMemory({ identity }: { identity: Identity }) {
                     }}
                   >
                     <input value={draft.text} maxLength={400} placeholder={`Something every agent on ${r.name} should know…`} aria-label="A lesson to add" onChange={(ev) => setDraft({ ...draft, text: ev.target.value })} />
-                    <Segmented<BrainKind> value={draft.kind} onChange={(kind) => setDraft({ ...draft, kind })} options={KINDS} />
+                    <Choice<BrainKind> label="What kind of lesson" value={draft.kind} onChange={(kind) => setDraft({ ...draft, kind })} options={KINDS} />
                     <button type="submit" className="btn primary small" disabled={!draft.text.trim()}>
                       Add
                     </button>

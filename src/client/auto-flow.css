@@ -1,0 +1,57 @@
+/* An automation's editor as a flow (Automations.tsx Step; friday-polish.html #automation): When, Who, Where, Does, Then and Limits
+   read top down, each a card beside its icon in a small rounded square, the squares joined by one line. A test run lights the
+   steps as its run goes: blue where it is, green where it has been, red where it stopped. Tokens only, so it holds in dark, light
+   and glass; rounded squares, never pills (Arun, 2026-11-14). */
+.af-flow { display: grid; min-width: 0; margin: 0; padding: 0; border: 0; }
+.af-step { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr); column-gap: 12px; }
+.af-node { z-index: 1; display: grid; place-items: center; width: 26px; height: 26px; margin-top: 10px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--card); color: var(--text-muted); transition: border-color .25s var(--ease-out), color .25s var(--ease-out); }
+.af-node svg { width: 14px; height: 14px; }
+/* The line from this step's square down to the next one's, and the light that runs down it from the step a run is at. */
+.af-step:not(:last-child)::before { content: ""; position: absolute; top: 36px; bottom: -10px; left: 12px; width: 1px; background: var(--border-strong); }
+.af-step:not(:last-child)::after { content: ""; position: absolute; top: 36px; left: 11px; width: 3px; height: 0; border-radius: 2px; background: var(--live); box-shadow: 0 0 8px var(--live); }
+.af-step[data-state="going"]:not(:last-child)::after { animation: af-travel .5s var(--ease-out) forwards; }
+@keyframes af-travel { to { height: calc(100% - 26px); } }
+.af-step[data-state="going"] .af-node { border-color: var(--live); color: var(--live); }
+.af-step[data-state="lit"] .af-node { border-color: var(--green); color: var(--green); }
+.af-step[data-state="fail"] .af-node { border-color: var(--red); color: var(--red); }
+@media (prefers-reduced-motion: reduce) { .af-step[data-state="going"]:not(:last-child)::after { animation: none; height: calc(100% - 26px); } .af-node { transition: none; } }
+.af-card { display: flex; min-width: 0; flex-direction: column; gap: 10px; margin-bottom: 10px; padding: 10px 12px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--card); }
+.af-step:last-child .af-card { margin-bottom: 0; }
+.af-hd { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
+.af-hd b { color: var(--ink); font-size: var(--t-13); font-weight: 600; }
+.af-hd > span { color: var(--text-muted); font-size: var(--t-12); }
+/* The repository with GitHub's mark in front, as one field. */
+.af-repo { position: relative; display: inline-flex; align-items: center; }
+.af-repo > svg { position: absolute; left: 9px; color: var(--text-muted); pointer-events: none; }
+/* The label: the kit's tag input as a bare tag once it has one, a field to type in while it has none or has the caret. */
+.af-label.ui-tagc { display: inline-flex; width: auto; min-width: 0; }
+.af-label .ui-tagc__box { min-height: 28px; padding: 2px; }
+.af-label:has(.ui-tagc__chip) .ui-tagc__box:not(:focus-within) { padding: 0; background: none; box-shadow: none; }
+.af-label:has(.ui-tagc__chip) .ui-tagc__input { flex: 0 0 28px; }
+.af-label:has(.ui-tagc__chip) .ui-tagc__input::placeholder { color: transparent; }
+.af-label:not(:has(.ui-tagc__chip)) .ui-tagc__input { flex: 0 0 96px; }
+/* A fix to make, in amber: what's wrong, the command that fixes it with Copy, and Check again at the end of the line. */
+.af-call { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border-radius: var(--r-md); background: color-mix(in srgb, var(--amber) 10%, transparent); color: var(--ink); font-size: 12.5px; }
+.af-call > svg { flex: none; width: 14px; height: 14px; color: var(--amber); }
+.af-call code { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 7px; border: 1px solid var(--border); border-radius: 5px; background: var(--card); color: var(--ink); font: 11.5px var(--mono); }
+.af-call code button { display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--faint); cursor: pointer; }
+.af-call code button:hover { background: var(--hover); color: var(--ink); }
+.af-call code button svg { width: 12px; height: 12px; }
+.af-call > .af-call-again { margin-left: auto; }
+/* Where, as a compact field when it's a new folder each run; a folder picked shows its path beside its name. */
+.af-card .auto-where.new { align-self: flex-start; }
+.af-card .auto-where.new .auto-where-btn { flex: 0 1 auto; height: 28px; padding: 0 9px; border-radius: 7px; font-size: 12.5px; }
+.af-card .auto-where-name { max-width: none; }
+/* The prompt: a see-through textarea over a layer that draws the same text with {{event}} as a token. Both share every metric
+   that places a letter, so the token sits under the characters it styles. */
+.af-prompt { position: relative; display: grid; border: 1px solid var(--border-strong); border-radius: var(--r-md); background: var(--bg); }
+.af-prompt:focus-within { border-color: var(--border-focus); }
+.af-prompt-layer, .af-prompt-input { grid-area: 1 / 1; margin: 0; padding: 8px 10px; border: 0; font: 400 12.5px/1.7 var(--font); letter-spacing: normal; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; tab-size: 4; scrollbar-gutter: stable; }
+.af-prompt-layer { overflow: hidden; color: var(--ink); pointer-events: none; }
+.af-prompt-input { position: relative; z-index: 1; min-height: 76px; resize: vertical; overflow-y: auto; background: transparent; color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--ink); outline: none; }
+.af-prompt-input::placeholder { color: var(--faint); -webkit-text-fill-color: var(--faint); }
+.af-prompt-input::selection { background: color-mix(in srgb, var(--live) 28%, transparent); }
+/* {{event}}, the one word the instructions have filled in, as a token: its padding drawn by a shadow, so its letters stay where the
+   textarea's are. */
+.af-tok { border-radius: 4px; background: color-mix(in srgb, var(--live) 12%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--live) 12%, transparent); color: var(--live); }
+.af-perday { display: inline-flex; width: 96px; }

@@ -58,85 +58,110 @@
   .msv-need { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 }
 
-/* The directory (mcp-directory.tsx): the kinds down the left with their counts, every service in quiet rows of two under its
-   kind's name, the ones connected marked green. */
+/* The directory (mcp-directory.tsx), as the approved Customize mock draws it (2026-11-27), in the kit's measurements: one header
+   line, a 184px rail of 30px rows (Yours, then Add more), and the services as cards with one button each. The kit's ring is a
+   hairline and a soft shadow, not a border; it lifts a little when pointed at. */
+:root { --cz-ring: 0 0 0 .5px rgb(0 0 0 / .12), 0 1px 2px rgb(0 0 0 / .05); --cz-ring-up: 0 0 0 .5px rgb(0 0 0 / .14), 0 2px 6px -2px rgb(0 0 0 / .12); }
+html.dark { --cz-ring: 0 0 0 .5px rgb(255 255 255 / .1), 0 1px 2px rgb(0 0 0 / .4); --cz-ring-up: 0 0 0 .5px rgb(255 255 255 / .16), 0 2px 8px -2px rgb(0 0 0 / .6); }
 /* The directory uses the page's width: four or five cards a row on a wide window. */
 .msv-page .msv { max-width: 1320px; }
 /* Its first row as high as the Agent Board's (Arun, 2026-11-19: "the same layout height as for example the agent board page"): the
    page's own padding is the room above it, not this as well. */
 .msv-page .msv { padding-top: 0; }
-.mdir { display: flex; flex-direction: column; gap: 12px; }
-.mdir-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mdir { display: flex; flex-direction: column; gap: 18px; }
+.mdir-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .mdir-head .msv-h2 { margin: 0; }
-/* Beside the search: the Claude Code switch, and Custom server. */
+/* The page's actions at the end of the line: the Claude Code switch as a quiet button, then Custom server, the white one. */
 .mdir-head-acts { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.mdir-cc { display: inline-flex; flex: none; align-items: center; gap: 7px; height: 32px; padding: 0 6px 0 10px; border: 1px solid var(--border); border-radius: 9px; color: var(--ink-2); font-size: 12.5px; white-space: nowrap; cursor: pointer; transition: border-color var(--t-hover) var(--ease-out); }
-.mdir-cc:hover { border-color: var(--border-strong); }
-.mdir-custom-btn { height: 32px; border-radius: 9px; gap: 5px; }
-.mdir-search { display: flex; align-items: center; gap: 7px; width: 340px; height: 32px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--card); color: var(--text-muted); transition: border-color var(--t-hover) var(--ease-out); }
-.mdir-search:focus-within { border-color: var(--border-focus); }
+.mdir-cc { display: inline-flex; flex: none; align-items: center; gap: 8px; height: 28px; padding: 0 6px 0 10px; border-radius: 6px; background: var(--card); box-shadow: var(--cz-ring); color: var(--ink); font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: box-shadow var(--t-hover) var(--ease-out); }
+.mdir-cc:hover { box-shadow: var(--cz-ring-up); }
+.mdir-custom-btn { flex: none; }
+/* Customize's switch (customize-switch.tsx): the kit's tray, its counts a quiet number after each label. */
+.cz-switch.ui-segc { flex: none; --ui-segc-fs: 12.5px; --ui-segc-icon: 13px; --ui-segc-track: var(--hover); --ui-segc-card: var(--card); --ui-segc-card-shadow: var(--cz-ring); }
+.cz-switch .ui-segc__count { min-width: 0; height: auto; padding: 0; border-radius: 0; background: none !important; box-shadow: none !important; color: var(--faint) !important; font-size: 12.5px; font-weight: 400; animation: none; }
+.mdir-search { display: flex; flex: 0 1 300px; align-items: center; gap: 8px; min-width: 0; height: 32px; padding: 0 8px 0 10px; border-radius: 8px; background: var(--card); box-shadow: var(--cz-ring); color: var(--faint); transition: box-shadow var(--t-hover) var(--ease-out); }
+.mdir-search:focus-within { box-shadow: 0 0 0 1px var(--border-focus); }
+.mdir-search > svg { flex: none; }
 .mdir-search > input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; outline: none; }
+.mdir-search > input::placeholder { color: var(--faint); }
+.mdir-kbd { display: grid; flex: none; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--border-strong); color: var(--faint); font: 500 11px/1 var(--font); }
 .mdir-body { display: grid; grid-template-columns: 184px minmax(0, 1fr); align-items: start; gap: 20px; }
 .mdir-filters { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 1px; }
-.mdir-filter { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; transition: background-color var(--t-hover) var(--ease-out); }
-.mdir-filter > svg { flex: none; color: var(--text-muted); transition: color var(--t-hover) var(--ease-out); }
+.mdir-rail-label { padding: 10px 8px 4px; color: var(--faint); font-size: 10px; font-weight: 500; line-height: 16px; letter-spacing: .5px; text-transform: uppercase; }
+.mdir-rail-label:first-child { padding-top: 0; }
+.mdir-filter { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); font: inherit; font-size: 13px; text-align: left; cursor: pointer; transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out); }
+.mdir-filter > svg { flex: none; width: 14px; height: 14px; color: var(--faint); transition: color var(--t-hover) var(--ease-out); }
 .mdir-filter:hover > svg, .mdir-filter[aria-pressed="true"] > svg { color: var(--ink); }
 .mdir-filter > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mdir-filter:hover { background: var(--hover); color: var(--ink); }
 .mdir-filter[aria-pressed="true"] { background: var(--hover-strong); color: var(--ink); font-weight: 500; }
 .mdir-filter:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
 /* While searching, the counts are the matches; a kind with none is faded. */
-.mdir-filter.none:not([aria-pressed="true"]) { color: var(--text-muted); opacity: .55; }
-.mdir-count { flex: none; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.mdir-sep { height: 1px; margin: 6px 10px; background: var(--border); }
-.mdir-list { display: flex; flex-direction: column; gap: 26px; min-width: 0; }
-.mdir-group-head { display: flex; align-items: center; gap: 7px; margin: 2px 0 10px 2px; color: var(--ink); font-size: 14px; font-weight: 600; letter-spacing: -0.005em; }
-.mdir-group-head > svg { flex: none; color: var(--ink-2); }
-.mdir-group-head > span { color: var(--text-muted); font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
-/* A card a service: its logo and how it connects along the top, its name, what it does in two lines. Connected ones carry their
-   state in colour and a faint tint, and say Manage when pointed at. */
-.mdir-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
-.mdir-cards > li { display: flex; min-width: 0; }
-.mdir-card { position: relative; display: flex; flex: 1; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; min-height: 112px; padding: 12px 12px 13px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--ink); font: inherit; text-align: left; cursor: pointer; box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 3%, transparent); transition: border-color var(--t-hover) var(--ease-out), background-color var(--t-hover) var(--ease-out), box-shadow var(--t-hover) var(--ease-out), transform var(--t-hover) var(--ease-out); }
-.mdir-card:hover { border-color: var(--border-strong); box-shadow: 0 2px 10px -4px color-mix(in srgb, var(--ink) 18%, transparent); transform: translateY(-1px); }
-.mdir-card:active { transform: none; }
-.mdir-card:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
-.mdir-card.is-on { border-color: color-mix(in srgb, var(--green) 32%, var(--border)); background: color-mix(in srgb, var(--green) 4%, var(--card)); }
-.mdir-card.is-bad { border-color: color-mix(in srgb, var(--red) 32%, var(--border)); background: color-mix(in srgb, var(--red) 3%, var(--card)); }
-.mdir-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
-.mdir-name { overflow: hidden; color: var(--ink); font-size: 13.5px; font-weight: 500; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
-.mdir-blurb { display: -webkit-box; overflow: hidden; color: var(--text-muted); font-size: 12px; line-height: 16px; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-wrap: pretty; }
-.mdir-manage-hint { display: inline-flex; align-items: center; gap: 3px; margin-top: auto; padding-top: 8px; color: var(--text-muted); font-size: 11.5px; font-weight: 500; transition: color var(--t-hover) var(--ease-out); }
-.mdir-card:hover .mdir-manage-hint, .mdir-card:focus-visible .mdir-manage-hint { color: var(--ink); }
-/* How it connects, quiet, until pointed at; the state of one that's connected, in its colour. */
-.mdir-how { display: inline-flex; flex: none; align-items: center; gap: 5px; color: var(--text-muted); font-size: 11.5px; white-space: nowrap; opacity: .75; transition: opacity var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out); }
-.mdir-card:hover .mdir-how { opacity: 1; color: var(--ink-2); }
-.mdir-how:not(.on):not(.bad):not(.off) { padding: 2px 7px; border-radius: 999px; background: var(--hover); }
-.mdir-how > i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.mdir-how.on { color: var(--green); opacity: 1; }
-.mdir-how.bad { color: var(--red); opacity: 1; }
-.mdir-how.off { opacity: 1; }
-.mdir-card:hover .mdir-how.on { color: var(--green); }
-.mdir-card:hover .mdir-how.bad { color: var(--red); }
-.mdir-mark { position: relative; display: grid; flex: none; place-items: center; border: 1px solid var(--border); border-radius: 9px; background: #fff; color: var(--ink-2); overflow: hidden; }
+.mdir-filter.none:not([aria-pressed="true"]) { opacity: .55; }
+.mdir-count { flex: none; color: var(--faint); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+/* Needs sign in counts in amber: the one place the rail says something needs you. */
+.mdir-count.is-amber { color: var(--amber); font-weight: 500; }
+.mdir-sep { height: 1px; margin: 6px 8px; background: var(--border); }
+.mdir-list { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+/* A card a service: its logo, name and how it connects along the top, what it does in two lines, and one small button at its foot,
+   the line beside it saying what the button does (pointed at) or, connected, how many tools and who gets them. */
+.mdir-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.mdir-card { display: grid; grid-template-rows: auto 1fr auto; gap: 8px; min-width: 0; min-height: 132px; padding: 12px; border-radius: 10px; background: var(--card); box-shadow: var(--cz-ring); color: var(--ink); cursor: pointer; transition: box-shadow var(--t-hover) var(--ease-out); }
+.mdir-card:hover { box-shadow: var(--cz-ring-up); }
+.mdir-card-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mdir-name { flex: 1; min-width: 0; overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 500; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
+.mdir-blurb { display: -webkit-box; align-self: start; overflow: hidden; color: var(--text-muted); font-size: 12px; line-height: 17px; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-wrap: pretty; }
+.mdir-card-foot { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mdir-card-hint { flex: 1; min-width: 0; overflow: hidden; color: var(--faint); font-size: 12px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; opacity: 0; transition: opacity var(--t-hover) var(--ease-out); }
+.mdir-card-hint.is-on, .mdir-card:hover .mdir-card-hint, .mdir-card:focus-within .mdir-card-hint { opacity: 1; }
+.mdir-act { flex: none; margin-left: auto; }
+/* Pointed at, a card's way in turns white, the one thing to press. */
+.mdir-card:hover .mdir-act[data-variant="secondary"], .mdir-card:focus-within .mdir-act[data-variant="secondary"] { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+/* How it connects (Your app, Runs here) or its state, as a chip: grey, green connected, amber when it needs you. */
+.mdir-how { display: inline-flex; flex: none; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border-radius: 5px; background: var(--hover); color: var(--text-muted); font-size: 11px; font-weight: 500; white-space: nowrap; }
+.mdir-how > i { width: 6px; height: 6px; border-radius: 2px; background: currentColor; }
+.mdir-how.on { background: color-mix(in srgb, var(--green) 13%, transparent); color: var(--green); }
+.mdir-how.signin, .mdir-how.bad { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--amber); }
+.mdir-mark { position: relative; display: grid; flex: none; place-items: center; border-radius: 7px; background: #fff; box-shadow: var(--cz-ring); color: var(--ink-2); overflow: hidden; }
 .mdir-mark > img { position: absolute; inset: 0; margin: auto; object-fit: contain; opacity: 0; transition: opacity .15s ease; }
 .mdir-mark > img.loaded { opacity: 1; }
-html.dark .mdir-mark { border-color: color-mix(in srgb, var(--ink) 10%, transparent); background: color-mix(in srgb, var(--ink) 6%, var(--bg)); }
+html.dark .mdir-mark { background: color-mix(in srgb, var(--ink) 6%, var(--bg)); }
 html.dark .mdir-mark > img.mdir-invert { filter: invert(1) brightness(1.6); }
+.mdir-drawer-head .mdir-mark, .mdir-sheet-head .mdir-mark { border-radius: 9px; }
 /* A server of one's own: a drawn mark, and what it runs in place of a description. */
-.mdir-mark.mdir-own { background: var(--hover); }
+.mdir-mark.mdir-own { background: var(--card); }
 html.dark .mdir-mark.mdir-own { background: color-mix(in srgb, var(--ink) 8%, var(--bg)); }
 .mdir-own-line { font-family: var(--mono, ui-monospace, monospace); font-size: 11.5px; word-break: break-all; }
 .mdir-sheet .mdir-own-line { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mdir-empty { margin: 4px 10px; color: var(--text-muted); font-size: 13px; }
+.mdir-empty { margin: 4px 2px; color: var(--text-muted); font-size: 13px; }
+/* A search that found nothing: what to do instead, in a dashed box. */
+.mdir-none { display: grid; justify-items: center; gap: 8px; padding: 40px 16px; border: 1px dashed var(--border-strong); border-radius: 12px; color: var(--text-muted); font-size: 12px; text-align: center; }
+.mdir-none > b { color: var(--ink); font-size: 13px; font-weight: 500; }
+
+/* Yours (Connected and Needs sign in): a heading with its count and what it means, then the servers as rows in one card. */
+.mdir-yours { gap: 16px; }
+.mdir-yours > .mdir-group { display: flex; flex-direction: column; gap: 10px; }
+.mdir-sec-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0; font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.mdir-sec-h > b { color: var(--ink); font-size: 13px; font-weight: 500; }
+.mdir-sec-n { font-variant-numeric: tabular-nums; }
+.mdir-rows { margin: 0; padding: 0; overflow: hidden; border-radius: 10px; background: var(--card); box-shadow: var(--cz-ring); list-style: none; }
+.mdir-rows > li + li { border-top: 1px solid var(--border); }
+.mdir-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 12px; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: background-color var(--t-hover) var(--ease-out); }
+.mdir-row:hover { background: var(--hover); }
+.mdir-row:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+.mdir-row.is-static { grid-template-columns: 28px minmax(0, 1fr) auto; cursor: default; }
+.mdir-row.is-static:hover { background: transparent; }
+.mdir-row-text { display: grid; min-width: 0; }
+.mdir-row-text > b { overflow: hidden; font-size: 13px; font-weight: 500; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
+.mdir-row-text > span { overflow: hidden; color: var(--text-muted); font-size: 12px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.mdir-row-chev { color: var(--faint); }
 /* Before the list is read (Directory, servers null): the kinds and the cards in their places, still, in the placeholder's tone. */
-.mdir-skel-filters { gap: 18px; padding: 9px 10px; }
+.mdir-skel-filters { gap: 18px; padding: 9px 8px; }
 .mdir-skel-filters .mdir-sep { margin: -9px 0; }
-.mdir-skel-head { margin: 4px 0 14px 2px; }
-.mdir-card.mdir-card-skel { gap: 8px; cursor: default; box-shadow: none; }
-.mdir-card.mdir-card-skel:hover { border-color: var(--border); box-shadow: none; transform: none; }
-.mdir-card-skel .mdir-card-top { margin-bottom: 4px; }
-/* The real cards rise into the placeholders' room once, as the list lands. */
+.mdir-card.mdir-card-skel { cursor: default; }
+.mdir-card.mdir-card-skel:hover { box-shadow: var(--cz-ring); }
+.mdir-card-skel .mdir-card-foot { justify-content: flex-end; }
+/* The real cards rise into the placeholders' room once, as the list lands, and again as the rail picks another view. */
 .mdir-landed .mdir-list { animation: tm-rise var(--t-open) var(--ease-out) both; }
 /* Read before, and not read again just now: said over the cards, which stay. */
 .msv-stale { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 12px; border: 1px solid color-mix(in srgb, var(--red) 28%, var(--border)); border-radius: 10px; background: color-mix(in srgb, var(--red) 4%, var(--card)); color: var(--ink-2); font-size: 12.5px; line-height: 18px; }
@@ -146,41 +171,45 @@ html.dark .mdir-mark.mdir-own { background: color-mix(in srgb, var(--ink) 8%, va
 @media (prefers-reduced-motion: reduce) { .mdir-landed .mdir-list { animation: none; } }
 .mdir-more { align-self: flex-start; font-size: 12.5px; }
 .mdir-note { margin: 0; color: var(--text-muted); font-size: 12.5px; line-height: 18px; text-wrap: pretty; }
-@media (max-width: 860px) {
-  .mdir-body { grid-template-columns: minmax(0, 1fr); gap: 10px; }
-  .mdir-filters { position: static; flex-direction: row; flex-wrap: nowrap; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+/* A narrow window: the rail is a row above the cards that scrolls sideways, its labels left out. */
+@media (max-width: 900px) {
+  .mdir-body { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .mdir-filters { position: static; flex-direction: row; flex-wrap: nowrap; gap: 2px; overflow-x: auto; scrollbar-width: none; }
   .mdir-filters::-webkit-scrollbar { display: none; }
   .mdir-filter { flex: none; }
-  .mdir-sep { display: none; }
+  .mdir-sep, .mdir-rail-label { display: none; }
   .mdir-skel-filters { gap: 10px; padding: 9px 4px; overflow: hidden; }
   .mdir-skel-filters .sk { width: 64px !important; }
+  .mdir-head { flex-wrap: wrap; }
+  .mdir-search { flex: 1 1 200px; }
+  .mdir-head > .mdir-grow { display: none; }
+  .mdir-head-acts { margin-left: auto; }
 }
 @media (max-width: 640px) {
   .mdir-cards { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+  .mdir-cc > span { display: none; }
 }
 
-/* What a connected service has, at the top of its sheet: its state and switch, its tools, and the ways to manage it. */
-.mdir-manage { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--ink) 2.5%, var(--card)); }
-.mdir-manage-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.mdir-pill { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 12.5px; font-weight: 500; }
-.mdir-pill > i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.mdir-pill.on { color: var(--green); }
-.mdir-pill.bad { color: var(--red); }
-.mdir-toggle { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 12.5px; cursor: pointer; }
-.mdir-why { margin: 0; color: var(--ink-2); font-size: 12.5px; line-height: 18px; }
-/* Its tools, folded to a line (how many, the first few in words) that opens to all of them in two quiet columns. */
-.mdir-tools { display: flex; flex-direction: column; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-.mdir-tools-line { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; padding: 8px 0; border: 0; background: none; color: var(--text-muted); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
-.mdir-tools-line > svg { flex: none; }
-.mdir-tools-sum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mdir-tools-sum > b { color: var(--ink); font-weight: 500; }
-.mdir-tools-more { flex: none; color: var(--ink-2); font-weight: 500; }
-.mdir-tools-line:hover .mdir-tools-more { color: var(--ink); }
-.mdir-tools-line:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; border-radius: 4px; }
-.mdir-tools-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 16px; max-height: 168px; margin: 0 0 9px; padding: 0 0 0 20px; overflow-y: auto; list-style: none; }
-.mdir-tools-list > li { overflow: hidden; color: var(--ink-2); font-size: 12.5px; line-height: 19px; text-overflow: ellipsis; white-space: nowrap; }
-.mdir-manage-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.mdir-manage-acts svg { margin-right: 2px; }
+/* A connected service's drawer, from the right (the approved mock, 2026-11-27): its head, who gets it, its tools, then its actions. */
+.mdir-drawer[data-slot="sheet-content"] { top: 8px; right: 8px; bottom: 8px; width: 400px; max-width: calc(100vw - 16px); height: auto; gap: 14px; padding: 16px; overflow-y: auto; border: 0; border-radius: 12px; background: var(--card); box-shadow: var(--cz-ring-up), 0 24px 60px -24px rgb(0 0 0 / .35); }
+.mdir-drawer-head { display: flex; align-items: center; gap: 10px; min-width: 0; padding-right: 30px; }
+.mdir-drawer-title { display: grid; flex: 1; min-width: 0; }
+.mdir-drawer-title > h2 { margin: 0; color: var(--ink); font-size: 14px; font-weight: 500; line-height: 20px; }
+.mdir-drawer-title > p { margin: 0; overflow: hidden; color: var(--text-muted); font-size: 12px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.mdir-manage { display: flex; flex-direction: column; gap: 10px; }
+.mdir-drawer .mdir-manage { gap: 10px; }
+.mdir-lbl { margin-top: 4px; color: var(--faint); font-size: 10px; font-weight: 500; line-height: 16px; letter-spacing: .5px; text-transform: uppercase; }
+.mdir-num { margin-left: 2px; font-variant-numeric: tabular-nums; }
+.mdir-box { display: flex; flex-direction: column; margin: 0; padding: 0; overflow: hidden; border-radius: 10px; background: var(--card); box-shadow: var(--cz-ring); list-style: none; }
+.mdir-box-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; padding: 0 12px; color: var(--ink); font-size: 13px; }
+.mdir-box > * + * { border-top: 1px solid var(--border); }
+.mdir-box-row code { overflow: hidden; font: 12px/18px var(--mono, ui-monospace, monospace); text-overflow: ellipsis; white-space: nowrap; }
+.mdir-box-more { width: 100%; justify-content: flex-start; gap: 6px; border: 0; background: none; color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.mdir-box-more:hover { color: var(--ink); background: var(--hover); }
+.mdir-faint { color: var(--faint); font-size: 12px; }
+.mdir-toggle { cursor: pointer; }
+.mdir-why { margin: 0; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--amber) 10%, transparent); color: var(--ink-2); font-size: 12.5px; line-height: 18px; }
+.mdir-manage-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .mdir-grow { flex: 1; }
 .mdir-danger { color: var(--red); }
 .mdir-danger:hover { background: color-mix(in srgb, var(--red) 10%, transparent); color: var(--red); }
@@ -210,9 +239,3 @@ html.dark .mdir-mark.mdir-own { background: color-mix(in srgb, var(--ink) 8%, va
 .mdir-state.ok { color: var(--green); }
 .mdir-state.bad { color: var(--red); }
 .mdir-foot { margin: 4px 0 0; color: var(--text-muted); font-size: 11.5px; line-height: 16px; }
-@media (max-width: 860px) { .mdir-head { flex-wrap: wrap; } .mdir-head-acts { flex-wrap: wrap; width: 100%; } .mdir-search { flex: 1 1 180px; width: auto; } }
-@media (max-width: 640px) { .mdir-cc > span { display: none; } }
-
-/* Customize's switch, MCP servers or Skills (App.tsx CustomizeTabs): the page's own top row, above its toolbar, larger than any
-   filter so which of the two you're in reads first (Arun, 2026-11-20: "make the MCP and Skills toggle more visible"). */
-.customize-bar { display: flex; align-items: center; margin: 0; }

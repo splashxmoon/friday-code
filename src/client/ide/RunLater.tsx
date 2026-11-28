@@ -74,9 +74,9 @@ function LaterPop({ trig, identity, folder, ask, tool, mode, fullAccess, model, 
     setBusy("queue");
     setErr("");
     try {
-      // The account is the one picked, else the tool's preferred one; the tool's own sign-in ("default") sends none.
-      const ac = box.account || preferredAccount(tool as EngineTool, box.accounts);
-      const account = ac !== "default" && box.accounts?.some((x) => x.id === ac) ? ac : "";
+      // The account picked in the box, the tool's own sign-in too; none, and it starts on whichever the computer has for new
+      // sessions when its time comes (runner/accounts.ts preferredAccount).
+      const account = box.account && box.accounts?.some((x) => x.id === box.account) ? box.account : "";
       const effort = box.effort && box.levels?.includes(box.effort) ? box.effort : null;
       await queueLater(identity, {
         folder,

@@ -1,5 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import type http from "node:http";
+import path from "node:path";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 
@@ -19,12 +21,58 @@ import { WebSocket, WebSocketServer, type RawData } from "ws";
 /** What a computer's claim on its id is kept as: the hash of its secret. Memory on a relay of its own, Redis on the hosted one. */
 export interface ClaimStore {
   get(id: string): Promise<string | null>;
-  set(id: string, hash: string): Promise<unknown>;
+  /** Kept for `ttlSec` from now, when the store can forget: a claim nobody comes back to is not kept for ever. */
+  set(id: string, hash: string, ttlSec: number): Promise<unknown>;
+  /** The computer came back: its claim is kept for `ttlSec` more. */
+  touch?(id: string, ttlSec: number): Promise<unknown>;
 }
+
+/** How long a claim nobody links with is kept: a computer away longer than this claims its id again with the same secret. */
+export const CLAIM_TTL_SEC = 90 * 24 * 3600;
 
 export function memoryClaims(): ClaimStore {
   const m = new Map<string, string>();
   return { get: async (id) => m.get(id) ?? null, set: async (id, h) => void m.set(id, h) };
+}
+
+/**
+ * Claims kept in a file, for a relay somebody runs themselves: in memory alone a restart forgot every claim, and whoever knew a
+ * computer's id (it is in every pairing QR) could then claim it first and keep that computer from linking (2026-11-27 security
+ * review). Hashes only, readable by the relay's user alone; a claim not linked with for CLAIM_TTL_SEC is dropped as it is read.
+ */
+export function fileClaims(file: string): ClaimStore {
+  let m = new Map<string, { h: string; until: number }>();
+  try {
+    m = new Map(Object.entries(JSON.parse(readFileSync(file, "utf8")) as Record<string, { h: string; until: number }>).filter(([id, c]) => ID.test(id) && typeof c?.h === "string" && c.until > Date.now()));
+  } catch {
+    // No file yet, or one that can't be read: start with none, as a first run does.
+  }
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const write = () => {
+    timer = null;
+    try {
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(`${file}.tmp`, JSON.stringify(Object.fromEntries(m)), { mode: 0o600 });
+      chmodSync(`${file}.tmp`, 0o600);
+      renameSync(`${file}.tmp`, file);
+    } catch (e) {
+      console.error(`[relay] claims not saved to ${file}: ${(e as Error).message}`);
+    }
+  };
+  const soon = () => void (timer ??= setTimeout(write, 1000).unref());
+  return {
+    get: async (id) => {
+      const c = m.get(id);
+      if (c && c.until <= Date.now()) m.delete(id);
+      return m.get(id)?.h ?? null;
+    },
+    set: async (id, h, ttlSec) => (m.set(id, { h, until: Date.now() + ttlSec * 1000 }), soon()),
+    touch: async (id, ttlSec) => {
+      const c = m.get(id);
+      // Written at most once a day for a claim: a computer links again every time its network blinks.
+      if (c && Date.now() + ttlSec * 1000 - c.until > 86_400_000) ((c.until = Date.now() + ttlSec * 1000), soon());
+    },
+  };
 }
 
 export interface ReachLimits {
@@ -38,9 +86,13 @@ export interface ReachLimits {
   idleMs: number;
   /** How long a phone waits for the computer to open its stream. */
   openMs: number;
+  /** Ids one address may claim an hour: a computer claims one, once. */
+  claimsPerHour: number;
+  /** Computers linked at once, all told. */
+  homes: number;
 }
 
-export const REACH_LIMITS: ReachLimits = { streams: 24, bytesPerDay: 4 * 1024 ** 3, reachesPerMinute: 60, idleMs: 15 * 60_000, openMs: 10_000 };
+export const REACH_LIMITS: ReachLimits = { streams: 24, bytesPerDay: 4 * 1024 ** 3, reachesPerMinute: 60, idleMs: 15 * 60_000, openMs: 10_000, claimsPerHour: 20, homes: 50_000 };
 
 /** Close codes a phone or computer reads. */
 export const CLOSE = { offline: 4404, busy: 4429, refused: 4401, idle: 4408, ended: 4000 } as const;
@@ -66,6 +118,7 @@ export class ReachRelay {
   private homes = new Map<string, Home>();
   private waiting = new Map<string, Waiting & { id: string }>();
   private tries = new Map<string, number[]>();
+  private claimed = new Map<string, number[]>();
   private wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 
   constructor(
@@ -117,21 +170,39 @@ export class ReachRelay {
     }
     // The computer: its id and secret, the first secret for an id claiming it.
     const secret = String(req.headers["x-friday-secret"] ?? "");
-    if (!ID.test(id) || secret.length < 32 || !(await this.owns(id, secret))) return refuse(401);
-    if (rest === "/home") return accept((ws) => this.home(id, ws));
+    if (!ID.test(id) || secret.length < 32) return refuse(401);
+    const owns = await this.owns(id, secret, from);
+    if (owns !== true) return refuse(owns === "limited" ? 429 : 401);
+    if (rest === "/home") {
+      // Every link is a held socket: a relay has room for so many, and says so rather than take them until it falls over.
+      if (!this.homes.has(id) && this.homes.size >= this.limits.homes) return refuse(429);
+      return accept((ws) => this.home(id, ws));
+    }
     const stream = /^\/stream\/([0-9a-f]{24})$/.exec(rest);
     if (stream) return accept((ws) => this.join(id, stream[1]!, ws));
     refuse(404);
   }
 
-  private async owns(id: string, secret: string): Promise<boolean> {
+  /**
+   * Whether this secret holds the id. An id nobody holds is claimed by the first secret, and that is limited per address: with
+   * no limit anyone could claim ids in a loop, each a key kept for ever and a socket held (2026-11-27 security review).
+   */
+  private async owns(id: string, secret: string, from: string): Promise<boolean | "limited"> {
     const hash = sha(`friday-reach:${secret}`);
     const held = await this.claims.get(id);
     if (!held) {
-      await this.claims.set(id, hash);
+      const now = Date.now();
+      const recent = (this.claimed.get(from) ?? []).filter((t) => now - t < 3_600_000);
+      if (recent.length >= this.limits.claimsPerHour) return "limited";
+      this.claimed.set(from, [...recent, now]);
+      // Dropped oldest first when it grows: clearing it all would hand everyone a fresh hour at once.
+      if (this.claimed.size > 10_000) for (const k of this.claimed.keys()) if (this.claimed.size > 5_000) this.claimed.delete(k);
+      await this.claims.set(id, hash, CLAIM_TTL_SEC);
       return true;
     }
-    return same(held, hash);
+    if (!same(held, hash)) return false;
+    void this.claims.touch?.(id, CLAIM_TTL_SEC)?.catch(() => {});
+    return true;
   }
 
   private allowed(from: string): boolean {
@@ -163,7 +234,10 @@ export class ReachRelay {
   /** A phone reaching a computer: told to open a stream, which the phone waits for, its first bytes held meanwhile. */
   private reach(id: string, home: Home | undefined, client: WebSocket): void {
     if (!home || home.ws.readyState !== WebSocket.OPEN) return client.close(CLOSE.offline, "Your computer isn't reachable right now.");
-    if (home.streams >= this.limits.streams) return client.close(CLOSE.busy, "Too many connections to this computer.");
+    // Phones still waiting count too: each holds up to 256 KB here until the computer answers, and they were not counted.
+    let waitingHere = 0;
+    for (const w of this.waiting.values()) if (w.id === id) waitingHere++;
+    if (home.streams + waitingHere >= this.limits.streams) return client.close(CLOSE.busy, "Too many connections to this computer.");
     const n = randomBytes(12).toString("hex");
     const waiting: Waiting & { id: string } = {
       id,

@@ -12,6 +12,14 @@ export interface Invite {
   v: number;
 }
 
+/**
+ * Every token here is signed with the one secret, and they were told apart only by which fields a payload happened to have
+ * (2026-11-27 security review). The newer kinds now say what they are (`k`), and each verifier refuses another kind's token.
+ * Links people already hold (an invite, a replay) are left exactly as they were made, so none of them changes or breaks:
+ * they are the kind with no `k`, and never accepted with one.
+ */
+const wrongKind = (v: { k?: unknown }, kind?: string): boolean => (kind === undefined ? v.k !== undefined : v.k !== undefined && v.k !== kind);
+
 export function signInvite(secret: string, sid: string, role: Role, v = 1): string {
   const payload = Buffer.from(JSON.stringify({ sid, role, v })).toString("base64url");
   return `${payload}.${mac(secret, payload)}`;
@@ -25,7 +33,8 @@ export function verifyInvite(secret: string, token: string | null | undefined): 
   const got = Buffer.from(sig);
   if (expected.length !== got.length || !timingSafeEqual(expected, got)) return null;
   try {
-    const v = JSON.parse(Buffer.from(payload, "base64url").toString()) as Partial<Invite>;
+    const v = JSON.parse(Buffer.from(payload, "base64url").toString()) as Partial<Invite> & { k?: unknown };
+    if (wrongKind(v)) return null;
     if (typeof v.sid !== "string" || !["owner", "editor", "viewer"].includes(v.role as string)) return null;
     return { sid: v.sid, role: v.role as Role, v: typeof v.v === "number" ? v.v : 1 };
   } catch {
@@ -50,8 +59,8 @@ export function verifyReplay(secret: string, token: string | null | undefined): 
   const got = Buffer.from(sig);
   if (expected.length !== got.length || !timingSafeEqual(expected, got)) return null;
   try {
-    const v = JSON.parse(Buffer.from(payload, "base64url").toString()) as { sid?: unknown; role?: unknown; v?: unknown };
-    if (typeof v.sid !== "string" || v.role !== "replay") return null;
+    const v = JSON.parse(Buffer.from(payload, "base64url").toString()) as { sid?: unknown; role?: unknown; v?: unknown; k?: unknown };
+    if (wrongKind(v) || typeof v.sid !== "string" || v.role !== "replay") return null;
     return { sid: v.sid, v: typeof v.v === "number" ? v.v : 1 };
   } catch {
     return null;
@@ -76,7 +85,7 @@ export const SESSION_MAX_AGE_S = 30 * 24 * 60 * 60;
  * are read from the store, so changing them never means reissuing a cookie.
  */
 export function signSession(secret: string, accountId: string, issuedAt = Date.now()): string {
-  const payload = Buffer.from(JSON.stringify({ uid: accountId, iat: issuedAt })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ uid: accountId, iat: issuedAt, k: "session" })).toString("base64url");
   return `${payload}.${mac(secret, payload)}`;
 }
 
@@ -88,8 +97,8 @@ export function verifySession(secret: string, token: string | null | undefined):
   const got = Buffer.from(sig);
   if (expected.length !== got.length || !timingSafeEqual(expected, got)) return null;
   try {
-    const v = JSON.parse(Buffer.from(payload, "base64url").toString()) as { uid?: unknown; iat?: unknown };
-    if (typeof v.uid !== "string" || !v.uid || typeof v.iat !== "number") return null;
+    const v = JSON.parse(Buffer.from(payload, "base64url").toString()) as { uid?: unknown; iat?: unknown; k?: unknown };
+    if (wrongKind(v, "session") || typeof v.uid !== "string" || !v.uid || typeof v.iat !== "number") return null;
     // An old cookie is not a valid one: signing out everywhere has to mean something.
     if (Date.now() - v.iat > SESSION_MAX_AGE_S * 1000) return null;
     return { uid: v.uid, iat: v.iat };
@@ -143,7 +152,7 @@ export const clearSessionCookie = (secure: boolean) => sessionCookie("", { secur
  * good for the session it names.
  */
 export function signActor(secret: string, sid: string, uid: string): string {
-  const payload = Buffer.from(JSON.stringify({ sid, uid, t: Date.now() })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ sid, uid, t: Date.now(), k: "actor" })).toString("base64url");
   return `${payload}.${mac(secret, payload)}`;
 }
 
@@ -155,8 +164,8 @@ export function verifyActor(secret: string, token: string | null | undefined, si
   const got = Buffer.from(sig);
   if (expected.length !== got.length || !timingSafeEqual(expected, got)) return null;
   try {
-    const v = JSON.parse(Buffer.from(payload, "base64url").toString()) as { sid?: unknown; uid?: unknown; t?: unknown };
-    if (typeof v.uid !== "string" || !v.uid || v.sid !== sid) return null;
+    const v = JSON.parse(Buffer.from(payload, "base64url").toString()) as { sid?: unknown; uid?: unknown; t?: unknown; k?: unknown };
+    if (wrongKind(v, "actor") || typeof v.uid !== "string" || !v.uid || v.sid !== sid) return null;
     // When it was minted: a token from before the account ended its sessions is refused (app.ts, the runner socket).
     return { uid: v.uid, t: typeof v.t === "number" ? v.t : 0 };
   } catch {

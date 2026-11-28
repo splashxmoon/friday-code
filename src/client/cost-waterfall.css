@@ -1,0 +1,143 @@
+/* The Cost Waterfall (CostWaterfall.tsx), as the approved mock measured affectUI's: a card of radius 12 on the raised ring, a 48px
+   head (13/500 title, the task muted, a 28px segmented switch of radius 7), a row of three stats on hairlines (10/500 uppercase,
+   15/500/24 value, 12 under), a 30px column head, 32px rows with 20px tiles of radius 5 on the ring, and 14px bars of radius 4
+   that step across to the total. Grey bars in two weights; blue only for a running turn, red only for a failed one. The card
+   lays itself out by its own width (a reply's column, the thread card's popover), not the window's. */
+.cwf {
+  --cwf-ring: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .05);
+  --cwf-ring-up: 0 0 0 .5px var(--border-strong), 0 2px 6px -2px rgb(0 0 0 / .12);
+  container: cwf / inline-size;
+  min-width: 0; border-radius: 12px; background: var(--card); box-shadow: var(--cwf-ring-up); color: var(--ink); overflow: hidden;
+  font: 400 13px/20px var(--font, inherit); outline: none; animation: cwf-in .22s cubic-bezier(.32, .72, .24, 1) both;
+}
+.dark .cwf { --cwf-ring: 0 0 0 .5px rgb(255 255 255 / .1), 0 1px 2px rgb(0 0 0 / .4); --cwf-ring-up: 0 0 0 .5px rgb(255 255 255 / .16), 0 2px 8px -2px rgb(0 0 0 / .6); }
+html.glass .cwf { background: var(--glass-float, var(--card)); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); }
+/* Focused when it opens, for Esc and the arrows: no ring on the card itself, its rows show where the keys are. */
+.cwf:focus, .cwf:focus-visible { outline: none; }
+@keyframes cwf-in { from { opacity: 0; transform: translateY(-4px); } }
+
+.cwf-head { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--border); }
+.cwf-head b { font-weight: 500; white-space: nowrap; }
+.cwf-task { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); }
+.cwf-grow { flex: 1; }
+.cwf-sw { display: inline-flex; flex: none; padding: 2px; border-radius: 7px; background: var(--hover); }
+.cwf-sw button { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border: 0; border-radius: 5px; background: none; color: var(--text-muted); font: 400 12px var(--font, inherit); white-space: nowrap; cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.cwf-sw button:hover { color: var(--ink); }
+.cwf-sw button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: var(--cwf-ring); }
+.cwf-sw button:focus-visible { outline: 2px solid var(--border-focus, var(--ink-2)); outline-offset: -2px; }
+.cwf-live { display: inline-flex; flex: none; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 5px; background: color-mix(in srgb, var(--live) 12%, transparent); color: var(--live); font-size: 12px; font-weight: 500; }
+.cwf-live i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: cwf-pulse 1.4s ease-in-out infinite; }
+@keyframes cwf-pulse { 50% { opacity: .35; } }
+
+.cwf-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 12px 0; border-bottom: 1px solid var(--border); }
+.cwf-stat { display: grid; padding: 0 16px; min-width: 0; }
+.cwf-stat + .cwf-stat { border-left: 1px solid var(--border); }
+.cwf-k { font-size: 10px; font-weight: 500; line-height: 16px; letter-spacing: .5px; text-transform: uppercase; color: var(--faint); }
+.cwf-v { font-size: 15px; font-weight: 500; line-height: 24px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cwf-v .shine { --shine-base: var(--ink); }
+.cwf-s { font-size: 12px; line-height: 16px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.cwf-cols, .cwf-row { display: grid; grid-template-columns: minmax(150px, 1.05fr) minmax(120px, 1fr) 54px 54px 62px 50px; align-items: center; column-gap: 10px; padding: 0 16px 0 10px; }
+.cwf-cols.k5, .cwf-row.k5 { grid-template-columns: minmax(140px, 1fr) minmax(140px, 1.3fr) 60px 48px 64px; }
+.cwf-cols { height: 30px; font-size: 10px; font-weight: 500; letter-spacing: .5px; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--border); }
+.cwf-cols > span:nth-child(n+3), .cwf-row > span:nth-child(n+3) { text-align: right; }
+.cwf-axis { display: flex; justify-content: space-between; text-transform: none; letter-spacing: 0; font-weight: 400; font-variant-numeric: tabular-nums; }
+.cwf-rows { position: relative; max-height: min(60vh, 520px); overflow-y: auto; overscroll-behavior: contain; }
+.cwf-row { height: 32px; font-size: 13px; outline: none; cursor: default; }
+.cwf-row[role="treeitem"] { cursor: pointer; }
+.cwf-row:hover, .cwf-row.cwf-open { background: var(--hover); }
+.cwf-row:focus-visible { outline: none; background: var(--hover); box-shadow: inset 2px 0 0 var(--ink-2); }
+.cwf-nm { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cwf-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cwf-t .shine { --shine-base: var(--ink); display: inline; }
+.cwf-m { flex: none; font-size: 12px; color: var(--faint); white-space: nowrap; }
+.cwf-row.cwf-grp .cwf-t { font-weight: 500; }
+.cwf-chev { display: grid; flex: none; place-items: center; width: 16px; height: 16px; color: var(--faint); transition: transform .15s ease; }
+.cwf-chev svg { width: 10px; height: 10px; }
+.cwf-chev.cwf-shut { transform: rotate(-90deg); }
+.cwf-ind { flex: none; width: 16px; }
+.cwf-ic { display: grid; flex: none; place-items: center; width: 20px; height: 20px; border-radius: 5px; background: var(--card); box-shadow: var(--cwf-ring); color: var(--text-muted); }
+.cwf-ic svg { width: 12px; height: 12px; }
+.cwf-dot { width: 6px; height: 6px; border-radius: 2px; background: var(--faint); }
+.cwf-n { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cwf-n.ink { color: var(--ink); font-weight: 500; }
+.cwf-n.dash { color: var(--faint); }
+.cwf-top { display: inline-flex; flex: none; align-items: center; height: 16px; padding: 0 5px; border-radius: 4px; background: var(--hover-strong); color: var(--text-muted); font-size: 10px; font-weight: 500; letter-spacing: .3px; }
+
+.cwf-track { position: relative; align-self: stretch; }
+.cwf-track::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--border); }
+.cwf-bar { position: absolute; top: 9px; height: 14px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 14%, transparent); transition: left .3s ease, width .3s ease; }
+.cwf-bar.cwf-soft { background: color-mix(in srgb, var(--ink) 7%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent); }
+.cwf-bar.cwf-out { background: color-mix(in srgb, var(--ink) 26%, transparent); }
+.cwf-bar.cwf-time { top: 14px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 18%, transparent); }
+.cwf-bar.cwf-run { background-color: color-mix(in srgb, var(--live) 22%, transparent); background-image: linear-gradient(90deg, transparent, color-mix(in srgb, var(--live) 26%, transparent), transparent); background-size: 60% 100%; background-repeat: no-repeat; animation: cwf-sheen 1.8s linear infinite; }
+.cwf-bar.cwf-fail { background: color-mix(in srgb, var(--red) 28%, transparent); }
+@keyframes cwf-sheen { from { background-position: -60% 0; } to { background-position: 160% 0; } }
+
+.cwf-detail { display: grid; gap: 8px; margin: 0 16px 8px 42px; padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--ink) 3%, transparent); box-shadow: inset 0 0 0 1px var(--border); font-size: 12px; line-height: 17px; color: var(--text-muted); animation: cwf-in .18s ease both; }
+/* Its dts are written first, then its dds: one row of names over one row of figures. */
+.cwf-detail dl { display: grid; grid-template-columns: repeat(var(--cwf-kinds, 4), auto); justify-content: start; gap: 2px 20px; margin: 0; }
+.cwf-detail dl:has(dt:nth-of-type(5)) { --cwf-kinds: 5; }
+.cwf-detail dt { font-size: 10px; font-weight: 500; letter-spacing: .5px; text-transform: uppercase; color: var(--faint); }
+.cwf-detail dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+.cwf-go { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border: 0; border-radius: 6px; background: var(--hover-strong); color: var(--ink); font: 400 12px var(--font, inherit); cursor: pointer; }
+.cwf-go:hover, .cwf-go:focus-visible { background: var(--border-strong); outline: none; }
+
+.cwf-foot { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--faint); }
+.cwf-foot > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cwf-foot kbd { font: 500 11px var(--font, inherit); padding: 1px 5px; border-radius: 4px; background: var(--hover); color: var(--text-muted); }
+.cwf-empty { display: grid; justify-items: center; gap: 4px; padding: 28px 16px; text-align: center; }
+.cwf-empty b { font-weight: 500; }
+.cwf-empty span { font-size: 12px; color: var(--text-muted); }
+
+/* Narrow: In, Out and Share step aside and the stats keep two. */
+@container cwf (max-width: 719px) {
+  .cwf-cols, .cwf-row { grid-template-columns: minmax(0, 1.2fr) minmax(70px, 1fr) 62px 46px; }
+  .cwf-cols > span:nth-child(3), .cwf-cols > span:nth-child(4), .cwf-row > span:nth-child(3), .cwf-row > span:nth-child(4) { display: none; }
+  .cwf-cols.k5, .cwf-row.k5 { grid-template-columns: minmax(0, 1.1fr) minmax(70px, 1fr) 56px 58px; }
+  .cwf-cols.k5 > span:nth-child(3), .cwf-row.k5 > span:nth-child(3) { display: block; }
+  .cwf-cols.k5 > span:nth-child(4), .cwf-row.k5 > span:nth-child(4) { display: none; }
+  .cwf-detail { margin-left: 16px; }
+}
+/* Under 520 each row stacks, its bar under its name. */
+@container cwf (max-width: 519px) {
+  .cwf-cols, .cwf-row, .cwf-cols.k5, .cwf-row.k5 { grid-template-columns: minmax(0, 1fr) 56px 52px; padding: 0 12px 0 8px; }
+  .cwf-cols .cwf-axis { display: none; }
+  .cwf-row { height: auto; padding-block: 7px 9px; row-gap: 5px; }
+  .cwf-track::before { display: none; }
+  .cwf-row > .cwf-track { grid-column: 1 / -1; grid-row: 2; height: 14px; }
+  .cwf-row > .cwf-track .cwf-bar { top: 1px; height: 12px; }
+  .cwf-row > .cwf-track .cwf-bar.cwf-time { top: 5px; height: 4px; }
+  .cwf-head { flex-wrap: wrap; padding-left: 12px; }
+  .cwf-head .cwf-task { order: 9; flex-basis: 100%; }
+  .cwf-stat { padding: 0 12px; }
+  .cwf-foot { padding: 0 12px; }
+  .cwf-foot kbd, .cwf-foot > span:last-child { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .cwf, .cwf-detail { animation: none; } .cwf-bar { transition: none; } .cwf-bar.cwf-run, .cwf-live i { animation: none; } }
+
+/* In the thread card's popover the popover is the card: Friday's own material for things that float (glass included), the
+   card inside it flat. */
+.cwf-pop > .cwf { border-radius: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* Under a reply, in the chat's column: lined up with the reply's words. */
+.cwf-under { margin: 8px 0 4px; max-width: 760px; }
+
+/* The thread's waterfall over the session: its height capped so it never runs the window's length (its turns scroll inside), and
+   everything around it dimmed while it is open (Arun, 2026-11-27: "cap height also make sure everything is dimmed around"). */
+.cwf-scrim { position: fixed; inset: 0; z-index: 85; display: grid; place-items: center; padding: 32px max(24px, env(safe-area-inset-right, 0px)) 32px max(24px, env(safe-area-inset-left, 0px)); background: color-mix(in srgb, #000 42%, transparent); animation: cwf-dim .2s ease both; -webkit-app-region: no-drag; }
+html:not(.dark) .cwf-scrim { background: color-mix(in srgb, #000 26%, transparent); }
+/* Centred over the dimmed window: as wide as the table wants up to 760, never taller than the window, its turns scrolling inside. */
+.cwf-modal { display: flex; flex-direction: column; width: min(760px, 100%); max-height: min(640px, 100%); border-radius: 12px; background: var(--card); box-shadow: 0 0 0 1px var(--border-strong), 0 24px 64px -16px rgb(0 0 0 / .55); overflow: hidden; animation: cwf-up .24s cubic-bezier(.32, .72, .24, 1) both; }
+.cwf-modal > .cwf { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.cwf-modal .cwf-rows { max-height: none; flex: 1; min-height: 120px; }
+@keyframes cwf-up { from { opacity: 0; transform: translateY(8px) scale(.985); } }
+@keyframes cwf-dim { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .cwf-scrim, .cwf-modal { animation: none; } }
+
+/* Cost, Tokens and Most costly always show (Arun, 2026-11-27): three across down to 560; narrower, the third takes a row of its own
+   under the other two. Hidden under 720 before, so a reply's waterfall in the chat column never said what cost the most. */
+@container cwf (max-width: 559px) {
+  .cwf-stats { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 10px; }
+  .cwf-stat:nth-child(3) { grid-column: 1 / -1; border-left: 0; padding-top: 10px; border-top: 1px solid var(--border); }
+}

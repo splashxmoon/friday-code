@@ -1,0 +1,85 @@
+/* Agent Tree, rebuilt by hand from affectUI Pro's public preview (SPEC agent-tree) in Friday's tokens (the --viz-* set in
+   agent-viz.css): every size, gap and curve is the original's, every colour one of Friday's, so it sits right in dark, light and
+   glass. Loaded with it only. */
+
+.viz-tree { display: flex; flex-direction: column; gap: 16px; width: 100%; min-width: 0; }
+
+/* The header: the title on the left; the count, what runs, what needs you or failed, and the whole run's cost on the right. */
+.viz-tree-head { display: flex; align-items: center; gap: 8px; height: 20px; }
+.viz-tree-icon { display: grid; place-items: center; flex: none; width: 16px; height: 14px; color: var(--live); }
+.viz-tree-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; line-height: 20px; color: var(--viz-t0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viz-tree-meta { display: inline-flex; align-items: center; gap: 4px 10px; flex: none; font-size: 12px; line-height: 16px; color: var(--viz-t3); white-space: nowrap; }
+.viz-tree-trail { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.viz-tree-meta .on { color: var(--live); }
+/* The run's cost keeps its place as it climbs; while it climbs a faint band runs over it. */
+.viz-tree-total { display: inline-block; min-width: 44px; text-align: right; font-weight: 500; color: var(--viz-t1); --shine-base: var(--viz-t1); --shine-ink: var(--viz-t4); }
+.viz-tree-flag { display: inline-flex; align-items: center; gap: 2px; height: 20px; padding: 0 4px 0 6px; border: 0; border-radius: 5px; font-size: 12px; font-weight: 500; line-height: 16px; cursor: pointer; transition: background-color .16s ease; }
+.viz-tree-flag[data-s="failed"] { background: var(--red-soft); color: var(--red); }
+.viz-tree-flag[data-s="needs"] { background: var(--amber-soft); color: var(--amber); }
+.viz-tree-flag:hover { background: color-mix(in srgb, currentColor 16%, transparent); }
+
+/* The tree: the first level side by side under the root (columns 8 apart, the root over the middle of its row, 40 below it), deeper
+   levels hanging 12 apart and 32 in. Every card the same width (--tree-card, set from the space there is). */
+.viz-tree-body { position: relative; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.viz-tree-body[data-narrow] { align-items: stretch; }
+.viz-tree-item { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.viz-tree-item.root { gap: 40px; align-items: flex-start; }
+.viz-tree-item.root > .viz-tree-card { margin-left: var(--tree-shift, 0px); }
+.viz-tree-body[data-narrow] .viz-tree-item.root { gap: 12px; }
+.viz-tree-row { display: flex; gap: 8px; align-items: flex-start; }
+.viz-tree-item.col { width: var(--tree-col); flex: none; }
+.viz-tree-sub { display: flex; flex-direction: column; gap: 12px; padding-left: 32px; }
+
+/* A card: 8 round on the kit's ring, 10 10 8 10 inside, 6 between its rows; it rises in (.36s), glides when the tree changes. */
+.viz-tree-card { position: relative; display: flex; flex-direction: column; gap: 6px; width: var(--tree-card, 216px); box-sizing: border-box; padding: 10px 10px 8px; border-radius: 8px; background: var(--viz-card); box-shadow: var(--viz-sh); text-align: left; transition: box-shadow .2s ease, opacity .24s ease, transform .42s var(--viz-expo); animation: viz-tree-rise .36s var(--viz-sheet) backwards; }
+@keyframes viz-tree-rise { from { opacity: 0; transform: translateY(6px); } }
+.viz-tree-card[data-pick] { cursor: pointer; }
+.viz-tree-card[data-pick]:hover { box-shadow: var(--viz-sh-hover); }
+.viz-tree-card:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+/* Queued and stopped agents step back. */
+.viz-tree-card[data-quiet] { opacity: .55; }
+
+.viz-tree-r1 { display: flex; align-items: center; gap: 8px; height: 30px; }
+.viz-tree-r1 > .viz-chip, .viz-tree-chipbtn { align-self: flex-start; }
+.viz-tree-chipbtn { display: inline-flex; flex: none; padding: 0; border: 0; border-radius: 4px; background: none; cursor: pointer; }
+.viz-tree-chipbtn:hover .viz-chip { background: color-mix(in srgb, currentColor 18%, transparent); }
+
+/* What it was asked, two lines at most, its tools stacked in front. */
+.viz-tree-task { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: -2px -2px -3px; padding: 2px 2px 3px; font-size: 12px; font-weight: 400; line-height: 16px; color: var(--viz-t2); overflow-wrap: anywhere; }
+.viz-tree-role { margin: -6px 0 0; font-size: 11px; line-height: 14px; color: var(--viz-t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viz-tree-task > .viz-tools { vertical-align: top; margin-right: 6px; }
+
+.viz-tree-foot { display: flex; align-items: center; gap: 6px; height: 20px; min-width: 0; }
+.viz-tree-cost { display: inline-flex; align-items: baseline; min-width: 0; font-size: 11px; line-height: 16px; white-space: nowrap; }
+.viz-tree-usd { font-weight: 500; color: var(--viz-t1); --shine-base: var(--viz-t1); --shine-ink: var(--viz-t4); }
+.viz-tree-time { color: var(--viz-t3); white-space: pre; }
+.viz-tree-fold { display: inline-flex; align-items: center; gap: 2px; height: 20px; margin-left: auto; padding: 0 4px 0 6px; border: 0; border-radius: 5px; background: transparent; font-size: 11px; font-weight: 500; line-height: 20px; color: var(--viz-t3); cursor: pointer; transition: background-color .16s ease, color .16s ease; }
+.viz-tree-fold:hover { background: var(--viz-f6); color: var(--viz-t2); }
+.viz-tree-chev { flex: none; transition: transform .22s var(--viz-sheet); }
+.viz-tree-fold[data-folded] .viz-tree-chev { transform: rotate(-90deg); }
+
+/* Connectors: 1.5px in the live colour, round elbows, a small open dot where they leave a card; quiet grey into a queued or
+   stopped agent. A new one draws itself from the parent's dot. */
+.viz-tree-wire { fill: none; stroke: color-mix(in srgb, var(--live) 45%, transparent); stroke-width: 1.5; stroke-dasharray: 1 1; animation: viz-tree-draw .42s var(--viz-expo) backwards; }
+.viz-tree-dot { fill: var(--viz-card); stroke: color-mix(in srgb, var(--live) 55%, transparent); stroke-width: 1.5; }
+html.dark .viz-tree-wire { stroke: color-mix(in srgb, var(--live) 75%, transparent); }
+html.dark .viz-tree-dot { stroke: color-mix(in srgb, var(--live) 85%, transparent); }
+.viz-tree-wire[data-quiet], .viz-tree-dot[data-quiet] { stroke: color-mix(in srgb, var(--ink) 18%, transparent); }
+@keyframes viz-tree-draw { from { stroke-dashoffset: 1; } }
+
+/* The window behind a "Needs you" or "Failed" chip. */
+.viz-tree-win { width: 100%; box-sizing: border-box; }
+.viz-tree-win-name { min-width: 0; font-size: 13px; font-weight: 500; line-height: 20px; color: var(--viz-t0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viz-model .viz-model-mark { display: inline-flex; vertical-align: -2px; margin-right: 4px; }
+.viz-tree-fold:focus:not(:focus-visible) { outline: none; box-shadow: none; }
+.viz-tree-fold:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+
+/* The crew as a centred grid when one row won't hold it (AgentTree.tsx `grid`): the Captain over the middle, every card the same
+   height, rows 28 apart for their buses, the bracket on the grid's left drawn by the wires. */
+.viz-tree-grid { display: grid; grid-auto-rows: 1fr; column-gap: 8px; row-gap: 28px; justify-content: center; }
+.viz-tree-body[data-grid] .viz-tree-item.root { align-items: center; }
+.viz-tree-grid > .viz-tree-item > .viz-tree-card:only-child { flex: 1; }
+/* Picked: the card the bottom panel is showing (CaptainPage), raised on a ring. */
+.viz-tree-card[data-sel] { box-shadow: 0 0 0 1.5px var(--ink), 0 8px 22px -10px rgb(0 0 0 / .35); }
+html.dark .viz-tree-card[data-sel] { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--ink) 80%, transparent), 0 8px 22px -10px rgb(0 0 0 / .7); }
+.viz-tree-card[data-pick]:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }

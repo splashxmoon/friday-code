@@ -11,6 +11,7 @@ import { rememberAsk, walkAsks } from "./askHistory.js";
 import { NoMachine, connectThisComputer, hostApi, useMachine } from "./local.js";
 import { RunsOn } from "./Computers.js";
 import { HeroTitle } from "./HeroTitle.js";
+import "./home.css";
 import { MachineBadge } from "./MachineBadge.js";
 import type { Identity, RecentSession } from "./storage.js";
 import { InBand, MenuButton, Switch, useDismiss } from "./ui.js";
@@ -34,12 +35,15 @@ import { issueBranch, parseIssueUrl, parsePrLink, withIssue, withPr, type Issue,
 import { isTeamSid } from "./Teammates.js";
 import { CircleDotIcon, GitPullRequestIcon } from "lucide-react";
 import { DailyBriefCard, openBrief } from "./DailyBrief.js";
-import { GoalsCard } from "./Goals.js";
-import { GettingStarted, markOwnFolder } from "./GettingStarted.js";
+import { markOwnFolder } from "./gs-marks.js";
 import { useVoice, VoiceBar, VoiceButton, VoiceLive } from "./VoiceMic.js";
 // Only Code's column shows it: loaded when it is drawn, not with the first screen (test/client-bundle.test.ts).
 // Auto in the tool picker, all of it (ide/auto-tool.tsx).
 const AutoTool = lazy(() => import("./ide/auto-tool.js"));
+// The checklist waits for the first screen to be up: it kept the local first load over its 448 KB budget (client-bundle.test.ts).
+// Goals draws nothing until there are goals, so it waits too.
+const GoalsCard = lazy(() => import("./Goals.js").then((m) => ({ default: m.GoalsCard })));
+const GettingStarted = lazy(() => import("./GettingStarted.js").then((m) => ({ default: m.GettingStarted })));
 const RunLater = lazy(() => import("./ide/RaceButton.js").then((m) => ({ default: m.RunLater })));
 const RaceButton = lazy(() => import("./ide/RaceButton.js").then((m) => ({ default: m.RaceButton })));
 // The iPhone card and its code-drawing, after the box (client-bundle.test.ts: no qrcode-generator in the first load).
@@ -175,7 +179,7 @@ export function Code({
   defaults?: { model?: string };
   /** A brief carried over from the Skills page, Code Review or a prompt link, dropped into the box. `shepherd`: Friday sees its pull
    *  request through once it starts. `repo` and `tool` come with a prompt link (prompt-link.ts). */
-  preset?: { brief?: string; shepherd?: boolean; repo?: string; tool?: EngineTool; /** A folder on this computer to start in. */ folder?: string } | null;
+  preset?: { brief?: string; shepherd?: boolean; repo?: string; tool?: EngineTool; /** A folder on this computer to start in. */ folder?: string; /** The brief came from a prompt link, not the app. */ fromLink?: boolean } | null;
   onPresetUsed?: () => void;
   /** An agent picked on the Agents page runs this session. */
   initialAgentId?: string;
@@ -202,6 +206,12 @@ export function Code({
   useEffect(() => {
     if (preset?.brief && !goal.trim()) setGoal(preset.brief);
   }, [preset?.brief]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A prompt link's task is said to be from a link for as long as it is the words in the box: the box looks as if the person
+  // typed it, and a long task can carry a line nobody scrolled down to (audit L7, 2026-11-27).
+  const [linked, setLinked] = useState("");
+  useEffect(() => {
+    if (preset?.fromLink) setLinked(preset.brief ?? "");
+  }, [preset?.fromLink, preset?.brief]);
   // Kept once typing pauses, not on every key: a synchronous storage write per keystroke was work the key waited on. What is
   // still waiting is written when the page is left or the box goes away.
   const saveDraft = useRef<(() => void) | null>(null);
@@ -720,7 +730,8 @@ export function Code({
               // and the one picked, which everyone else's turns are held to and which it goes back to after that first run.
               handMode: mode,
               ...(model ? { model } : {}),
-              ...((ac) => (engine && ac !== "default" && tool?.accounts?.some((a) => a.id === ac) ? { account: ac } : {}))(account || (engine ? preferredAccount(engine, tool?.accounts) : "default")),
+              // The account its pill shows, the tool's own sign-in too, so the run starts on what the person saw.
+              ...((ac) => (engine && tool?.accounts?.some((a) => a.id === ac) ? { account: ac } : {}))(account || (engine ? preferredAccount(engine, tool?.accounts) : "default")),
               // A pull request's own branch, when that is what the session is about; never a copy of the folder unasked.
               // Or, with uncommitted work in the folder, a copy of it on that branch (local-api start's `aside`).
               ...(folder ? (aside ? { worktree: "lane", copyName: engine || "friday", aside } : { branch: target }) : {}),
@@ -987,6 +998,14 @@ export function Code({
             </FolderCard>
           )}
           {/* No rows over the request for a folder's branch or its other folders: the box's folder menu holds both (FolderMenu.tsx). */}
+          {linked && goal === linked && (
+            <div className="composer-link-repo">
+              <span>From a link. Read it before you send.</span>
+              <button type="button" className="link-btn" onClick={() => setGoal("")}>
+                Clear
+              </button>
+            </div>
+          )}
           {/* A prompt link's repo that isn't on this computer yet: one press clones it, and the box is ready. */}
           {linkRepo && !pr && !issue && hasMachine && !picked && repoMissing === linkRepo && (
             <div className="composer-link-repo">
@@ -1167,7 +1186,8 @@ export function Code({
                 <Icon name="x" size={12} className="menu-pill-caret" />
               </button>
             )}
-            {/* Who does the work and on which model are one decision, so one control: the agent, and the models that agent runs. */}
+            {/* Who does the work and on which model are one decision, so one control: the agent, and the models that agent runs. At
+                the left beside the +, never at the right by the mic (Arun, 2026-11-27: "move the model picker thing to the left again"). */}
             <AgentModelPicker
               route={route}
               engine={engine}
@@ -1197,7 +1217,8 @@ export function Code({
               className={`agent-pill mode-pill${access === "bypass" ? " mode-full" : ""}`}
               label="Permissions"
               text={access === "bypass" ? FULL_ACCESS.name : MODE_NAME[mode]}
-              {...(access === "bypass" ? { mark: <Icon name="shield" size={13} /> } : {})}
+              // Each choice wears its icon on the pill, as the chat composer's mode button does (SPEC chat-composer).
+              mark={<Icon name={access === "bypass" ? "shield" : MODE_ICON[mode]} size={16} />}
               above
               items={() => [
                 { heading: "Permissions" },
@@ -1227,7 +1248,7 @@ export function Code({
                   fullAccess: access === "bypass",
                   engine: engine || "",
                   model,
-                  account: account || (engine ? ((ac) => (ac !== "default" && tool?.accounts?.some((x) => x.id === ac) ? ac : ""))(preferredAccount(engine, tool?.accounts)) : ""),
+                  account,
                   effort: engine && effort && effortLevels.includes(effort) ? effort : null,
                   typed: goal,
                   session: {
@@ -1384,12 +1405,16 @@ export function Code({
           Arun's own build only while the phone app has more to do (Arun, 2026-11-25: "leave all of the phone stuff out for now"). */}
       {isLocal() && <TodayCard identity={identity} tool={engine || ""} mode={mode} fullAccess={access === "bypass"} model={model} box={{ account, accounts: tool?.accounts, effort, levels: effortLevels }} />}
       {/* Each project's Captain: how its project stands, what's for you and what's ready (Managers.tsx, spec 14 P3). */}
-      <GettingStarted recents={recents} onPickFolder={() => setTimeout(() => document.querySelector<HTMLButtonElement>(".cw-drop")?.click(), 0)} />
+      <Suspense fallback={null}>
+        <GettingStarted recents={recents} onPickFolder={() => setTimeout(() => document.querySelector<HTMLButtonElement>(".cw-drop")?.click(), 0)} />
+      </Suspense>
       {/* The morning brief or evening wrap-up across everything, then what happened in each session while you were away. */}
       <DailyBriefCard />
       {/* Every goal you set, at risk first (goals.ts). */}
       {/* Every agent's finished work, proven first, one press from shipped (ready.ts). */}
-      <GoalsCard identity={identity} />
+      <Suspense fallback={null}>
+        <GoalsCard identity={identity} />
+      </Suspense>
       {/* What happened while you were away, before what you might do next. */}
 
       {/* No Right now or Your year under the box (Arun, 2026-11-20: "get rid of this", "get rid of the right now section too"): the
