@@ -41,12 +41,27 @@ export function shellLine(argv: string[], env: Record<string, string> = {}, plat
   return (vars.length ? `env ${vars.map(([k, v]) => q(`${k}=${v}`)).join(" ")} ` : "") + argv.map(q).join(" ") + (exit ? "; exit" : "");
 }
 
+/**
+ * The command as cmd reads it on Windows. A word with `&`, `|`, `<`, `>`, `^` or a bracket in it is quoted as one with a space is:
+ * unquoted, cmd read those as its own (a folder named "R&D" ran a second command; Security L9). `safe` is false when a word
+ * can't be said to cmd without it changing it (a `%`, which it fills in even between quotes, a quote in a variable's value, a
+ * line break): the window is then not opened, and the command is only shown.
+ */
+export function windowsCommand(argv: string[], env: Record<string, string> = {}): { command: string; safe: boolean } {
+  const quote = (s: string) => (/[\s"&|<>^()]/.test(s) || !s ? `"${s.replace(/"/g, '""')}"` : s);
+  const vars = Object.entries(env);
+  const safe = ![...argv, ...vars.flat()].some((x) => /[%\r\n]/.test(x)) && !vars.some(([k, v]) => /"/.test(v) || !/^\w+$/.test(k));
+  return { command: vars.map(([k, v]) => `set "${k}=${v}" && `).join("") + argv.map(quote).join(" "), safe };
+}
+
 export async function openInTerminal(argv: string[], env: Record<string, string> = {}): Promise<{ opened: boolean; command: string }> {
   const win = process.platform === "win32";
-  const quote = (s: string) => (win ? (/[\s"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s) : `'${s.replace(/'/g, `'\\''`)}'`);
+  const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
   // What it runs with besides (one of a tool's accounts: CODEX_HOME), said in the command, since the terminal is its own process.
   const vars = Object.entries(env);
-  const command = (win ? vars.map(([k, v]) => `set "${k}=${v}" && `).join("") : vars.length ? `env ${vars.map(([k, v]) => quote(`${k}=${v}`)).join(" ")} ` : "") + argv.map(quote).join(" ");
+  const forWindows = win ? windowsCommand(argv, env) : null;
+  const command = forWindows ? forWindows.command : (vars.length ? `env ${vars.map(([k, v]) => quote(`${k}=${v}`)).join(" ")} ` : "") + argv.map(quote).join(" ");
+  if (forWindows && !forWindows.safe) return { opened: false, command };
   const run = (cmd: string, args: string[]) => new Promise<void>((resolve, reject) => execFile(cmd, args, { windowsHide: true }, (err) => (err ? reject(err) : resolve())));
   try {
     if (process.platform === "darwin") {

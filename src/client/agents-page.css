@@ -6,73 +6,107 @@
 .ap.ap-page { height: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column; border: 0; border-radius: 0; background: transparent; }
 .ap-page > .ap-head { padding-top: 0; padding-bottom: 0; color: inherit; }
 .ap-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 22px; border-bottom: 1px solid var(--border); background: var(--bg); }
-.ap-head h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
-.ap-count { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+.ap-head h1 { margin: 0; font-size: 15px; font-weight: 500; line-height: 24px; }
+.ap-count { font-size: 12px; line-height: 16px; color: var(--faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ap-head-acts { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .ap-body { width: min(880px, 100%); margin: 0 auto; padding: 22px 22px 48px; display: flex; flex-direction: column; gap: 24px; }
-.ap-label { margin: 0 0 6px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+/* Section labels as the kit's eyebrows: 10/500/16 in small capitals, 0.5px apart. */
+.ap-label { margin: 0 0 8px; padding: 0 2px; font-size: 10px; font-weight: 500; line-height: 16px; letter-spacing: .5px; text-transform: uppercase; color: var(--faint); }
 
-.ap-btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border: 1px solid var(--border-strong); border-radius: 8px; background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background-color 120ms var(--ease-out, ease); }
-.ap-btn:hover { background: var(--hover); }
-.ap-btn:disabled { opacity: .55; cursor: default; }
-.ap-btn svg { width: 14px; height: 14px; }
-.ap-btn.ap-quiet { border-color: transparent; color: var(--ink-2); }
-.ap-btn.ap-quiet:hover { color: var(--ink); }
-.ap-btn.ap-primary { border-color: var(--ink); background: var(--ink); color: var(--bg); }
-.ap-btn.ap-primary:hover { opacity: .9; background: var(--ink); }
-.ap-btn:focus-visible, .ap-row-main:focus-visible, .ap-room:focus-visible, .ap-needs-step:focus-visible { outline: 2px solid var(--border-focus, var(--ink)); outline-offset: 2px; }
+/* Redesigned 2026-11-27 on the shared kit's measurements (affect-pro SPEC.md): cards 10 with a ring for an edge, never a border
+   (the needs card 14 and raised), buttons 28 at radius 6, chips 18 at radius 5, titles 13/500/20 over meta 11 to 12/400. */
+.ap-page {
+  --ap-ring: var(--aui-shadow-card, 0 0 0 1px var(--border)), 0 1px 2px rgb(0 0 0 / .05);
+  --ap-ring-hover: 0 0 0 1px var(--border-strong), 0 2px 6px -2px rgb(0 0 0 / .12);
+  --ap-raised: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .05), 0 10px 28px -12px rgb(0 0 0 / .16);
+}
+html.dark .ap-page { --ap-ring: var(--aui-shadow-card, 0 0 0 1px var(--border)), 0 1px 2px rgb(0 0 0 / .4); --ap-raised: 0 0 0 .5px var(--border-strong), 0 12px 28px -10px rgb(0 0 0 / .6); --ap-ring-hover: 0 0 0 1px var(--border-strong), 0 2px 6px -2px rgb(0 0 0 / .5); }
+.ap-row-main:focus-visible, .ap-room:focus-visible, .ap-needs-step:focus-visible, .ap-needs:focus-visible { outline: 2px solid var(--border-focus, var(--ink)); outline-offset: 2px; }
 
-/* What needs you: one at a time, answered here; ⌘J steps through. */
-.ap-needs { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--border)); border-radius: 12px; background: color-mix(in srgb, var(--amber) 9%, var(--bg)); }
-.ap-needs-text { flex: 1; min-width: 0; }
-.ap-needs-line { font-size: 13.5px; line-height: 1.45; color: var(--ink); overflow-wrap: anywhere; }
-.ap-needs-why { margin-top: 2px; font-size: 12px; line-height: 1.45; color: var(--ink-2); }
+/* What needs you: one at a time, answered here; ⌘J steps through. The kit's Approval Card: radius 14, padding 16, raised. */
+.ap-needs { display: flex; flex-direction: column; gap: 14px; padding: 16px; border-radius: 14px; background: var(--card); box-shadow: var(--ap-raised); }
+.ap-needs-head { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: start; gap: 12px; }
+.ap-needs-head > .ui-bdgc { margin-top: 1px; }
+.ap-needs-text { min-width: 0; }
+.ap-needs-line { font-size: 14px; font-weight: 400; line-height: 20px; color: var(--ink); overflow-wrap: anywhere; }
+.ap-needs-line b { font-weight: 500; }
+.ap-needs-why { margin-top: 2px; font-size: 13px; line-height: 18px; color: var(--text-muted); overflow-wrap: anywhere; }
+.ap-needs-why code, .ap-needs-line code { padding: 1px 5px; border-radius: 4px; background: var(--hover); font: 12px/18px var(--mono); }
 .ap-needs-why.ap-err { color: var(--red); }
-.ap-needs-acts { display: flex; align-items: center; gap: 6px; flex: none; }
-.ap-needs-step { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 0 0 0 10px; border: 0; border-left: 1px solid var(--border-strong); background: none; font: inherit; font-size: 12px; color: var(--text-muted); white-space: nowrap; cursor: pointer; }
-.ap-needs-step kbd { font: 500 12px ui-monospace, Menlo, monospace; padding: 0 5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 5px; }
+.ap-needs-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 -16px; padding: 14px 16px 0; border-top: 1px solid var(--border); }
+/* Always allow at the foot, as on the Approval Card ("Always allow this action"): 13/400 in the muted ink. */
+.ap-needs-always { color: var(--text-muted); font-size: 13px; }
+.ap-needs-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-left: auto; }
+.ap-needs-step { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border: 0; border-radius: 6px; background: none; font: inherit; font-size: 12px; color: var(--text-muted); white-space: nowrap; cursor: pointer; font-variant-numeric: tabular-nums; transition: background-color .15s ease, color .15s ease; }
+.ap-needs-step:hover { background: var(--hover); color: var(--ink); }
+.ap-needs-step kbd { height: 18px; padding: 0 4px; border: 0; border-radius: 4px; background: var(--hover); box-shadow: inset 0 0 0 .5px var(--border-strong); color: var(--faint); font: 500 10px/18px var(--font); }
+/* A key on an answer only while the card has the keyboard: only then does it answer it (the thread's permission card). */
+.ap-keyed kbd { display: none; height: 18px; min-width: 18px; padding: 0 4px; border: 0; border-radius: 4px; background: var(--hover); color: var(--faint); font: 500 10px/18px var(--font); box-shadow: none; }
+.ap-needs:focus-within .ap-keyed kbd { display: inline-grid; place-items: center; }
+.ap-keyed .ui-buttonc__icon:has(kbd) { width: auto; height: auto; }
+.ap-keyed[data-variant="primary"] kbd { background: color-mix(in srgb, var(--on-accent) 16%, transparent); color: color-mix(in srgb, var(--on-accent) 72%, transparent); }
 
-/* The crew: one row each, its face, name and role, what it is doing now, how long ago, and Message. */
-.ap-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-.ap-row { display: flex; align-items: center; gap: 8px; padding-right: 12px; }
-.ap-row + .ap-row { border-top: 1px solid var(--border); }
-/* A crew mate's ⋯ beside Message: restart its tool, make it the lead, remove it (mate-menu.ts). */
-.ap-row-more { flex: none; }
-.ap-row:hover { background: var(--hover); }
-.ap-row-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 12px 6px 12px 14px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.ap-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ap-row-name { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink); }
-.ap-row-name b { font-weight: 600; }
-.ap-chip { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 6px; background: var(--hover-strong); color: var(--ink-2); font-size: 12px; white-space: nowrap; }
-.ap-row-line { font-size: 12.5px; line-height: 1.4; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The crew: the kit's Agent Fleet cards (radius 10, padding 10 10 8 10, gap 6): face and name over its role and what it runs on,
+   a chip only when it needs you; what it is doing now; how long ago, Message and its ⋯ (mate-menu.ts: restart, lead, remove). */
+.ap-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(256px, 1fr)); gap: 8px; }
+.ap-row { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px 10px 8px; border-radius: 10px; background: var(--card); box-shadow: var(--ap-ring); transition: box-shadow .2s ease; animation: ap-in .38s cubic-bezier(.32, .72, .24, 1) both; }
+.ap-row:hover { box-shadow: var(--ap-ring-hover); }
+.ap-row:nth-child(2) { animation-delay: .05s; } .ap-row:nth-child(3) { animation-delay: .1s; } .ap-row:nth-child(4) { animation-delay: .15s; } .ap-row:nth-child(n+5) { animation-delay: .2s; }
+/* The card is its chat: the name's press covers it, under the line and its buttons. */
+.ap-row-main { position: static; display: flex; align-items: center; gap: 8px; min-width: 0; height: 30px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ap-row-main::after { content: ""; position: absolute; inset: 0; border-radius: 10px; }
+.ap-row-main:focus-visible { outline: 0; }
+.ap-row:has(.ap-row-main:focus-visible) { box-shadow: var(--ap-ring), 0 0 0 2px var(--border-focus); }
+.ap-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ap-row-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; line-height: 16px; color: var(--ink); }
+.ap-row-name b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-row-sub { font-size: 11px; line-height: 14px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-row-flag { flex: none; align-self: flex-start; margin-top: 1px; }
+/* The Working chip's ring, turning as a spinner does (0.9s linear); still when less motion is asked. */
+.ap-ring { display: block; width: 9px; height: 9px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid color-mix(in srgb, currentColor 25%, transparent); border-top-color: currentColor; animation: spin .9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .ap-ring { animation: none; } }
+html.reduce-motion .ap-ring { animation: none; }
+.ap-row-line { display: block; min-height: 16px; font-size: 12px; line-height: 16px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-row-line.s-working, .ap-row-line.s-limited { color: var(--ink-2); }
-.ap-row-line.s-waiting, .ap-row-line.s-needs { color: var(--amber); }
-.ap-row-line.s-stopped, .ap-row-line.s-failed { color: var(--red); }
-.ap-when { flex: none; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.ap-row-line.s-waiting { color: var(--ink); }
+.ap-row-line.s-stopped { color: var(--red); }
+.ap-row-foot { position: relative; z-index: 1; display: flex; align-items: center; gap: 4px; height: 24px; }
+.ap-when { flex: 1; font-size: 11px; font-weight: 500; line-height: 16px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.ap-row-msg { margin-left: auto; }
+.ap-row-more { flex: none; }
 
-/* Rooms: the Crew room and the project rooms, then a new one. */
-.ap-rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
-.ap-room { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.ap-room:hover { background: var(--hover); }
-.ap-room-text { display: flex; flex-direction: column; min-width: 0; font-size: 13.5px; }
-.ap-room-text b { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink); }
+/* Rooms: cards as the crew's, then a new one, dashed. */
+.ap-rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(256px, 1fr)); gap: 8px; }
+.ap-room { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 52px; padding: 10px 12px; border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--ap-ring); color: inherit; font: inherit; text-align: left; cursor: pointer; transition: box-shadow .2s ease; }
+.ap-room:hover { box-shadow: var(--ap-ring-hover); }
+.ap-room-text { display: flex; flex-direction: column; min-width: 0; font-size: 13px; line-height: 20px; }
+.ap-room-text b { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; color: var(--ink); }
 /* At work, or asking the person (Teammates.tsx roomNow): its line in the state's ink. */
 .ap-room[data-tone="working"] .ap-room-text > span { color: var(--ink-2); }
 .ap-room[data-tone="waiting"] .ap-room-text > span { color: var(--amber); }
-.ap-room-text > span { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ap-room-new { justify-content: flex-start; gap: 8px; border-style: dashed; border-color: var(--border-strong); color: var(--text-muted); font-size: 13px; }
+.ap-room-text > span { font-size: 12px; line-height: 16px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-room-new { justify-content: flex-start; gap: 8px; background: none; box-shadow: inset 0 0 0 1px var(--border-strong); outline-offset: 2px; color: var(--text-muted); font-size: 13px; font-weight: 500; border: 1px dashed transparent; }
+.ap-room.ap-room-new { box-shadow: none; border-color: var(--border-strong); }
+.ap-room-new:hover { background: var(--hover); color: var(--ink); box-shadow: none; }
 
-/* What finished today. */
-.ap-done { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.ap-done li { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 2px; font-size: 13px; }
-.ap-done-title { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.ap-done-meta { flex: none; font-size: 12px; color: var(--text-muted); }
-.ap-done-check { margin-left: auto; flex: none; color: var(--green); }
+/* What finished today: the kit's decided rows, 32 tall at radius 9 on a ring, a check in a soft 14px circle. */
+.ap-done { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ap-done li { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 9px; border-radius: 9px; background: var(--card); box-shadow: var(--ap-ring); }
+.ap-done-check { flex: none; display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 5%, transparent); color: var(--green); }
+.ap-done-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; line-height: 20px; color: var(--ink); }
+.ap-done-meta { flex: none; display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: 11.5px; line-height: 16px; color: var(--faint); }
+
+/* Cards rise in as the page opens, on the kit's SHEET curve, a beat apart; still when less motion is asked. */
+@keyframes ap-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.ap-needs { animation: ap-in .4s cubic-bezier(.22, 1, .36, 1) both; }
+@media (prefers-reduced-motion: reduce) { .ap-row, .ap-needs { animation: none; } }
+html.reduce-motion :is(.ap-row, .ap-needs) { animation: none; }
+/* On glass the cards are tinted glass with their top highlight, and still the ring. */
+html.glass :is(.ap-row, .ap-room:not(.ap-room-new), .ap-done li) { background: var(--glass-float, var(--card)); box-shadow: inset 0 1px 0 var(--glass-hi, transparent), var(--ap-ring); }
+html.glass .ap-needs { background: var(--glass-float, var(--card)); box-shadow: inset 0 1px 0 var(--glass-hi, transparent), var(--ap-raised); }
 
 @media (max-width: 720px) {
-  .ap-needs { flex-wrap: wrap; }
-  .ap-needs-acts { width: 100%; justify-content: flex-end; }
-  .ap-row-msg, .ap-when { display: none; }
+  .ap-needs-acts { width: 100%; }
   .ap-head { padding: 0 16px; }
   /* The window's own bar says "Agents" in a narrow window: said once. */
   .ap-head h1 { display: none; }

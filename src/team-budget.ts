@@ -1,5 +1,5 @@
 import { shortTokens } from "./tool-usage.js";
-import { MAIN_LANE, type SessionEvent, type TeamBrief } from "./types.js";
+import { MAIN_LANE, PRICES, type SessionEvent, type TeamBrief } from "./types.js";
 
 /**
  * Budgets and work hours for Crew teammates, and a budget for a room running on its own (Arun, 2026-10-31: picked as the top Crew
@@ -201,30 +201,6 @@ export function spentOn(events: readonly SessionEvent[], lane: string, from: num
   return { input, output };
 }
 
-/**
- * Dollars per million tokens, in and out, of the models Friday knows a list price for: Anthropic's API prices (as of
- * 2026-11-09), by Claude Code's aliases and ids. On a subscription this is what the work would have cost on the API, the only
- * dollar figure there is. Smart routing, a tool's own default and every other tool: not known, so no dollar cap applies.
- */
-export const PRICES: Record<string, [number, number]> = {
-  fable: [8, 40],
-  "claude-fable-5-2": [8, 40],
-  "claude-fable-5-1": [10, 50],
-  "claude-fable-5": [10, 50],
-  opus: [4, 20],
-  "claude-opus-5-5": [4, 20],
-  "claude-opus-5": [5, 25],
-  "claude-opus-4-8": [5, 25],
-  "claude-opus-4-7": [5, 25],
-  "claude-opus-4-6": [5, 25],
-  sonnet: [2, 10],
-  "claude-sonnet-5-5": [2, 10],
-  "claude-sonnet-5": [2, 10],
-  "claude-sonnet-4-6": [3, 15],
-  haiku: [0.1, 0.5],
-  "claude-haiku-5-5": [0.1, 0.5],
-  "claude-haiku-4-5": [1, 5],
-};
 export const priceOf = (t: { tool: string; model?: string }): [number, number] | null => (t.tool === "claude" && t.model ? (PRICES[t.model] ?? null) : null);
 export const dollarsOf = (s: { input: number; output: number }, price: [number, number]) => (s.input * price[0] + s.output * price[1]) / 1e6;
 

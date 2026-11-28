@@ -1,0 +1,106 @@
+/* Code's home in the measured affectUI system (scratchpad SPEC §1 and chat-composer, setup-guide, running-now): 13/500 controls
+   28px tall, the composer's box at radius 16 with its controls at radius 8, a ring in place of a border, colour only for state.
+   app.css loads before style.css, so these name `html .home` to outweigh the older layers there (their !important ones too). */
+.home {
+  --hm-expo: cubic-bezier(.22, 1, .36, 1);
+  /* The kit's card edge and soft fill (public/style.css --aui-*), so Home's surfaces match every kit card. */
+  --hm-ring: var(--aui-shadow-card, 0 0 0 1px var(--border));
+  --hm-shell: color-mix(in srgb, var(--ink) 4%, var(--card));
+  --hm-fill: var(--aui-subtle, color-mix(in srgb, var(--ink) 5%, transparent));
+  --hm-t3: color-mix(in srgb, var(--ink) 52%, transparent);
+  --hm-t4: color-mix(in srgb, var(--ink) 30%, transparent);
+}
+html.dark .home { --hm-shell: color-mix(in srgb, #000 28%, var(--bg)); }
+
+/* The line over the title: 12/400 meta, the dot a T4 separator. */
+html .home .hero-kicker { margin: 0 0 8px; font-size: 12px; font-weight: 400; line-height: 16px; color: var(--hm-t3); }
+html .home .hero-kicker .day { color: var(--hm-t3); }
+html .home .hero-kicker .dot { background: var(--hm-t4); }
+
+/* Runs on: a quiet label and the computer as the model picker's trigger, 28 tall at radius 6, its chevron turning when open. */
+html .home .cw-runs-on { gap: 2px; }
+html .home .cw-runs-label { padding: 0 4px 0 6px; color: var(--hm-t3); font-size: 13px; line-height: 20px; }
+html .home .cw-runs-on .cw-drop { height: 28px; padding: 0 6px; gap: 6px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font: 500 13px/20px var(--font); transition: background-color .14s ease, color .14s ease; }
+html .home .cw-runs-on .cw-drop:is(:hover, .on, [aria-expanded="true"]) { background: var(--hm-fill); }
+html .home .cw-runs-on .cw-drop > svg:first-child { width: 16px; height: 16px; color: var(--hm-t3); }
+html .home .cw-runs-note { color: var(--hm-t3); font-size: 12px; line-height: 16px; }
+html .home :is(.cw-runs-on, .composer-bar, .composer-below) .menu-pill-caret { width: 14px; height: 14px; color: var(--hm-t4); transition: transform .22s var(--hm-expo), color .14s ease; }
+html .home :is(.cw-runs-on, .composer-bar, .composer-below) :is(.on, [aria-expanded="true"]) > .menu-pill-caret { transform: rotate(180deg); color: var(--hm-t3); }
+
+/* The box: white at radius 16 on a 1px hairline ring, padding 14 10 10 10, two lines of words over a 28px toolbar. The hairline firms up
+   under the pointer and while typing, never a bright ring (Arun, 2026-11-16, design A: "a quiet hairline that firms up when you
+   type"), and the words stay at 14px as that design has them. */
+html .home .composer-card .composer-inner {
+  gap: 14px; padding: 14px 10px 10px !important; border: 0 !important; border-radius: 16px !important; background: var(--card) !important;
+  box-shadow: 0 0 0 1px var(--border-strong), 0 1px 2px rgb(0 0 0 / .04) !important; transition: box-shadow .16s ease;
+}
+html .home .composer-card .composer-inner:hover { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent), 0 1px 2px rgb(0 0 0 / .04) !important; }
+html .home .composer-card .composer-inner:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 30%, transparent), 0 1px 2px rgb(0 0 0 / .05) !important; }
+html.glass .home .composer-card .composer-inner { background: var(--glass-float) !important; -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); }
+html .home .composer-card .composer-inner textarea { min-height: 40px; padding: 0 4px !important; font-size: 14px; line-height: 20px; color: var(--ink); }
+html .home .composer-card .composer-inner textarea::placeholder { color: var(--hm-t3); }
+
+/* Its toolbar: 28px controls at radius 8, gap 4 inside a group; the + and the mic plain icons, send a filled square. */
+html .home .composer-bar { gap: 4px; min-height: 28px; margin: 0 !important; padding: 0 !important; }
+html .home .composer-bar .cm-anchor .icon-btn, html .home .composer-bar .voice-mic { width: 28px; height: 28px; border-radius: 8px; color: var(--hm-t3); transition: background-color .16s ease, color .16s ease, transform .16s var(--hm-expo); }
+html .home .composer-bar :is(.cm-anchor .icon-btn, .voice-mic):hover:not(:disabled) { background: var(--hm-fill); color: var(--ink); }
+html .home .composer-bar :is(.cm-anchor .icon-btn, .voice-mic, .send):active:not(:disabled) { transform: scale(.94); }
+html .home .composer-bar .cm-anchor .icon-btn svg, html .home .composer-bar .voice-mic svg { width: 16px; height: 16px; }
+/* Who works (the tool and its model): T1 words, padding 0 6 0 8, gap 4. What it may do: T3 words with its icon, padding 0 10 0 8. */
+html .home .composer-bar :is(.menu-pill, .agent-pill) { height: 28px; gap: 4px; padding: 0 6px 0 8px; border-radius: 8px; font: 400 13px/20px var(--font); color: var(--ink); transition: background-color .16s ease, color .16s ease; }
+html .home .composer-bar :is(.menu-pill, .agent-pill):is(:hover, .on, [aria-expanded="true"]) { background: var(--hm-fill) !important; color: var(--ink); }
+html .home .composer-bar .mode-pill { gap: 6px; padding: 0 10px 0 8px; color: var(--hm-t3); }
+html .home .composer-bar .mode-pill .menu-pill-mark { display: inline-grid; place-items: center; margin: 0; color: inherit; }
+html .home .composer-bar .mode-pill .menu-pill-mark svg { width: 16px; height: 16px; }
+html .home .composer-bar .mode-pill .menu-pill-caret { display: none; }
+html .home .composer-bar .mode-pill.mode-full { color: color-mix(in srgb, var(--amber) 88%, var(--ink)) !important; }
+html .home .composer-bar .send { width: 28px; height: 28px; border-radius: 8px; background: var(--ink); color: var(--card); transition: background-color .16s ease, color .16s ease, transform .16s var(--hm-expo); }
+html .home .composer-bar .send:disabled { background: var(--hm-fill) !important; color: var(--hm-t4) !important; }
+html .home .composer-bar .send svg { width: 16px; height: 16px; stroke-width: 2; }
+
+/* The strip under the box, where it works: the composer's grey shell, 36 tall, its button 26 tall at radius 8 in 12/400 T3. It
+   hangs from where the box's curve ends, its own foot rounded (Arun, 2026-11-08: "connect where the input box finished curving and
+   at the bottom of it where it is now flat"), so it is inset by the box's radius rather than as wide as the box. */
+html .home .composer-below {
+  width: calc(min(656px, 100%) - 32px); min-height: 36px; margin: -1px auto 0; padding: 1px 10px 0 6px; gap: 8px;
+  border: 0; border-radius: 0 0 14px 14px; background: var(--hm-shell); box-shadow: var(--hm-ring);
+}
+html .home .composer-below .cw-drop { height: 26px; padding: 0 8px 0 7px; gap: 7px; border-radius: 8px; color: var(--hm-t3); font: 400 12px/16px var(--font); }
+html .home .composer-below .cw-drop:is(:hover, [aria-expanded="true"]) { background: var(--hm-fill); color: var(--ink); }
+html .home .composer-below .cw-drop > svg:first-child { width: 14px; height: 14px; color: inherit; }
+html .home .composer-below .composer-below-note { font-size: 12px; line-height: 16px; color: var(--hm-t3); }
+
+/* The coding tools in the corner, as Running now's trigger reads: 28 tall at radius 6, the count 12/500 T1, the words 12/400 T2,
+   a 12px chevron that turns. Text, not a card (DIRECTION.md §9.5, Arun 2026-10-29: "text where there were pills"). */
+html .home .home-tools .mb-pill { height: 28px; gap: 8px; padding: 0 8px 0 10px; border-radius: 6px; color: color-mix(in srgb, var(--ink) 62%, transparent); font: 400 12px/16px var(--font); transition: background-color .14s ease, color .14s ease; }
+html .home .home-tools .mb-pill:is(:hover, [aria-expanded="true"]) { background: var(--hm-fill); color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  html .home :is(.composer-inner, .composer-bar *, .cw-runs-on *, .menu-pill-caret) { transition: none !important; }
+}
+
+/* The folder picker behind "New folder" (Workspace.tsx), as the kit's command menu (SPEC command-menu): the panel at radius 12 on
+   the float shadow, a 48px search row over a hairline, sources as 36px rows at radius 6 whose tint steps in .09s, section labels
+   10/500 uppercase, a folder a 48px two-line row with its 28px tile at radius 7, and kbds 20 tall at radius 5 on an inset ring. */
+html .wsp { border: 0; border-radius: 12px; box-shadow: var(--aui-shadow-popover, var(--shadow-pop)); font-variant-numeric: tabular-nums; }
+html .wsp .wsp-search { height: 48px; gap: 12px; padding: 0 12px 0 14px; border-bottom: 1px solid var(--border); }
+html .wsp .wsp-search input { font: 400 13px/20px var(--font); color: var(--ink); }
+html .wsp .wsp-search input::placeholder { color: color-mix(in srgb, var(--ink) 48%, transparent); }
+html .wsp kbd { min-width: 20px; height: 20px; box-sizing: border-box; padding: 0 5px; border: 0; border-radius: 5px; background: none; box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--ink) 16%, transparent); color: color-mix(in srgb, var(--ink) 48%, transparent); font: 500 11px/16px var(--font); }
+html .wsp .wsp-rail { padding: 4px; }
+html .wsp .wsp-src { height: 36px; gap: 10px; padding: 0 8px; border-radius: 6px; color: color-mix(in srgb, var(--ink) 72%, transparent); font: 400 13px/20px var(--font); transition: background-color .09s ease-out, color .14s ease; }
+html .wsp .wsp-src:hover { background: var(--aui-subtle, var(--hover)); color: var(--ink); }
+html .wsp :is(.wsp-src.on, .wsp-src[aria-pressed="true"]) { background: var(--aui-subtle, var(--hover)); color: var(--ink); font-weight: 500; }
+html .wsp .wsp-n { color: color-mix(in srgb, var(--ink) 48%, transparent); font-size: 12px; line-height: 16px; }
+html .wsp .wsp-head { padding: 10px 14px 4px; color: color-mix(in srgb, var(--ink) 48%, transparent); font: 500 10px/16px var(--font); letter-spacing: .5px; text-transform: uppercase; }
+html .wsp .wsp-head .wsp-hint { text-transform: none; letter-spacing: 0; font-size: 11px; }
+html .wsp .wsp-item { margin: 0 4px; }
+html .wsp .wsp-row { min-height: 48px; gap: 10px; padding: 6px 8px; border-radius: 8px; transition: background-color .09s ease-out; }
+html .wsp .wsp-row:hover, html .wsp .wsp-row.on { background: var(--aui-subtle, var(--hover)); }
+html .wsp .wsp-tile { border-radius: 7px; background: var(--card); box-shadow: var(--aui-shadow-card, 0 0 0 1px var(--border)); }
+html .wsp .wsp-name { font-size: 13px; font-weight: 500; line-height: 20px; }
+html .wsp .wsp-sub { color: color-mix(in srgb, var(--ink) 48%, transparent); font-size: 12px; line-height: 16px; }
+html .wsp .wsp-branch { height: 18px; padding: 0 6px; border-radius: 5px; font-size: 11px; }
+html .wsp .wsp-foot { height: 40px; gap: 6px; padding: 0 12px 0 6px; color: color-mix(in srgb, var(--ink) 48%, transparent); font-size: 12px; line-height: 16px; }
+html .wsp .wsp-foot-btn { height: 28px; gap: 6px; padding: 0 10px 0 8px; border-radius: 6px; color: color-mix(in srgb, var(--ink) 72%, transparent); font: 500 12px/16px var(--font); transition: background-color .14s ease, color .14s ease; }
+html .wsp .wsp-foot-btn:is(:hover, [aria-pressed="true"]) { background: var(--aui-subtle, var(--hover)); color: var(--ink); }

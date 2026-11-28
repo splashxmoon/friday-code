@@ -49,7 +49,7 @@
 .gu-select { align-self: stretch; height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: transparent; color: var(--ink); font: 13px var(--font); }
 .gu-select:focus-visible { outline: 2px solid color-mix(in srgb, var(--ink) 30%, transparent); outline-offset: 1px; }
 .gu-form-foot { display: flex; justify-content: flex-end; }
-.gu-send { height: 32px; padding: 0 14px; border: 0; border-radius: var(--r-pill); background: var(--ink); color: var(--bg); font: 500 13px var(--font); cursor: pointer; }
+.gu-send { height: 32px; padding: 0 14px; border: 0; border-radius: var(--r-md, 8px); background: var(--ink); color: var(--bg); font: 500 13px var(--font); cursor: pointer; }
 .gu-send:disabled { opacity: .6; cursor: default; }
 .gu-answers { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 0; }
 .gu-answers div { display: grid; grid-template-columns: minmax(100px, 34%) 1fr; gap: 10px; padding: 4px 0; font-size: 13.5px; }

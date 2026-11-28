@@ -17,14 +17,13 @@ export interface WhatsNewNotes {
 }
 
 export const WHATS_NEW: WhatsNewNotes = {
-  version: "0.4.3",
-  title: "Captains",
-  summary: "A Captain minds a project's coding sessions for you: it keeps work going, checks what's finished, and brings you only what needs you.",
+  version: "0.4.5",
+  summary: "Captains that run a crew until the job is done, a new look across the app, automations that start on GitHub, and four more coding tools.",
   items: [
-    { icon: "crown", title: "Captains", line: "Turn one on for a project and it minds every thread there; its row in the sidebar says what it's doing now." },
-    { icon: "check", title: "Checked and ready", line: "Finished work is tested by itself, a failure goes back once, and checked work waits for your Review & ship." },
-    { icon: "message", title: "Talk to it", line: "Say what should get done and it follows it to ready, splitting big tasks across your coding tools." },
-    { icon: "zap", title: "Fast, solid, live", line: "Working rows show their step and clock, nothing is lost to a full disk or a crash, and long sessions open at once." },
+    { icon: "crown", title: "Captains with a crew", line: "Tell a project's Captain what you want: it plans the steps, runs a crew of agents, checks each one and keeps going until done." },
+    { icon: "star", title: "A new look", line: "Every page redrawn on one set of parts: calmer cards, clearer states, the same menus and buttons everywhere." },
+    { icon: "zap", title: "Starts itself on GitHub", line: "Automations can run when an issue is opened, someone opens a pull request, or a check fails on main." },
+    { icon: "plug", title: "Four more coding tools", line: "Aider, Crush, Auggie and Goose, added by contributors: 22 tools side by side in one app." },
   ],
 };
 

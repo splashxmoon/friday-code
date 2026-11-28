@@ -1,6 +1,6 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import http from "node:http";
 import net from "node:net";
 import path from "node:path";
@@ -120,6 +120,9 @@ async function serveStatic(cwd: string, port: number): Promise<http.Server> {
         if (!(await exists(spa))) return void res.writeHead(404).end("Not found");
         file = spa;
       }
+      // Nor through a link in the folder to a file outside it (a repository can ship one): by where the file really is (Security L6).
+      const [real, root] = await Promise.all([realpath(file), realpath(cwd)]);
+      if (real !== root && !real.startsWith(root + path.sep)) return void res.writeHead(403).end("Outside the preview folder");
       res.writeHead(200, { "Content-Type": MIME[path.extname(file).toLowerCase()] ?? "application/octet-stream", "Cache-Control": "no-store" });
       createReadStream(file).pipe(res);
     } catch (e) {

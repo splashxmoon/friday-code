@@ -37,7 +37,14 @@ export interface ToolAccount {
   outAt?: number;
 }
 
-type Store = Partial<Record<AccountTool, ToolAccount[]>>;
+type Store = Partial<Record<AccountTool, ToolAccount[]>> & {
+  /**
+   * Which account new sessions of each tool start on, picked by the person (Arun, 2026-11-26: "ensure it works properly and is
+   * designed and oriented for ease of switching"). Kept on the computer, not in one window, so a session started any way (the
+   * message box, an automation, a Captain, a crew mate, another agent over MCP, the phone) starts on it. Absent: the tool's own.
+   */
+  preferred?: Partial<Record<AccountTool, string>>;
+};
 
 const stateDir = () => process.env.FRIDAY_STATE_DIR || path.join(homedir(), ".friday");
 const storeFile = () => path.join(stateDir(), "accounts.json");
@@ -305,7 +312,11 @@ export async function renameAccount(tool: AccountTool, id: string, label: string
  */
 export async function removeAccount(tool: AccountTool, id: string): Promise<void> {
   if (id === DEFAULT_ACCOUNT) throw new Error("That's the tool's own sign-in. Sign out of it instead.");
-  await updateStore((s) => void (s[tool] = (s[tool] ?? []).filter((a) => a.id !== id)));
+  await updateStore((s) => {
+    s[tool] = (s[tool] ?? []).filter((a) => a.id !== id);
+    // New sessions go back to the tool's own sign-in when the one they used is gone.
+    if (s.preferred?.[tool] === id) delete s.preferred[tool];
+  });
   if (ID.test(id)) await rm(accountDir(tool, id), { recursive: true, force: true });
 }
 
@@ -354,4 +365,21 @@ export async function nextAccount(tool: AccountTool, current: string, signedIn: 
     if ((await signedIn(a.id)) !== false) return a;
   }
   return null;
+}
+
+/** The account new sessions of `tool` start on: the one picked, while it is still here, else the tool's own sign-in. */
+export async function preferredAccount(tool: AccountTool): Promise<string> {
+  const s = await readStore();
+  const id = s.preferred?.[tool];
+  return id && id !== DEFAULT_ACCOUNT && (s[tool] ?? []).some((a) => a.id === id) ? id : DEFAULT_ACCOUNT;
+}
+
+/** New sessions of `tool` start on `id` from now on; sessions already open stay where they are. */
+export async function setPreferredAccount(tool: AccountTool, id: string): Promise<void> {
+  await updateStore((s) => {
+    if (id !== DEFAULT_ACCOUNT && !(s[tool] ?? []).some((a) => a.id === id)) throw new Error("There's no such account.");
+    s.preferred = { ...s.preferred };
+    if (id === DEFAULT_ACCOUNT) delete s.preferred[tool];
+    else s.preferred[tool] = id;
+  });
 }

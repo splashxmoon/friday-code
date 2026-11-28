@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import JSZip from "jszip";
 import path from "node:path";
 import type { FileStore } from "./files.js";
+import { gitCall, inUntrustedRepo } from "./runner/git.js";
 import { readRepo } from "./runner/repo-read.js";
 import type { Attachment, RepoCall, SessionEvent } from "./types.js";
 
@@ -61,6 +62,20 @@ export const MAX_FOLDER_ARCHIVE = 600 * 1024 * 1024;
 
 const modeNow = () => (uploadsMayRun() ? ("full" as const) : ("edits" as const));
 const GIT_OPS = new Set<RepoCall["op"]>(["checkpoint", "restore", "commit", "publish", "remote", "branches", "switch", "prcomments", "diff"]);
+
+/**
+ * Whether an uploaded path is git's own folder, or inside one, at any depth (`.git`, `vendor/lib/.git/config`, a `.git` file).
+ * Never written: git runs the programs its config and hooks name, and Friday runs git in this folder as the server, so an
+ * upload that brought its own `.git` chose what the server ran (2026-11-27 security review). Any depth, because git also reads
+ * a nested repository's settings once it is added as one. Spelled as a filesystem might fold it: any case, Windows' dropped
+ * trailing dots and spaces and its short name, and the characters HFS+ ignores in a name.
+ */
+export function inUploadedGitDir(rel: string): boolean {
+  return rel.split(/[\\/]+/).some((seg) => {
+    const s = seg.replace(/[\u200c-\u200f\u202a-\u202e\u206a-\u206f\ufeff]/g, "").toLowerCase().replace(/[. ]+$/, "");
+    return s === ".git" || /^git~\d+$/.test(s);
+  });
+}
 
 export interface UploadedFolder {
   root: string;
@@ -157,6 +172,8 @@ export class UploadedFolders {
       // thing that stops being true.
       const full = path.resolve(root, rel);
       if (full !== root && !full.startsWith(root + path.sep)) continue;
+      // Nor git's own folder: its settings are Friday's to write here, never an upload's (see inUploadedGitDir).
+      if (inUploadedGitDir(rel)) continue;
       count++;
       if (seen.has(a.id)) continue;
       seen.add(a.id);
@@ -207,6 +224,8 @@ export class UploadedFolders {
       const clean = e.name.replace(/\\/g, "/").replace(/^[a-zA-Z]:/, "").replace(/^\/+/, "");
       const rel = top && clean.startsWith(`${top}/`) ? clean.slice(top.length + 1) : clean;
       if (!rel || rel.split("/").some((seg) => seg === ".." || seg === "")) continue;
+      // The archive's own `.git` stays in the archive: what git runs in this folder is not the uploader's to say.
+      if (inUploadedGitDir(rel)) continue;
       const full = path.resolve(root, rel);
       if (full === root || !full.startsWith(root + path.sep)) continue;
       const data = await e.async("nodebuffer");
@@ -240,12 +259,31 @@ export class UploadedFolders {
       };
     }
     // Every git question gets this folder's own repository — never whatever repository happens to enclose the uploads directory.
+    // And every other question that reaches git (a search is `git grep`) finds either that repository or none in this folder.
     if (GIT_OPS.has(req.op)) await ownRepo(folder.root);
+    else await dropForeignRepo(folder.root);
     return {
-      output: await readRepo(folder.root, { ...req, mode: modeNow(), isolate: true }),
+      output: await inUntrustedRepo(() => readRepo(folder.root, { ...req, mode: modeNow(), isolate: true })),
       where: { host: "the uploaded folder", cwd: folder.name },
     };
   }
+}
+
+/** Beside the folder, as the upload's own marker is: it says the `.git` inside was made by Friday, at this moment. */
+const repoMarker = (root: string) => `${root}.repo.json`;
+
+/**
+ * Remove a `.git` in an uploaded folder that Friday did not make. One that came with an upload (before uploads were kept from
+ * bringing one, or by a way nobody has thought of yet) names programs for git to run as the server. Told apart by the marker
+ * beside the folder, which no upload can write: every uploaded path lands inside it.
+ */
+async function dropForeignRepo(root: string): Promise<boolean> {
+  const dotGit = path.join(root, ".git");
+  // lstat: a link named .git is somebody else's too.
+  if (!(await lstat(dotGit).then(() => true, () => false))) return false;
+  if (await stat(repoMarker(root)).then(() => true, () => false)) return true;
+  await rm(dotGit, { recursive: true, force: true });
+  return false;
 }
 
 /**
@@ -255,7 +293,10 @@ export class UploadedFolders {
  * another checkout (in development it is inside this one), and git would
  * otherwise snapshot and restore that whole repository instead.
  */
-async function ownRepo(root: string): Promise<void> {
-  if (await stat(path.join(root, ".git")).then(() => true, () => false)) return;
-  await new Promise<void>((resolve, reject) => execFile("git", ["init", "-q"], { cwd: root, windowsHide: true }, (e) => (e ? reject(e) : resolve())));
+export async function ownRepo(root: string): Promise<void> {
+  if (await dropForeignRepo(root)) return;
+  // No template: a server's init.templateDir would copy its hooks in. Made as every later call in this folder is made.
+  const call = gitCall(["init", "-q", "--template="], undefined, true);
+  await new Promise<void>((resolve, reject) => execFile("git", call.args, { cwd: root, windowsHide: true, env: call.env }, (e) => (e ? reject(e) : resolve())));
+  await writeFile(repoMarker(root), JSON.stringify({ at: Date.now() }));
 }

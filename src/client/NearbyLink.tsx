@@ -6,7 +6,8 @@ import { Icon } from "./icons.js";
 /**
  * Linking a computer in two clicks (local/nearby.ts; Arun, 2026-11-21: "make it way easier to link up machines too"): Add a
  * computer › Nearby lists the Fridays on this network, Link offers one this computer's pairing, and that one asks its person
- * (LinkOffers, below) with a check number both screens show.
+ * (LinkOffers, below) for the code this one shows: typed there, it is what tells that computer the offer is this one's and
+ * not somebody else's on the network under the same name (security audit 2026-11-27).
  */
 
 interface Found {
@@ -23,7 +24,7 @@ const OS: Record<string, string> = { darwin: "Mac", linux: "Linux", win32: "Wind
 /** Add a computer › Nearby. */
 export function NearbyLink() {
   const [found, setFound] = useState<Found[] | null>(null);
-  const [asked, setAsked] = useState<{ id: string; name: string; check: string } | null>(null);
+  const [asked, setAsked] = useState<{ id: string; name: string; code: string } | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
@@ -37,8 +38,8 @@ export function NearbyLink() {
     setBusy(f.id);
     setError("");
     try {
-      const r = await call<{ name: string; check: string; error?: string }>("/api/computers/nearby/link", { method: "POST", body: JSON.stringify({ id: f.id }) });
-      setAsked({ id: f.id, name: r.name, check: r.check });
+      const r = await call<{ name: string; code: string; error?: string }>("/api/computers/nearby/link", { method: "POST", body: JSON.stringify({ id: f.id }) });
+      setAsked({ id: f.id, name: r.name, code: r.code });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -51,16 +52,16 @@ export function NearbyLink() {
       {asked && !done ? (
         <div className="nearby-asked">
           <p className="small">
-            On <b>{asked.name}</b>, press <b>Allow</b>. Both screens show the same number:
+            On <b>{asked.name}</b>, type this code and press <b>Allow</b>:
           </p>
-          <div className="nearby-check" aria-label={`Check number ${asked.check}`}>
-            {asked.check}
+          <div className="nearby-check" aria-label={`Code ${asked.code.split("").join(" ")}`}>
+            {asked.code.slice(0, 4)} {asked.code.slice(4)}
           </div>
           <p className="muted small">Waiting for {asked.name}… The offer lasts ten minutes.</p>
         </div>
       ) : (
         <>
-          <p className="muted small">Any computer with Friday open on this Wi-Fi shows up here. Link it, then press Allow on it.</p>
+          <p className="muted small">Any computer with Friday open on this Wi-Fi shows up here. Link it, then type the code on it.</p>
           <ul className="nearby-list">
             {found === null && <li className="muted small nearby-empty"><span className="nearby-pulse" aria-hidden />Looking…</li>}
             {found?.length === 0 && <li className="muted small nearby-empty"><span className="nearby-pulse" aria-hidden />Looking… Open Friday on the other computer.</li>}
@@ -88,11 +89,14 @@ export function NearbyLink() {
 }
 
 /**
- * On the computer being linked: "Maya's MacBook Pro wants to run agents on this computer", with its check number, Allow or Don't.
+ * On the computer being linked: "Maya's MacBook Pro wants to run agents on this computer", the code from that computer's screen
+ * to type, Allow or Don't. A wrong code keeps the offer, to try again.
  * Polled while Friday is open here (local edition only); one offer at a time, newest first.
  */
 export function LinkOffers() {
-  const [offers, setOffers] = useState<{ from: string; name: string; check: string; until: number }[]>([]);
+  const [offers, setOffers] = useState<{ from: string; name: string; until: number }[]>([]);
+  const [code, setCode] = useState("");
+  const [wrong, setWrong] = useState("");
   const [said, setSaid] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -107,14 +111,22 @@ export function LinkOffers() {
   const answer = async (allow: boolean) => {
     if (!o) return;
     setBusy(true);
+    setWrong("");
+    let stays = false;
     try {
-      const r = await call<{ hub?: { connected?: boolean } | null; error?: string }>(`/api/computers/offers/${o.from}`, { method: "POST", body: JSON.stringify({ allow }) });
-      setSaid(allow ? (r.error ? r.error : `Linked to ${o.name}. Its agents can run here now.`) : "");
+      const r = await call<{ hub?: { connected?: boolean; name?: string } | null; error?: string }>(`/api/computers/offers/${o.from}`, { method: "POST", body: JSON.stringify({ allow, ...(allow ? { code } : {}) }) });
+      setSaid(allow ? (r.error ? r.error : `Linked to ${r.hub?.name || o.name}. Its agents can run here now.`) : "");
     } catch (e) {
-      setSaid((e as Error).message);
+      // A code that doesn't match: the offer stays, to type it again. Anything else (it ran out) ends it.
+      stays = /doesn't match/.test((e as Error).message);
+      if (stays) setWrong((e as Error).message);
+      else setSaid((e as Error).message);
     } finally {
       setBusy(false);
-      setOffers((l) => l.slice(1));
+      if (!stays) {
+        setCode("");
+        setOffers((l) => l.slice(1));
+      }
     }
   };
   useEffect(() => {
@@ -122,21 +134,36 @@ export function LinkOffers() {
     const t = setTimeout(() => setSaid(""), 6000);
     return () => clearTimeout(t);
   }, [said]);
+  const ready = code.replace(/[^A-Z0-9]/gi, "").length >= 8;
   if (!o) return said ? <div className="nearby-toast small">{said}</div> : null;
   return (
     <div className="overlay nearby-over">
       <div ref={ref} className="modal nearby-offer" role="alertdialog" aria-modal="true" aria-label={`${o.name} wants to link`}>
         <h2>Link to {o.name}?</h2>
         <p className="muted small">
-          {o.name} wants to run agents on this computer, with your coding tools here. Check that it shows the same number:
+          {o.name} wants to run agents on this computer, with your coding tools here. Type the code it is showing:
         </p>
-        <div className="nearby-check">{o.check}</div>
-        <p className="muted small">Only allow it if you started this on {o.name}. You can remove it any time in Settings › Other computers.</p>
+        <input
+          className="input nearby-code"
+          autoFocus
+          value={code}
+          maxLength={12}
+          spellCheck={false}
+          autoCapitalize="characters"
+          autoComplete="off"
+          placeholder="Code"
+          aria-label={`The code ${o.name} is showing`}
+          aria-invalid={!!wrong}
+          onChange={(e) => (setCode(e.target.value.toUpperCase()), setWrong(""))}
+          onKeyDown={(e) => e.key === "Enter" && ready && !busy && void answer(true)}
+        />
+        {wrong && <p className="small computers-said bad">{wrong}</p>}
+        <p className="muted small">Only if you started this on {o.name}. You can remove it any time in Settings › Other computers.</p>
         <div className="nearby-actions">
           <button type="button" className="btn small" disabled={busy} onClick={() => void answer(false)}>
             Don't allow
           </button>
-          <button type="button" className="btn small primary" disabled={busy} onClick={() => void answer(true)}>
+          <button type="button" className="btn small primary" disabled={busy || !ready} onClick={() => void answer(true)}>
             {busy ? "Linking…" : "Allow"}
           </button>
         </div>

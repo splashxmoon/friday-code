@@ -1,0 +1,209 @@
+/* The Diff Timeline (DiffTimeline.tsx), rebuilt by hand from affectUI Pro's public preview (SPEC diff-timeline): a card of radius 10
+   on the kit's ring, a 48px head (pixel mark, 13/500 name over a 12/400 status line, 20px total chips), a 208px chart (40px y
+   gutter, 156px plot, a 24px time axis), 30px file rows of radius 7 with 6px bars of radius 2 cut into one piece per edit, and a
+   36px legend. Every size, gap and curve is the original's; every colour one of Friday's, so it holds in dark, light and glass. */
+
+.dtl {
+  /* Added and removed: Friday's green and red, the lines a step lighter on the light ground, the bars the lines at 75%. */
+  --dtl-add-line: color-mix(in srgb, var(--green) 58%, #fff);
+  --dtl-del-line: color-mix(in srgb, var(--red) 82%, #fff);
+  --dtl-add-bar: color-mix(in srgb, var(--dtl-add-line) 75%, transparent);
+  --dtl-del-bar: color-mix(in srgb, var(--dtl-del-line) 75%, transparent);
+  --dtl-hair: color-mix(in srgb, var(--ink) 7%, transparent);
+  --dtl-guide: color-mix(in srgb, var(--ink) 14%, transparent);
+  --dtl-ring: var(--card);
+  --dtl-ic-line: color-mix(in srgb, #fff 85%, transparent);
+  --dtl-pop: var(--aui-overlay, var(--card));
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: 10px;
+  background: var(--viz-card);
+  box-shadow: var(--viz-sh);
+  font-size: 13px;
+  line-height: 18px;
+}
+html.dark .dtl {
+  --dtl-add-line: var(--green);
+  --dtl-del-line: var(--red);
+  --dtl-hair: color-mix(in srgb, var(--ink) 8%, transparent);
+  --dtl-ic-line: color-mix(in srgb, #000 45%, transparent);
+  --dtl-pop: var(--aui-overlay, color-mix(in srgb, var(--ink) 8%, var(--card)));
+}
+/* Glass: the dots' ring and the popover sit on the frosted card's solid colour, not its see-through one. */
+html.glass .dtl { --dtl-ring: var(--float-solid, var(--glass-float, var(--card))); --dtl-pop: var(--float-solid, var(--glass-float, var(--card))); }
+
+/* ── head ───────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.dtl-head { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; grid-template-areas: "mark who totals"; align-items: center; column-gap: 10px; min-height: 48px; padding: 14px 16px 0; box-sizing: border-box; }
+.dtl-mark { grid-area: mark; display: grid; place-items: center; width: 16px; height: 16px; }
+.dtl-who { grid-area: who; display: flex; flex-direction: column; min-width: 0; }
+.dtl-l1 { display: flex; min-width: 0; font-size: 13px; line-height: 18px; white-space: nowrap; }
+.dtl-name { font-weight: 500; color: var(--viz-t1); overflow: hidden; text-overflow: ellipsis; }
+.dtl-ctx { flex: none; color: var(--viz-t3); }
+.dtl-status { font-size: 12px; line-height: 16px; color: var(--viz-t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dtl-status .dtl-folder { color: var(--viz-t4); }
+.dtl-status .dtl-file { color: var(--viz-t1); }
+.dtl-totals { grid-area: totals; display: flex; align-items: center; gap: 6px; margin: 0; white-space: nowrap; }
+.dtl-chip { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 5px; font-size: 12px; font-weight: 500; line-height: 16px; }
+.dtl-chip.add { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
+.dtl-chip.del { color: var(--red); background: color-mix(in srgb, var(--red) 10%, transparent); }
+html.dark .dtl-chip.add { background: color-mix(in srgb, var(--green) 16%, transparent); }
+html.dark .dtl-chip.del { background: color-mix(in srgb, var(--red) 17%, transparent); }
+.dtl-across { font-size: 12px; line-height: 16px; color: var(--viz-t3); }
+
+/* ── chart ──────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.dtl-chart { display: grid; grid-template-columns: 40px minmax(0, 1fr); padding: 22px 16px 6px 0; }
+.dtl-y { position: relative; height: 156px; }
+/* Heights come from the component (156 for the chart, more when it fills a tall pane); these are the original's. */
+.dtl-y > span { position: absolute; right: 10px; font-size: 11px; line-height: 16px; color: var(--viz-t4); }
+.dtl-plot { position: relative; height: 180px; border-radius: 4px; outline: none; }
+.dtl-plot:focus-visible { box-shadow: 0 0 0 2px var(--border-focus); }
+.dtl-svg { position: absolute; left: 0; top: 0; display: block; overflow: visible; }
+.dtl-grid { stroke: var(--dtl-hair); stroke-width: 1; stroke-dasharray: 3 3; }
+.dtl-base { stroke: color-mix(in srgb, var(--ink) 12%, transparent); stroke-width: 1; }
+.dtl-now { stroke: var(--dtl-guide); stroke-width: 1; stroke-dasharray: 2 2; }
+.dtl-guide { stroke: var(--dtl-guide); stroke-width: 1; }
+.dtl-guide.pinned { stroke: color-mix(in srgb, var(--ink) 30%, transparent); }
+.dtl-lines { transition: opacity .2s ease; }
+/* A chosen file: the run's lines step back, its own edits stand as stems with a dot where each landed. */
+.dtl-plot[data-sel] .dtl-lines { opacity: .35; }
+.dtl-stem { stroke-width: 1; }
+.dtl-stem.add { stroke: color-mix(in srgb, var(--dtl-add-line) 60%, transparent); }
+.dtl-stem.del { stroke: color-mix(in srgb, var(--dtl-del-line) 60%, transparent); }
+.dtl-dot.sm { width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; }
+/* A folded idle gap: a faint band and a break mark on the baseline. */
+.dtl-fold rect { fill: var(--viz-f2); opacity: .7; }
+.dtl-fold path { fill: none; stroke: var(--viz-t4); stroke-width: 1.2; stroke-linecap: round; }
+.dtl-plot { cursor: default; }
+.dtl-ln { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.dtl-ln.add { stroke: var(--dtl-add-line); }
+.dtl-ln.del { stroke: var(--dtl-del-line); }
+.dtl-net { fill: none; stroke: var(--viz-t4); stroke-width: 1; stroke-dasharray: 3 3; }
+
+/* The time axis: the first label starts at 0, the last ends at the edge, the rest sit centred on their minute. */
+.dtl-x { position: absolute; left: 0; right: 0; top: 162px; height: 16px; }
+.dtl-x > span { position: absolute; top: 0; font-size: 11px; line-height: 16px; color: var(--viz-t4); white-space: nowrap; transform: translateX(-50%); }
+.dtl-x > span[data-edge="start"] { transform: none; }
+.dtl-x > span[data-edge="end"] { transform: translateX(-100%); }
+
+/* Line ends: 6px dots (the net's 5px) on a 1.5px ring of the card; live, each breathes out a soft ring. */
+.dtl-dot { position: absolute; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--dtl-ring); pointer-events: none; transition: top .09s ease-out, left .09s ease-out; }
+.dtl-dot.add { background: var(--dtl-add-line); }
+.dtl-dot.del { background: var(--dtl-del-line); }
+.dtl-dot.net { width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; background: var(--viz-t4); }
+.dtl[data-live] .dtl-dot:not(.at)::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: inherit; opacity: .45; animation: dtl-breathe 1.6s ease-out infinite; }
+.dtl[data-live] .dtl-dot.net::after { animation-delay: .2s; }
+@keyframes dtl-breathe { from { transform: scale(1); opacity: .45; } to { transform: scale(2.6); opacity: 0; } }
+/* A file row under the pointer marks its edits on the baseline. */
+.dtl-mark-e { position: absolute; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--dtl-ring); animation: dtl-fade .2s ease both; pointer-events: none; }
+.dtl-mark-e.add { background: var(--dtl-add-line); }
+.dtl-mark-e.del { background: var(--dtl-del-line); }
+
+/* The open edit: a popover on the pop shadow, 8 10 10 10, scaling in from .98; it steps between edits in a short crisp move. */
+.dtl-pop { position: absolute; top: 0; z-index: 5; width: 248px; max-width: 100%; box-sizing: border-box; padding: 8px 10px 10px; border-radius: 10px; background: var(--dtl-pop); box-shadow: 0 0 0 .5px var(--border-strong), 0 8px 24px -6px rgb(0 0 0 / .14), 0 2px 6px -2px rgb(0 0 0 / .06); opacity: 0; transform: scale(.98); transform-origin: top left; pointer-events: none; transition: left .09s ease-out, opacity .14s ease, transform .18s var(--viz-expo); }
+html.dark .dtl-pop { box-shadow: 0 0 0 .5px var(--border-strong), 0 12px 28px -10px rgb(0 0 0 / .6); }
+.dtl-pop[data-open] { opacity: 1; transform: none; }
+/* Pinned, it takes the pointer: its whole diff scrolls inside it. */
+.dtl-pop[data-pinned] { width: 340px; pointer-events: auto; }
+.dtl-pop[data-pinned] .dtl-diff { max-height: 220px; overflow-y: auto; }
+.dtl-pop-hint { margin-top: 6px; font-size: 11px; line-height: 14px; color: var(--viz-t4); }
+.dtl-pop-h { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; line-height: 18px; }
+.dtl-pop-f { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dtl-pop-by { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; line-height: 16px; color: var(--viz-t2); }
+.dtl-pop-t { flex: none; font-size: 12px; line-height: 16px; color: var(--viz-t3); }
+.dtl-pop-n { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; font-size: 12px; font-weight: 500; line-height: 16px; }
+.dtl-pop-run { margin-left: auto; font-weight: 400; color: var(--viz-t3); }
+.dtl-diff { margin-top: 8px; padding: 4px 0; border-radius: 6px; background: var(--viz-f2); box-shadow: inset 0 0 0 .5px var(--dtl-hair); font: 400 11px/16px var(--mono); color: var(--viz-t2); overflow: hidden; }
+.dtl-diff > div { padding: 0 8px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.dtl-diff > div.add { background: color-mix(in srgb, var(--green) 9%, transparent); color: var(--viz-t1); }
+.dtl-diff > div.del { background: color-mix(in srgb, var(--red) 8%, transparent); color: var(--viz-t1); }
+.dtl-sign { display: inline-block; width: 12px; color: var(--viz-t4); }
+.dtl-diff > .add .dtl-sign { color: var(--green); }
+.dtl-diff > .del .dtl-sign { color: var(--red); }
+.dtl-more { font-family: var(--font); color: var(--viz-t3); }
+
+/* ── files ──────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+/* One grid for every row (subgrid), so the bars and the counts line up; `--rows` rows tall, then it scrolls. The empty first and
+   last tracks give each row its 8px inner edge (padding would eat into a subgrid's edge tracks). */
+.dtl-files { position: relative; display: grid; grid-template-columns: 0 16px minmax(0, .9fr) minmax(0, 1fr) auto 0; grid-auto-rows: 30px; align-content: start; column-gap: 8px; height: calc(var(--rows, 7) * 30px + 10px); box-sizing: border-box; margin: 0; padding: 2px 8px 8px; list-style: none; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.dtl-files > li { position: relative; z-index: 1; display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; height: 30px; border-radius: 7px; transition: opacity .2s ease; animation: dtl-rise .52s var(--viz-expo) both; }
+.dtl-files > li[role="button"] { cursor: pointer; outline: none; }
+.dtl-files > li[role="button"]:focus-visible { box-shadow: inset 0 0 0 2px var(--border-focus); }
+.dtl-files[data-dim] > li:not([data-on]):not(.dtl-group) { opacity: .4; }
+/* Files outside the project: last, quieter, under their own label. */
+.dtl-files > li.dtl-group { display: flex; grid-column: 2 / -2; align-items: flex-end; padding-bottom: 6px; font-size: 10px; font-weight: 500; line-height: 16px; letter-spacing: .5px; text-transform: uppercase; color: var(--viz-t3); cursor: default; }
+.dtl-files > li[data-out] .dtl-file { color: var(--viz-t2); }
+.dtl-files > li[data-out] .dtl-ic { opacity: .6; }
+@keyframes dtl-rise { from { opacity: 0; transform: translateY(6px); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+/* The wash under the file being edited now, gliding from row to row. */
+.dtl-wash { position: absolute; left: 8px; right: 8px; top: 2px; height: 30px; border-radius: 7px; background: color-mix(in srgb, var(--ink) 3.5%, transparent); transition: transform .42s var(--viz-expo); animation: dtl-fade .3s ease both; }
+@keyframes dtl-fade { from { opacity: 0; } }
+
+.dtl-files > li > :nth-child(1) { grid-column: 2; }
+.dtl-files > li > :nth-child(2) { grid-column: 3; }
+.dtl-files > li > :nth-child(3) { grid-column: 4; }
+.dtl-files > li > :nth-child(4) { grid-column: 5; }
+.dtl-ic { display: block; flex: none; justify-self: center; }
+.dtl-ic[data-k="code"] { color: color-mix(in srgb, var(--live) 70%, transparent); }
+.dtl-ic[data-k="image"] { color: color-mix(in srgb, var(--st-held, #d680b2) 75%, transparent); }
+.dtl-path { min-width: 0; font-size: 12.5px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dtl-folder { color: var(--viz-t4); }
+.dtl-file { color: var(--viz-t1); }
+
+.dtl-barcell { display: flex; align-items: center; min-width: 0; }
+.dtl-bar { display: flex; gap: 2px; height: 6px; transition: width .6s var(--viz-expo); animation: dtl-grow .7s var(--viz-expo) both; }
+@keyframes dtl-grow { from { width: 0; } }
+.dtl-piece { display: flex; flex: 1 1 0; min-width: 2px; border-radius: 2px; overflow: hidden; transition: flex-grow .6s var(--viz-expo), opacity .2s ease; animation: dtl-piece .6s var(--viz-expo) both; }
+@keyframes dtl-piece { from { flex-grow: 0; opacity: 0; } }
+.dtl-piece > i { flex: 1 1 0; min-width: 1px; }
+.dtl-piece > i.a { background: var(--dtl-add-bar); }
+.dtl-piece > i.r { background: var(--dtl-del-bar); }
+.dtl-binbit { width: 6px; height: 6px; border-radius: 2px; background: var(--viz-t4); animation: dtl-fade .4s ease both; }
+
+.dtl-counts { display: flex; justify-content: flex-end; gap: 6px; min-width: 57px; font-size: 12px; font-weight: 500; line-height: 16px; white-space: nowrap; }
+.dtl-add { color: var(--green); }
+.dtl-del { color: var(--red); }
+.dtl-zero { color: var(--viz-t4); }
+.dtl-bin { font-weight: 400; color: var(--viz-t3); }
+
+/* ── a chosen file's edits ─────────────────────────────────────────────────────────────────────────────────────────── */
+.dtl-detail { height: calc(var(--rows, 7) * 30px + 10px); padding: 2px 8px 8px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; animation: dtl-fade .2s ease both; }
+.dtl-dhead { display: grid; grid-template-columns: auto 16px minmax(0, 1fr) auto; align-items: center; column-gap: 8px; height: 30px; padding: 0 8px 0 0; }
+.dtl-back { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px 0 6px; border: 0; border-radius: 6px; background: transparent; font-size: 12px; font-weight: 500; line-height: 16px; color: var(--viz-t2); cursor: pointer; transition: background-color .14s ease, color .14s ease; }
+.dtl-back:hover { background: var(--viz-f6); color: var(--viz-t1); }
+.dtl-dsum { margin: 0; padding: 2px 8px 8px; font-size: 12px; line-height: 16px; color: var(--viz-t3); }
+.dtl-dsum .dtl-add, .dtl-dsum .dtl-del { font-weight: 500; }
+.dtl-dedits { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.dtl-dedit { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 7px 8px 8px; border: 0; border-radius: 7px; background: transparent; text-align: left; font: inherit; color: inherit; cursor: pointer; transition: background-color .14s ease; }
+.dtl-dedit:hover { background: color-mix(in srgb, var(--ink) 3.5%, transparent); }
+.dtl-dedit[aria-pressed="true"] { background: var(--viz-f6); }
+.dtl-dedit-h { display: flex; align-items: center; gap: 8px; }
+.dtl-dedit-t { flex: 1; font-size: 12px; line-height: 16px; color: var(--viz-t3); }
+.dtl-dedit .dtl-diff { margin-top: 0; width: 100%; box-sizing: border-box; }
+.dtl-dedit-none { font-size: 12px; line-height: 16px; color: var(--viz-t4); }
+
+/* ── fill: the card takes its parent's height; the chart grows (the component sizes it) and the list or the detail the rest ── */
+.dtl[data-fill] { height: 100%; min-height: 480px; }
+.dtl[data-fill] :is(.dtl-files, .dtl-detail) { flex: 1 1 0; height: auto; min-height: 100px; }
+
+/* ── legend ─────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.dtl-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: auto; padding: 6px 16px 14px; font-size: 12px; line-height: 16px; color: var(--viz-t3); }
+.dtl-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.dtl-legend b { font-weight: 500; color: var(--viz-t1); }
+.dtl-sw { width: 12px; height: 2px; border-radius: 1px; }
+.dtl-sw.add { background: var(--dtl-add-line); }
+.dtl-sw.del { background: var(--dtl-del-line); }
+.dtl-sw.net { height: 0; border-top: 1px dashed var(--viz-t4); border-radius: 0; }
+
+/* ── narrow: under 440px the totals go under the name, folders hide and counts shorten (the component says which) ────── */
+.dtl[data-narrow] .dtl-head { grid-template-areas: "mark who" ". totals"; grid-template-columns: 16px minmax(0, 1fr); row-gap: 6px; }
+.dtl[data-narrow] .dtl-totals { padding-bottom: 2px; }
+.dtl[data-narrow] .dtl-files { grid-template-columns: 0 16px minmax(0, 1fr) minmax(0, 1fr) auto 0; }
+.dtl[data-narrow] .dtl-counts { min-width: 0; }
+
+/* ── reduced motion: no glides, no growth, no blur; the mark holds still (the component stops it) ─────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .dtl *, .dtl *::after { animation: none !important; transition: none !important; }
+}
+html.reduce-motion .dtl *, html.reduce-motion .dtl *::after, .dtl[data-still] *, .dtl[data-still] *::after { animation: none !important; transition: none !important; }

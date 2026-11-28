@@ -10,3 +10,13 @@ button.subs-head:hover { background: var(--hover); }
 .subs[data-open="true"] .subs-chev { transform: rotate(180deg); }
 .subs[data-open="false"] .subs-head { border-bottom: 0; }
 @media (prefers-reduced-motion: reduce) { .subs-chev { transition: none; } }
+
+/* The tray as a crew (agent-viz Agent Crew), and the small button that picks it. */
+.subs-view { flex: none; display: grid; place-items: center; width: 24px; height: 24px; margin: -4px -6px -4px 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; transition: background-color .14s ease, color .14s ease; }
+.subs-view:hover, .subs-view[aria-pressed="true"] { background: var(--hover); color: var(--ink); }
+.subs-pop-body.subs-crew { padding: 10px 14px 14px; }
+/* In the reply's card: on its head, left of the chevron, and the crew under it. */
+.subs { position: relative; }
+.subs[data-crew] > .subs-head { padding-right: 44px; }
+.subs-view.in-card { position: absolute; top: 10px; right: 10px; margin: 0; }
+.subs > .subs-crew { padding: 4px 12px 12px; }

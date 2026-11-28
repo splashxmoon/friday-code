@@ -1,82 +1,132 @@
-/* The Code sidebar's projects as cards, their threads on a tree (Arun, 2026-11-24: "making the project things into cards with info and
-   threads nested in them", then "Mix of a and b I want that tree"): each folder of threads (and each project you made) is a card,
-   its tile and name, how many work in it, a facts line under the name (Sidebar.tsx ProjectFacts) that stays when it folds, and its
-   threads hanging off a rail that runs down from its tile, each with a tick to its ring and the last with an elbow. */
+/* The Code sidebar's projects as cards (Arun, 2026-11-24: "making the project things into cards with info and threads nested in
+   them"), drawn again from the mock he approved (Arun, 2026-11-27: "ok go with the sidebar design thing and get rid of the day groups
+   stuff i dont like that"): one card per project on the sidebar's ground, its Captain as its top line, a head of tile, name, chevron
+   and count, a facts line, then its threads as the kit's two-line rows. No card inside a card, no rail down the side, no folder name
+   on every row, no day labels. Folded, a card is its head with the most pressing state as a chip. */
 
 .sb-tray.sb-card, .sb-card.sb-proj-card {
-  --rail: color-mix(in srgb, var(--ink) 22%, transparent);
   margin: 0 0 8px;
-  padding: 3px !important;
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  padding: 0 !important;
+  border: 0;
+  border-radius: 10px;
   background: var(--card);
-  box-shadow: 0 1px 2px rgb(0 0 0 / .04), 0 6px 16px -12px rgb(0 0 0 / .18);
+  box-shadow: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .05);
+  overflow: clip;
 }
-html.dark :is(.sb-tray.sb-card, .sb-card.sb-proj-card) { --rail: color-mix(in srgb, var(--ink) 16%, transparent); box-shadow: 0 1px 0 rgb(255 255 255 / .03) inset, 0 8px 20px -14px rgb(0 0 0 / .7); }
+html.dark :is(.sb-tray.sb-card, .sb-card.sb-proj-card) { box-shadow: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .4); }
 .sb-card.sb-card-drop { box-shadow: 0 0 0 2px color-mix(in srgb, var(--live) 55%, transparent); }
 
-/* The head: the name in the card's own weight, a larger tile. */
-.sb-tray.sb-card [data-sidebar="group-label"] { height: 30px; color: var(--ink); font-size: 13px; font-weight: 600; }
-/* Its count stays under the filter button above the list (Arun, 2026-11-19: "line up the filter button with the numbers"): the card's
-   inset (3px + its border) is given back on the right. */
-.sb-tray.sb-card [data-sidebar="group-label"] { padding-right: 2px; }
-.sb-tray.sb-card [data-sidebar="group-label"] .sb-group-count { font-weight: 400; color: var(--text-muted); }
-.sb-tray.sb-card .sb-tile { width: 18px; height: 18px; border-radius: 5px; font-size: 11px; }
-.sb-card.sb-proj-card > .dass-row { min-height: 30px; }
-.sb-card.sb-proj-card > .dass-row .dass-row-title { color: var(--ink); font-size: 13px; font-weight: 600; }
+/* The head: a 20px tile, the name 13/500 with its chevron just after it, the count faint at the right; 38px, the whole of a folded
+   card. */
+.sb-tray.sb-card [data-sidebar="group-label"] { height: 38px; padding: 0 6px 0 10px !important; color: var(--ink); font-size: 13px; font-weight: 500; }
+/* The count stays under the filter button above the list (Arun, 2026-11-19: "line up the filter button with the numbers"), so the head
+   is 6px in on its right where the mock had 10. */
+.sb-tray.sb-card [data-sidebar="group-label"]:hover, .sb-card.sb-proj-card > .dass-row:hover { background: var(--hover) !important; color: var(--ink); }
+.sb-tray.sb-card [data-sidebar="group-label"] > span:first-child { flex: 0 1 auto; gap: 9px; }
+.sb-tray.sb-card [data-sidebar="group-label"] .sb-fold-chev { margin-left: 4px; color: var(--faint); }
+.sb-tray.sb-card [data-sidebar="group-label"] .sb-group-count { color: var(--faint); font-size: 12px; font-weight: 400; }
+.sb-tray.sb-card .sb-tile, .sb-proj-card .sb-proj-mark { width: 20px; height: 20px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+.sb-tray.sb-card { container: sb-card / inline-size; }
+.sb-tray.sb-card [data-sidebar="group-label"] { min-width: 0; }
+/* Its controls on hover, in the count's place: New thread, 22px. */
+.sb-tray.sb-card .sb-thr-add { top: 8px !important; right: 8px; width: 22px; height: 22px; border-radius: 6px; color: var(--faint); }
+.sb-tray.sb-card .sb-thr-add:hover { background: var(--hover); color: var(--ink); }
 
-/* The facts line, under the name: the tile's width in (8px label inset + 18px tile + 6px gap; a made project's folder icon is 14px). */
-.sb-card-facts { display: flex; align-items: center; min-width: 0; height: 18px; margin: -3px 0 4px; padding: 0 8px 0 37px; overflow: hidden; color: var(--text-muted); font-size: 12px; white-space: nowrap; }
-.sb-proj-card > .sb-card-facts { padding-left: 31px; margin-top: -2px; }
+/* Open, the count; folded, the most pressing state as a chip (asking over working), else the count. */
+.sb-card:not([data-folded]) .sb-gstate, .sb-card .sb-gstate.needs ~ .sb-gstate.live { display: none; }
+.sb-card[data-folded] :has(> .sb-gstate) > .sb-group-count { display: none; }
+html .sb-panel-inner .sb-card .sb-gstate { gap: 4px; height: 18px; padding: 0 6px; border-radius: 5px; font-size: 11px; font-weight: 500; line-height: 18px; }
+.sb-card .sb-gstate::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: currentColor; }
+.sb-card .sb-gstate .sb-gspin { display: none; }
+html .sb-panel-inner .sb-card .sb-gstate.live { background: color-mix(in srgb, var(--live) 12%, transparent); color: var(--live); }
+html .sb-panel-inner .sb-card .sb-gstate.needs { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--amber); }
+
+/* The facts line under the name, in the name's column (10px in, the 20px tile, 9px), folding away with the threads. */
+.sb-card-facts { display: flex; align-items: center; min-width: 0; height: 16px; margin: -9px 0 0; padding: 0 10px 0 39px; overflow: hidden; box-sizing: content-box; padding-bottom: 8px; color: var(--text-muted); font-size: 12px; line-height: 16px; white-space: nowrap; }
+/* Under the pointer the head's tint runs down behind the facts line, as one head (the line sits 9px up into the head's row, over it). */
+.sb-card-facts { position: relative; }
+.sb-card:has(> [data-slot="collapsible"] [data-sidebar="group-label"]:hover) .sb-card-facts, .sb-proj-card:has(> .dass-row:hover) .sb-card-facts { background: var(--hover); }
 .sb-card-facts > * { display: inline-flex; flex: none; align-items: center; gap: 4px; }
-.sb-card-facts > * + *::before { content: "·"; margin: 0 6px; color: var(--faint); }
-.sb-card-facts .sb-changes { gap: 5px; font: 500 12px var(--mono); font-variant-numeric: tabular-nums; }
+.sb-card-facts > * + *::before { content: "·"; margin: 0 6px; color: var(--faint); font: 400 12px var(--font); }
+.sb-card-facts .sb-changes { gap: 5px; }
+.sb-card-facts > .sb-changes::before { margin-right: 1px; }
+/* Lines changed in the card's own face, figures in columns, as the mock has them. */
+.sb-card .sb-changes { font: 500 11.5px/16px var(--font); font-variant-numeric: tabular-nums; }
 .sb-card-facts .sb-changes .add { color: var(--green); }
 .sb-card-facts .sb-changes .del { color: var(--red); }
 .sb-card-facts svg { width: 12px; height: 12px; }
 
-/* The tree: a rail down from the tile's middle, a tick to each thread's ring, an elbow to the last. The rail's middle is the tree's left
-   edge plus half its 1.5px line, so the tree starts 0.75px short of the tile's middle (1px border + 3px card inset + 12px label inset
-   + 9px half tile = 25px in, less the tree's 4px of card = 21px), and the rail starts at the tile's foot: it runs up past the facts line to touch it (Arun, 2026-11-24: "make
-   the line connect to the folder icon thing for example the P and make sure it is lined up properly and centered too"). */
-.sb-card .sb-tree { position: relative; width: auto !important; margin: 0 0 2px 20.25px; padding: 2px 0 0 8px !important; border: 0; }
-.sb-proj-card .sb-tree { margin-left: 16px; }
-/* Rows on the tree sit 4px nearer the rail than elsewhere, so a narrow sidebar keeps the line under a thread's name whole. */
-.sb-tree > .sb-row { --tree-pad: 6px; padding-left: var(--tree-pad) !important; }
-/* New since you looked: its dot sits on the rail where the thread's tick leaves it, a node of the tree, ringed in the card's colour so
-   the rail doesn't run through it (Arun, 2026-11-24: "fix blue dot placement"). It is placed from the row's name line (its parent),
-   which starts the row's padding in: the rail's middle is 7.25px left of the row. */
-.sb-tree > .sb-row .sb-unread-dot { left: calc(-10.25px - var(--tree-pad)); width: 6px; height: 6px; margin-top: -3px; box-shadow: 0 0 0 2px var(--card); }
-.sb-tree > :is(.dass-row, .sb-day) { position: relative; }
-/* Not while ⌘⌥ numbers the rows: the number takes the row's ::before (style.css .sb-row[data-jump]). */
-.sb-tree > :is(.dass-row:not([data-jump]), .sb-day)::before { content: ""; position: absolute; left: -8px; top: -3px; bottom: 0; border-left: 1.5px solid var(--rail); pointer-events: none; }
-.sb-tree > :is(.dass-row:not([data-jump]), .sb-day):first-child::before { top: -2px; }
-/* From the tile's foot: the facts line (18px, 3px up into the head, 4px below) and the tree's own 2px top, 25px above its first row. */
-.sb-tray.sb-card .sb-tree > :is(.dass-row:not([data-jump]), .sb-day):first-child::before { top: -27px; }
-/* The tick runs to just short of the ring (9px in on the tree, its middle 13.5px down: Sidebar.tsx SessionRing). */
-.sb-tree > .dass-row::after { content: ""; position: absolute; left: -8px; top: 13px; width: 13px; border-top: 1.5px solid var(--rail); pointer-events: none; }
-.sb-tree > .dass-row:not([data-jump]):last-child::before { bottom: auto; height: 16.5px; width: 13px; border-bottom: 1.5px solid var(--rail); border-bottom-left-radius: 6px; }
-.sb-tree > .dass-row:last-child::after { display: none; }
-/* A day's word on the tree, beside its rail rather than under a ring's column. */
-.sb-tree > .sb-day { padding-left: 10px; }
-/* A made project with no threads yet: its hint sits on the tree, with no tick. */
-.sb-tree > p { margin-left: -6px; }
+/* A project you made: the same head, its folder in the tile's place, its New thread and ⋯ on hover in its count's place. */
+.sb-card.sb-proj-card > .dass-row { min-height: 38px; gap: 0; padding: 0 6px 0 10px !important; border-radius: 10px; background: none !important; box-shadow: none !important; }
+.sb-proj-card .sb-proj-mark { display: inline-grid; flex: none; place-items: center; margin-right: 9px; background: var(--hover); color: var(--text-muted); }
+.sb-card.sb-proj-card > .dass-row .dass-row-title { color: var(--ink); font-size: 13px; font-weight: 500; }
+.sb-proj-card > .dass-row .sb-fold-chev { margin-left: 4px; color: var(--faint); }
+.sb-proj-card > .dass-row .sb-proj-end { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding-left: 8px; }
+.sb-proj-card > .dass-row .sb-group-count { color: var(--faint); font-size: 12px; }
+.sb-proj-card > .dass-row .dass-row-act { display: none; gap: 2px; }
+.sb-proj-card > .dass-row .dass-row-act :is(button, .icon-btn) { width: 22px; height: 22px; border-radius: 6px; color: var(--faint); }
+.sb-proj-card > .dass-row .dass-row-act :is(button, .icon-btn):hover { background: var(--hover); color: var(--ink); }
+.sb-proj-card > .dass-row:is(:hover, :focus-within) .dass-row-act { display: inline-flex; }
+.sb-proj-card > .dass-row:is(:hover, :focus-within) .sb-proj-end > :not(.dass-row-act) { display: none; }
 
-/* A narrow sidebar (Arun, 2026-11-24: "please allow design for when the side bar window is smaller"). The head's name shortens rather
-   than pushing its count off the card. Below about 250px a card spends less on its sides: the tile and the rail move 4px left, rows
-   sit nearer the rail. Under a thread's name, past a certain narrowness, its agents' marks give way to its folder and its change (the
-   ring and the thread itself say who is at work). */
-.sb-tray.sb-card { container: sb-card / inline-size; }
-.sb-tray.sb-card [data-sidebar="group-label"] { min-width: 0; }
-.sb-tray.sb-card [data-sidebar="group-label"] > span:first-child { flex: 0 1 auto; }
+/* The threads: the kit's two-line row, 44px, its state in a 14px slot, the title 13 in ink, the time faint; the line under it in the
+   title's column. Under the pointer the hover tint, the open one a step stronger, an asking one a faint amber wash. */
+.sb-card .sb-tree { position: relative; width: auto !important; margin: 0; padding: 0 4px 4px !important; border: 0; gap: 1px; }
+html .sb-panel-inner .sb-scroll .sb-card .sb-tree .dass-row.sb-row { min-height: 44px; row-gap: 0; padding: 4px 8px !important; border-radius: 7px; }
+.sb-card .sb-tree .sb-row > .flex { line-height: 20px; }
+.sb-card .sb-tree .sb-row + .sb-row { margin-top: 0; }
+.sb-card .sb-tree .sb-row .sb-lead { width: 14px; margin: 0 1px 0 0; }
+.sb-card .sb-tree .sb-row > .dass-row-sub { padding-left: 23px !important; line-height: 16px; }
+.sb-card .sb-tree .sb-row .dass-row-title { font-size: 13px; font-weight: 400; letter-spacing: 0; }
+.sb-card .sb-tree .sb-row[data-unread] .dass-row-title { font-weight: 600; }
+.sb-card .sb-tree .sb-row .dass-row-time { color: var(--faint); }
+.sb-card .sb-tree .sb-unread-dot { left: -6px; }
+html .sb-scroll .sb-card .sb-tree .sb-row[data-needs]:not([data-active="true"]) { background: color-mix(in srgb, var(--amber) 7%, transparent); }
+html .sb-scroll .sb-card .sb-tree .sb-row:not([data-active="true"]):hover { background: var(--hover); }
+html .sb-scroll .sb-card .sb-tree .sb-row[data-active="true"]:not(:focus-visible) { background: var(--hover-strong) !important; box-shadow: none !important; }
+
+/* Many threads: five, then "Show N more", which opens the rest in place. */
+.sb-more { display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; padding: 0 8px 0 31px; border-radius: 7px; color: var(--text-muted); font-size: 12px; text-align: left; }
+.sb-more:hover { background: var(--hover); color: var(--ink); }
+.sb-more:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+.sb-more .sb-fold-chev { width: 12px; height: 12px; margin-left: -18px; color: var(--faint); }
+.sb-more-rows { display: grid; gap: 1px; }
+
+/* A project with nothing in it: one dashed slot and New thread. */
+.sb-card-empty { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 4px 4px; padding: 10px; border: 1px dashed var(--border-strong); border-radius: 7px; color: var(--text-muted); font-size: 12px; }
+.sb-card-empty button { display: inline-flex; flex: none; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: 6px; background: var(--card); box-shadow: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .05); color: var(--ink); font: 500 12px var(--font); }
+.sb-card-empty button:hover { background: var(--hover); }
+.sb-card-empty button svg { width: 12px; height: 12px; }
+
+/* A narrow sidebar (Arun, 2026-11-24: "please allow design for when the side bar window is smaller"): the name shortens before the
+   count leaves the card, and past a certain narrowness a row's agents' marks give way to its change. */
 @container sb-card (max-width: 250px) {
-  .sb-tray.sb-card [data-sidebar="group-label"] { padding-left: 4px; }
-  .sb-card-facts { padding-left: 33px; }
-  .sb-tree > .sb-row { --tree-pad: 4px; padding-right: 6px !important; }
-  .sb-tree > .dass-row::after { width: 11px; }
-  .sb-tree > .dass-row:not([data-jump]):last-child::before { width: 11px; }
+  .sb-tray.sb-card [data-sidebar="group-label"] { padding-left: 8px !important; }
+  .sb-card-facts { padding-left: 37px; }
 }
 @container sb-sub (max-width: 190px) {
   .sb-tree .sb-where-tools { display: none; }
   .sb-tree .sb-where-end { padding-left: 4px; }
+}
+/* A project card's head has no hover band: its New thread and ⋯ say it is live. The head's band and the facts line's under it were
+   two pieces with a seam between them, a band across the card in the frosted look (Arun, 2026-11-27: "frosted theme bug"). */
+.sb-card.sb-proj-card > .dass-row:hover, .sb-tray.sb-card [data-sidebar="group-label"]:hover { background: none !important; }
+.sb-card:has(> [data-slot="collapsible"] [data-sidebar="group-label"]:hover) .sb-card-facts, .sb-proj-card:has(> .dass-row:hover) .sb-card-facts { background: none !important; }
+.sb-card.sb-proj-card > .dass-row:hover .dass-row-title { color: var(--ink); }
+
+/* A row's agents as a stack of small tiles, each overlapping the one before, so three or four fit beside the change at any sidebar
+   width (Arun, 2026-11-27: "be able to handle to show like 3-4 coding tool icons if possible at all side bar sizes"); only the
+   narrowest folds to the first two and how many more. */
+.sb-where-tools.sb-crew-tools { gap: 0; }
+.sb-where-tools.sb-crew-tools > span:not(.sb-crew-more):not(.sb-crew-rest) { width: 16px; height: 16px; border-radius: 4px; background: var(--card); box-shadow: 0 0 0 1.5px var(--sidebar, var(--bg)); }
+.sb-where-tools.sb-crew-tools > span:not(.sb-crew-more):not(.sb-crew-rest) + span:not(.sb-crew-more):not(.sb-crew-rest) { margin-left: -4px; }
+.sb-where-tools.sb-crew-tools > :is(.sb-crew-more, .sb-crew-rest) { margin-left: 4px; font: 500 11px/16px var(--mono); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+@container sb-sub (max-width: 250px) {
+  .sb-where-tools > span:not(:first-child) { display: grid; }
+  .sb-where-tools > span.sb-crew-more { display: inline; }
+  .sb-where-tools > span.sb-crew-rest { display: none; }
+}
+@container sb-sub (max-width: 190px) {
+  .sb-where-tools > span:nth-child(n+3):not(.sb-crew-rest) { display: none; }
+  .sb-where-tools > span.sb-crew-rest { display: inline; }
 }

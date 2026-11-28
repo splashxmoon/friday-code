@@ -120,6 +120,13 @@ class FakeElement extends FakeNode {
   hasAttribute(k: string) {
     return this.attrs.has(k);
   }
+  /** As the DOM's: on (or forced on) sets it empty, off removes it; says whether it's on now. */
+  toggleAttribute(k: string, force?: boolean) {
+    const on = force ?? !this.attrs.has(k);
+    if (on) this.attrs.set(k, "");
+    else this.attrs.delete(k);
+    return on;
+  }
   get className() {
     return this.getAttribute("class") ?? "";
   }
@@ -180,12 +187,16 @@ class FakeElement extends FakeNode {
 }
 
 class FakeDocument extends FakeNode {
+  /** Where React 19 hoists a component's <style> and <link> (the kit's components bring their own): without it React read
+   *  head.insertBefore of undefined (2026-11-28, a 3,000-event feed after the Thinking Loader came in). */
+  head: FakeElement;
   body: FakeElement;
   documentElement: FakeElement;
   activeElement: FakeElement;
   constructor() {
     super(9, "#document", null);
     this.documentElement = this.appendChild(new FakeElement("html", this));
+    this.head = this.documentElement.appendChild(new FakeElement("head", this));
     this.body = this.documentElement.appendChild(new FakeElement("body", this));
     this.activeElement = this.body;
   }

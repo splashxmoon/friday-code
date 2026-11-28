@@ -45,9 +45,18 @@ function ToolAccounts({ identity, tool, read, onChanged }: { identity: Identity;
             <AccountRow
               key={v.id}
               tool={tool.tool}
-              v={{ ...v, label, ...(row.loggedIn === false ? { out: "Signed out" } : {}) }}
+              v={{ ...v, label, email: v.email ?? row.email ?? null, ...(row.loggedIn === false ? { out: "Signed out" } : {}) }}
               inUse={a.many && row.id === a.pick.id}
               page
+              act={
+                // Switching new sessions to it, a press on its row under its name rather than an item in its menu (Arun,
+                // 2026-11-26: "oriented for ease of switching"). Sessions already running stay where they are.
+                a.many && row.id !== a.pick.id && row.loggedIn !== false ? (
+                  <button type="button" className="acg-use" onClick={() => a.prefer(row.id)} title="New sessions start on this account. Sessions already running stay where they are.">
+                    Use for new sessions
+                  </button>
+                ) : undefined
+              }
               end={
                 <span className="acg-end">
                   {row.loggedIn === false && (

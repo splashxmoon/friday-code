@@ -22,3 +22,8 @@ test("a Friday running on this machine still opens it directly, over http only",
   assert.equal(loadsDirectly({ mode: "local", protocol: "http:", desktop: false, ownMachine: false }), true);
   assert.equal(loadsDirectly({ mode: "local", protocol: "https:", desktop: false, ownMachine: false }), false);
 });
+
+test("a host looked at from another computer never opens a dev server straight from localhost: that's the viewer's own (spec 15)", () => {
+  assert.equal(loadsDirectly({ mode: "local", protocol: "http:", desktop: true, ownMachine: true, remote: true }), false);
+  assert.equal(loadsDirectly({ mode: "local", protocol: "http:", desktop: false, ownMachine: false, remote: true }), false);
+});

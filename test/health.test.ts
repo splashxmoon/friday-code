@@ -164,7 +164,8 @@ test("GET /api/local/health: this computer's own page only, the numbers whole", 
   const { startLocal } = await import("../src/local/start.js");
   const friday = await startLocal({ home, port: 0 });
   t.after(() => friday.close());
-  const r = await fetch(`${friday.url}/api/local/health`);
+  const key = { "x-friday-key": friday.key };
+  const r = await fetch(`${friday.url}/api/local/health`, { headers: key });
   assert.equal(r.status, 200);
   assert.equal(r.headers.get("cache-control"), "no-store");
   const h = (await r.json()) as Health;
@@ -175,5 +176,5 @@ test("GET /api/local/health: this computer's own page only, the numbers whole", 
   assert.ok(h.log.bytes > 0);
   assert.equal(h.errors.week, 1);
   assert.equal((await fetch(`${friday.url}/api/local/health`, { headers: { Origin: "https://example.com" } })).status, 403, "another site's page is refused");
-  assert.equal((await fetch(`${friday.url}/api/local/health`, { method: "POST" })).status, 405);
+  assert.equal((await fetch(`${friday.url}/api/local/health`, { method: "POST", headers: key })).status, 405);
 });

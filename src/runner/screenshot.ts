@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { ownLocalApp } from "../browser-driver.js";
 import type { MeshAnswer } from "./friday-mcp.js";
 
 /**
@@ -29,6 +30,16 @@ export function useInProcessCapture(p: InProcess | null): void {
   inProcess = p;
 }
 
+/**
+ * Friday's own address, when it runs on this computer: no picture or clip is taken of it (browser-driver.ts ownLocalApp), and the
+ * app that takes them is told it too, so a page that sends the capture on there by a redirect or a frame is stopped as well.
+ */
+let own: string | null = null;
+export function holdOffOwnApp(server: string | null): void {
+  own = server;
+}
+const OWN_PAGE = "That is Friday's own page, which isn't captured or recorded: give the address of the page you started.";
+
 export const canScreenshot = (): boolean => viaDesktop || !!inProcess;
 export const canClipViaDesktop = (): boolean => clipsViaDesktop || !!inProcess;
 
@@ -40,6 +51,8 @@ export interface Shot {
   fullPage: boolean;
   /** Also say what the page logged as errors while it loaded (a preview check, preview-check.ts). A shell that doesn't know says none. */
   console?: boolean;
+  /** Friday's own address on this computer, for the app to hold the page off (set here, never by what asked). */
+  own?: string;
 }
 
 export interface Done {
@@ -78,6 +91,8 @@ function listen(): void {
 
 /** The shell's own answer to one capture: the picture and what the page logged, or what went wrong. Never rejects. */
 export function capture(shot: Shot, signal?: AbortSignal): Promise<Done> {
+  if (ownLocalApp(shot.url, own)) return Promise.resolve({ id: "", error: OWN_PAGE });
+  if (own) shot = { ...shot, own };
   if (inProcess && !viaDesktop) return withStop(inProcess.capture(shot).then((r) => (r.data ? { id: "", ...r } : { id: "", error: r.error || "The screenshot couldn't be taken." })), signal, 45_000, "The page didn't load and draw within 45 seconds.");
   if (!viaDesktop) return Promise.resolve({ id: "", error: "Screenshots are taken by the Friday desktop app, and this runner isn't running in it." });
   listen();
@@ -116,7 +131,9 @@ export async function screenshot(shot: Shot, signal?: AbortSignal): Promise<Mesh
  * baseline, Today with Tonight, and proof clips."): a walk through the words the change added (or to the scroll stops, or top to
  * bottom), as WebM, with its captions' times and the console's errors. Never rejects.
  */
-export function clipViaDesktop(ask: { url: string; width: number; height: number; targets?: { text: string }[]; stops?: number[]; badge?: string }, signal?: AbortSignal): Promise<Done> {
+export function clipViaDesktop(ask: { url: string; width: number; height: number; targets?: { text: string }[]; stops?: number[]; badge?: string; own?: string }, signal?: AbortSignal): Promise<Done> {
+  if (ownLocalApp(ask.url, own)) return Promise.resolve({ id: "", error: OWN_PAGE });
+  if (own) ask = { ...ask, own };
   if (inProcess && !clipsViaDesktop) return withStop(inProcess.clip(ask).then((r) => (r.data ? { id: "", ...r } : { id: "", error: r.error || "The clip couldn't be made." })), signal, 90_000, "The clip wasn't made within 90 seconds.");
   if (!clipsViaDesktop) return Promise.resolve({ id: "", error: "Clips are recorded by a newer Friday desktop app." });
   listen();

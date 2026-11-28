@@ -56,14 +56,17 @@ test.after(async () => {
   for (const f of opened) await f.close().catch(() => {});
   rmSync(sandbox, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
+/** Each Friday's key (local-key.ts), by its address: what its own page and programs send with every request. */
+const keys = new Map<string, string>();
 const start = async (home: string) => {
   const f = await startLocal({ home, port: 0 });
   opened.push(f);
+  keys.set(f.url, f.key);
   return f;
 };
 
 async function call<T>(url: string, p: string, method = "GET", json?: unknown): Promise<T> {
-  const r = await fetch(`${url}${p}`, { method, headers: { "Content-Type": "application/json", "x-friday-local": "1" }, ...(json === undefined ? {} : { body: JSON.stringify(json) }) });
+  const r = await fetch(`${url}${p}`, { method, headers: { "Content-Type": "application/json", "x-friday-local": "1", "x-friday-key": keys.get(url) ?? "" }, ...(json === undefined ? {} : { body: JSON.stringify(json) }) });
   const text = await r.text();
   assert.ok(r.ok, `${method} ${p}: ${r.status} ${text}`);
   return JSON.parse(text) as T;

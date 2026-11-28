@@ -14,8 +14,8 @@ export function agentWord(name: string, tool?: EngineTool | null): string {
   return name === "Main" ? (tool ? ENGINE_NAMES[tool] : "Friday Code") : name;
 }
 
-/** The most marks a row shows; the rest are "+N". */
-const MARKS_MAX = 5;
+/** The most marks a row shows, overlapped as a stack so four fit at any sidebar width (Arun, 2026-11-27); the rest are "+N". */
+const MARKS_MAX = 4;
 
 /** One agent's mark: its coding tool's, or Friday's agent's own face. */
 export function CrewMark({ x }: { x: { tool?: EngineTool | undefined; face?: number | undefined } }) {
@@ -38,8 +38,8 @@ export function CrewTools({ agents, names, label, className = "" }: { agents: { 
         </span>
       ))}
       {agents.length > MARKS_MAX && <span className="sb-crew-more">+{agents.length - MARKS_MAX}</span>}
-      {/* A narrow sidebar shows the first mark and how many more (style.css .sb-crew-rest), so the folder keeps its room. */}
-      {agents.length > 1 && <span className="sb-crew-rest" aria-hidden="true">+{agents.length - 1}</span>}
+      {/* The narrowest sidebar shows the first two and how many more (sidebar-cards.css .sb-crew-rest), so the line keeps its room. */}
+      {agents.length > 2 && <span className="sb-crew-rest" aria-hidden="true">+{agents.length - 2}</span>}
     </span>
   );
 }

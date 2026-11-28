@@ -1,4 +1,5 @@
 import { lazy, Suspense, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { focusAgent, useAgents, useFocusedAgent } from "./agentFocus.js";
 import { agentNameFor } from "./agent-name.js";
@@ -8,6 +9,7 @@ import { tabState } from "./agent-tab.js";
 import { Icon } from "./icons.js";
 import { EngineMark } from "./BrandMarks.js";
 import { ContextMenu, type MenuItem } from "./ui.js";
+import { shortTokens } from "../tool-usage.js";
 import { useNow } from "./presence.js";
 import { BranchButton } from "./Branches.js";
 import { GitMenu } from "./github-menu.js";
@@ -38,6 +40,9 @@ import { subTasksIn, type SubTask } from "./Tasks.js";
 import { jumpTo } from "./Subagents.js";
 import "./thread-card.css";
 
+// The agent picked here, as its monitor under its row (agent-viz/places.tsx, Agent Monitor): loaded when one is picked.
+const AgentMonitor = lazy(() => import("./components/agent-viz/places.js").then((m) => ({ default: m.SessionAgentMonitor })));
+
 /**
  * An agent's row, dragged onto the chat, opens it side by side with what is shown there, as the agent tabs do (Arun, 2026-11-16:
  * "allow to drag this so open the side by side view too"). The session's chat takes the drop (SessionView sv-main, AGENT_DRAG).
@@ -53,6 +58,9 @@ const dragAgent = (lane: string) => ({
 });
 
 const HandedRows = lazy(() => import("./crew-carry.js").then((m) => ({ default: m.HandedRows })));
+
+/** Where the thread's tokens went, by agent and turn (CostWaterfall.tsx): loaded when its count in the Agents header is pressed. */
+const ThreadFall = lazy(() => import("./CostWaterfall.js").then((m) => ({ default: m.ThreadFall })));
 
 /**
  * The thread card (Arun, 2026-11-16: "i kinda what something like this, like what t3 has with and agent section"): at the top
@@ -341,10 +349,13 @@ function Agents({ state, events, me, sid, invite, send, identity, onConnect, onC
   for (const t of subTasksIn(events)) if (t.opened && t.agentType !== "command" && t.status === "running") subsOf.set(t.lane, [...(subsOf.get(t.lane) ?? []), t]);
   const now = useNow(working || subsOf.size ? 1000 : 30_000);
   const spent = agents.map((a) => spentOf(a, now) ?? 0);
-  const longest = Math.max(0, ...spent);
   const total = spent.reduce((x, y) => x + y, 0);
   const fold = () => (write(FOLD_KEY, !folded), setFolded(!folded));
   const may = me.role === "owner" || me.role === "editor";
+  // What the agents used, counted as a reply's count is (fresh input and output, run-budget.ts): it opens the thread's waterfall.
+  const used = events.reduce((n, e) => (e.body.type === "agent.usage" ? n + e.body.input + e.body.output : n), 0);
+  const [fall, setFall] = useState(false);
+  const tok = useRef<HTMLButtonElement>(null);
   /**
    * The agents Stop all asked to stop and not stopped yet: it reads "Stopping…" the moment it is pressed, as the box's Stop does
    * (spec 13), until their runs end; one refused is working again, and the session says why.
@@ -381,7 +392,7 @@ function Agents({ state, events, me, sid, invite, send, identity, onConnect, onC
   const status = agents.map((a) => `${agentNameFor(state, a.lane)} ${words[toneOf(a)]}`).join(", ");
   return (
     <div className={cn("tc-sec tc-agents", folded && "is-folded")}>
-      <div className="tc-head">
+      <div className="tc-head" onContextMenu={may ? (e) => (e.preventDefault(), agentMenu(e.clientX, e.clientY)) : undefined}>
         <button type="button" className="tc-head-btn" onClick={fold} aria-expanded={!folded} title={folded ? `Show the agents${status ? `: ${status}` : ""}` : "Fold the agents"}>
           <span className="tc-ic">
             <Icon name={folded ? "chevronRight" : "chevronDown"} size={14} />
@@ -409,11 +420,33 @@ function Agents({ state, events, me, sid, invite, send, identity, onConnect, onC
             </span>
           )}
         </button>
-        {may && (
-          <button type="button" className="tc-end-btn" aria-label="What the chat shows, and the lead" title="What the chat shows, and the lead" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); agentMenu(r.right - 240, r.bottom + 4); }}>
-            <Icon name="more" size={14} />
-          </button>
+        {!folded && used > 0 && (
+          <>
+            <button ref={tok} type="button" className="tc-tok" aria-haspopup="dialog" aria-expanded={fall} aria-label={`${shortTokens(used)} tokens: where they went`} title={`${shortTokens(used)} tokens: where they went`} onClick={() => setFall(true)}>
+              <svg viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M2 3h4M2 6h7M2 9h2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+              {/* The number and its bars only: the card is narrow, and "tokens" beside it pushed the agents' own words out. */}
+              {shortTokens(used)}
+            </button>
+            {/* Centred in the window over everything else, dimmed, so it is the one thing to look at; a press on the dimmed rest or
+                Esc closes it (Arun, 2026-11-27: "make sure everything is dimmed around like this should be the main focus when
+                clicked", then "MAKE SURE THIS IS CENTERED"). It hung beside the card as a popover, off to one side and undimmed. */}
+            {fall &&
+              createPortal(
+                <div className="cwf-scrim" onMouseDown={(e) => e.target === e.currentTarget && (setFall(false), tok.current?.focus())}>
+                  <div className="cwf-pop cwf-modal" role="dialog" aria-modal="true" aria-label="Where this thread's tokens went" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setFall(false), tok.current?.focus())}>
+                    <Suspense fallback={<div className="cwf-wait" />}>
+                      <ThreadFall state={state} events={events} subs={subTasksIn(events)} who={(lane) => ({ name: agentNameFor(state, lane), mark: agentLook(state, lane, 12).mark })} go={(seq) => (setFall(false), jumpTo(seq))} onClose={() => (setFall(false), tok.current?.focus())} />
+                    </Suspense>
+                  </div>
+                </div>,
+                document.body,
+              )}
+          </>
         )}
+        {/* No ⋯ here (Arun, 2026-11-27: "get rid of the three dot here"): what the chat shows and the lead are a right-click on the
+            header, as an agent's own menu is on its card. */}
       </div>
       {!folded && (
         <>
@@ -430,59 +463,59 @@ function Agents({ state, events, me, sid, invite, send, identity, onConnect, onC
               const sub = tone === "done" ? (said ? (said.checked ? said.text : `Done · ${said.text}`) : line ? `Done · ${line.replace(/^done[:.\s—-]*/i, "")}` : "Done") : line || a.now.word;
               const ms = spentOf(a, now);
               const time = ms == null ? "" : clock(ms);
-              // How long it worked beside the others: the longest one's bar runs the row (Arun, 2026-11-24: "i kinda just want this").
-              const fill = ms && longest ? Math.max(4, Math.round((ms / longest) * 100)) : 0;
               const w = tone === "done" ? doneWord(said) : { text: TONE_WORD[tone], tone };
               const on = focused === a.lane;
               const subs = subsOf.get(a.lane) ?? [];
+              // Its controls in the card's head, by the fold: lead's crown, Answer when it asks, its ⋯ (Arun, 2026-11-17).
+              const headEnd = (
+                <>
+                  {state.lead === a.lane && <span className="tc-lead" role="img" aria-label="Leads the other agents" title="Leads the other agents"><Icon name="crown" size={13} /></span>}
+                  {tone === "need" && !a.ask && (
+                    <button type="button" className="tc-answer" onClick={(e) => (e.stopPropagation(), answer(a.lane))}>
+                      Answer
+                    </button>
+                  )}
+                  {may && <AgentMore lane={a.lane} name={name} />}
+                </>
+              );
+              // Done with proof: its chip opens what proves it, beside the card.
+              const pillWrap = proof && said ? (pill: React.ReactNode) => (
+                <PopoverTrigger asChild>
+                  <button type="button" className="tc-proof-chip" onClick={(e) => e.stopPropagation()} aria-label={`Proof: ${said.text}`} title={`${said.text} · what proves it: the checks, the changes, the picture, its own review`}>
+                    {pill}
+                  </button>
+                </PopoverTrigger>
+              ) : undefined;
+              // Each agent as the kit's Agent Monitor, folded to its top part (name, model and folder, state, the strip of its
+              // time) and opening to its steps (Arun, 2026-11-27: "use this design of the new component but more refined when not
+              // clicked"). A press anywhere but its buttons shows only its work, as the row did.
+              const focus = (e: React.SyntheticEvent) => !(e.target as HTMLElement).closest("button, a, input, code") && focusAgent(sid, on ? "all" : a.lane);
               const row = (
                 <div
-                  role="button"
-                  tabIndex={0}
-                  className={cn("tc-agent", on && "on", `is-${tone}`)}
-                  onClick={() => focusAgent(sid, on ? "all" : a.lane)}
-                  onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), focusAgent(sid, on ? "all" : a.lane))}
+                  role="group"
+                  className={cn("tc-agent-card", on && "on", `is-${tone}`)}
+                  onClick={focus}
                   onContextMenu={may ? (e) => (e.preventDefault(), agentMenu(e.clientX, e.clientY, a.lane)) : undefined}
                   {...dragAgent(a.lane)}
-                  title={`${sub}\n${on ? "Back to every agent's work" : `Only ${name}'s work · drag onto the chat to see it side by side`}`}
+                  title={`${sub}${time ? ` · ${time}` : ""}\n${on ? "Back to every agent's work" : `Only ${name}'s work · drag onto the chat to see it side by side`}`}
                   aria-label={`${name}${state.lead === a.lane ? ", leads the others" : ""}: ${sub}${time ? `, ${time}` : ""}`}
-                  aria-pressed={on}
                 >
-                  <span className="tc-mark" style={{ "--tint": look.tint } as React.CSSProperties}>
-                    {look.mark}
-                  </span>
-                  <span className="tc-agent-main">
-                    <span className="tc-agent-name">
-                      <span className="tc-trunc">{name}</span>
-                      {state.lead === a.lane && <span className="tc-lead" role="img" aria-label="Leads the other agents" title="Leads the other agents"><Icon name="crown" size={13} /></span>}
-                      {tone === "need" ? (
-                        <button type="button" className="tc-answer" onClick={(e) => (e.stopPropagation(), answer(a.lane))}>
-                          Answer
-                        </button>
-                      ) : proof && said ? (
-                        <PopoverTrigger asChild>
-                          <button type="button" className={cn("tc-word tc-proof", `is-${w.tone}`)} onClick={(e) => e.stopPropagation()} aria-label={`Proof: ${said.text}`} title={`${said.text} · what proves it: the checks, the changes, the picture, its own review`}>
-                            {w.text}
-                          </button>
-                        </PopoverTrigger>
-                      ) : (
-                        <span className={cn("tc-word", `is-${w.tone}`)}>{w.text}</span>
-                      )}
-                    </span>
-                    <span className={cn("tc-bar", `is-${tone}`)} aria-hidden="true">
-                      <i style={{ width: `${fill}%` }} />
-                    </span>
-                  </span>
-                  <span className="tc-agent-end">
-                    <span className="tc-time">{time}</span>
-                    {may && <AgentMore lane={a.lane} name={name} />}
-                  </span>
+                  <Suspense
+                    fallback={
+                      <div className="tc-agent-wait">
+                        <span className="tc-mark" style={{ "--tint": look.tint } as React.CSSProperties}>{look.mark}</span>
+                        <span className="tc-trunc">{name}</span>
+                      </div>
+                    }
+                  >
+                    <AgentMonitor a={a} state={state} events={events} me={me} send={send} may={may} head={{ headEnd, ...(pillWrap ? { pillWrap } : {}), ...(tone === "done" ? { words: { done: w.text } } : {}) }} />
+                  </Suspense>
                 </div>
               );
               return (
                 <li key={a.lane}>
                   {proof && said ? (
-                    // Its proof opens beside the card, level with the agent's row, never over the card itself.
+                    // Its proof opens beside the card, level with the agent, never over the card itself.
                     <Popover>
                       <PopoverAnchor asChild>{row}</PopoverAnchor>
                       <PopoverContent side="left" align="start" sideOffset={20} collisionPadding={12} className="tc-proof-pop" onClick={(e) => e.stopPropagation()}>

@@ -6,6 +6,7 @@ import { Icon } from "./icons.js";
 import { hostApi, type LocalTool } from "./local.js";
 import { openOutside } from "./openOutside.js";
 import type { Identity } from "./storage.js";
+import { pickedNow } from "./gauge.js";
 import { useToolLimits } from "./toolLimits.js";
 import { MenuButton } from "./ui.js";
 
@@ -40,26 +41,69 @@ const clock = (ms: number) => {
   return new Date(ms).toLocaleString([], today ? { hour: "numeric", minute: "2-digit" } : { weekday: "short", hour: "numeric", minute: "2-digit" });
 };
 
-/** Which account new sessions use, by tool: the person's pick, kept in this browser; the tool's own sign-in until they pick. */
+/**
+ * Which account new sessions use, by tool: the person's pick, kept on the computer (runner/accounts.ts preferredAccount, Arun
+ * 2026-11-26: "ensure it works properly"), so an automation, a Captain, a crew mate or the phone starts on it as the message box
+ * does. It was kept in one browser's storage, which only that window's message box read. The tool's own sign-in until picked.
+ */
 const PREFER = (tool: EngineTool) => `mpa.account.default.${tool}`;
+const legacyPick = (tool: EngineTool) => {
+  try {
+    return localStorage.getItem(PREFER(tool)) ?? "";
+  } catch {
+    return "";
+  }
+};
 export function preferredAccount(tool: EngineTool, rows: Row[] | undefined): string {
-  let id = "";
-  try {
-    id = localStorage.getItem(PREFER(tool)) ?? "";
-  } catch {
-    // Private mode: the tool's own sign-in.
-  }
-  const a = rows?.find((x) => x.id === id);
-  return a && a.loggedIn !== false ? a.id : "default";
+  const signedIn = (id: string | undefined) => {
+    const a = id ? rows?.find((x) => x.id === id) : undefined;
+    return a && a.loggedIn !== false ? a.id : null;
+  };
+  const now = pickedNow.get(tool);
+  if (now && rows?.some((x) => x.id === now)) return signedIn(now) ?? "default";
+  // A runner from before kept no pick: this browser's own, as it was.
+  const kept = rows?.some((x) => x.preferred) ? rows.find((x) => x.preferred)!.id : legacyPick(tool);
+  return signedIn(kept) ?? "default";
 }
-function setPreferred(tool: EngineTool, id: string): void {
-  try {
-    if (id === "default") localStorage.removeItem(PREFER(tool));
-    else localStorage.setItem(PREFER(tool), id);
+/** Friday's other windows in this browser told of a pick at once, as the storage event used to tell them. */
+// Only in a page: in Node (the unit tests import this file) an open channel kept the process from ever exiting, and the whole suite
+// hung on every file that reached it (2026-11-26).
+const told: BroadcastChannel | null = typeof window !== "undefined" && typeof document !== "undefined" && typeof BroadcastChannel === "function" ? new BroadcastChannel("friday-account-default") : null;
+// Never what keeps a process running, where there is one (a test that sets up a window in Node).
+(told as { unref?: () => void } | null)?.unref?.();
+if (told)
+  told.onmessage = (e: MessageEvent<{ tool?: EngineTool; id?: string }>) => {
+    if (!e.data?.tool || !e.data.id) return;
+    pickedNow.set(e.data.tool, e.data.id);
     dispatchEvent(new Event("friday-account-default"));
+  };
+async function setPreferred(identity: Identity, tool: EngineTool, id: string): Promise<void> {
+  pickedNow.set(tool, id);
+  dispatchEvent(new Event("friday-account-default"));
+  told?.postMessage({ tool, id });
+  await hostApi(identity, "/api/runner/accounts.prefer", { method: "POST", body: JSON.stringify({ tool, id }) });
+  try {
+    localStorage.removeItem(PREFER(tool));
   } catch {
-    // Not kept: it holds for this page.
+    // Nothing kept here to clear.
   }
+}
+/** A pick this browser kept before the computer kept them: handed to the computer once, then forgotten here. */
+function useCarryOverPick(identity: Identity, tool: EngineTool | undefined, rows: Row[] | undefined): void {
+  const old = tool ? legacyPick(tool) : "";
+  const there = rows?.find((x) => x.preferred)?.id;
+  useEffect(() => {
+    if (!tool || !old || !rows?.some((x) => x.preferred) || !rows.some((x) => x.id === old)) return;
+    if (there === old) {
+      try {
+        localStorage.removeItem(PREFER(tool));
+      } catch {
+        // Nothing to clear.
+      }
+      return;
+    }
+    void setPreferred(identity, tool, old).catch(() => {});
+  }, [tool, old, there]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 /** The preferred account, followed as it changes here or in another of the app's lists. */
 export function usePreferredAccount(tool: EngineTool | null | undefined, rows: Row[] | undefined): string {
@@ -197,6 +241,7 @@ export function Pending({ login, tool }: { login: Login; tool: EngineTool }) {
  */
 export function useAccountActions(identity: Identity, tool: LocalTool, onChanged: () => void) {
   const rows: Row[] = tool.accounts?.length ? tool.accounts : [{ id: "default", label: "Main", loggedIn: tool.loggedIn }];
+  useCarryOverPick(identity, tool.tool, tool.accounts);
   const preferred = usePreferredAccount(tool.tool, rows);
   const [adding, setAdding] = useState(false);
   const [signing, setSigning] = useState<{ id: string; login: Login } | null>(null);
@@ -229,7 +274,11 @@ export function useAccountActions(identity: Identity, tool: LocalTool, onChanged
   };
   const signIn = (id: string) => call(id, "/api/runner/login", id === "default" ? {} : { account: id }, (login) => setSigning({ id, login }));
   const signOut = (id: string) => call(id, "/api/runner/logout", id === "default" ? {} : { account: id });
-  const remove = (id: string) => call(id, "/api/runner/accounts.remove", { id }, () => preferred === id && setPreferred(tool.tool, "default"));
+  const remove = (id: string) => call(id, "/api/runner/accounts.remove", { id }, () => void (preferred === id && pickedNow.set(tool.tool, "default")));
+  const prefer = (id: string) => {
+    setErr("");
+    void setPreferred(identity, tool.tool, id).then(onChanged, (e: Error) => (pickedNow.delete(tool.tool), setErr(e.message), dispatchEvent(new Event("friday-account-default"))));
+  };
   const rename = (id: string, label: string) => {
     const l = label.trim();
     setRenaming(null);
@@ -237,13 +286,13 @@ export function useAccountActions(identity: Identity, tool: LocalTool, onChanged
   };
   const menu = (a: Row) => () => [
     { heading: a.label },
-    many && { label: "Use for new sessions", checked: a.id === pick.id, disabled: a.loggedIn === false, sub: a.loggedIn === false ? "Sign in to it first" : undefined, onSelect: () => setPreferred(tool.tool, a.id) },
+    many && { label: "Use for new sessions", checked: a.id === pick.id, disabled: a.loggedIn === false, sub: a.loggedIn === false ? "Sign in to it first" : undefined, onSelect: () => prefer(a.id) },
     many && { label: "Rename", icon: "pencil" as const, onSelect: () => setRenaming({ id: a.id, label: a.label }) },
     !many && { label: `Add a second ${name} account`, icon: "plus" as const, onSelect: () => setAdding(true) },
     a.loggedIn !== false && { label: "Sign in again", icon: "refresh" as const, sub: "To switch it to another login", onSelect: () => void signIn(a.id) },
     a.id === "default" ? { label: `Sign out of ${name}`, icon: "logout" as const, danger: true, onSelect: () => setConfirm(a.id) } : { label: "Remove", icon: "trash" as const, sub: "From this computer: its conversations stay", danger: true, onSelect: () => setConfirm(a.id) },
   ];
-  return { rows, preferred, pick, many, name, adding, setAdding, signing, setSigning, confirm, setConfirm, renaming, setRenaming, busy, err, signIn, signOut, remove, rename, menu };
+  return { rows, preferred, pick, many, name, adding, setAdding, signing, setSigning, confirm, setConfirm, renaming, setRenaming, busy, err, signIn, signOut, remove, rename, menu, prefer };
 }
 
 export function AccountList({ identity, tool, onChanged, state }: { identity: Identity; tool: LocalTool; onChanged: () => void; /** The tool's "Signed in", said after "+ Account" and before its ⋯, so it lines up with the other tools' (Arun, 2026-11-19). */ state?: ReactNode }) {
@@ -318,8 +367,10 @@ export function AccountList({ identity, tool, onChanged, state }: { identity: Id
                         }}
                       />
                     ) : (
-                      <span className="acct-label" title={[u?.email, u?.plan].filter(Boolean).join(" · ") || undefined}>
+                      <span className="acct-label" title={[a.email ?? u?.email, u?.plan].filter(Boolean).join(" · ") || undefined}>
                         {a.label}
+                        {/* Who it is, said, not only in a tooltip (Arun, 2026-11-26: "show the email for the accounts as well"). */}
+                        {(a.email ?? u?.email) && <span className="acct-mail">{a.email ?? u?.email}</span>}
                       </span>
                     )}
                     {a.id === pick.id && <span className="acct-default" title="New sessions use this account">Default</span>}
@@ -392,7 +443,7 @@ export function AccountPicker({ identity, tool, value, onChange, onChanged }: { 
                 aria-checked={current === a.id}
                 disabled={a.loggedIn === false}
                 className={`acct-chip ${current === a.id ? "on" : ""}`}
-                title={usage?.find((x) => x.id === a.id)?.email ?? a.label}
+                title={a.email ?? usage?.find((x) => x.id === a.id)?.email ?? a.label}
                 onClick={() => onChange(a.id)}
               >
                 {a.label}
@@ -402,6 +453,11 @@ export function AccountPicker({ identity, tool, value, onChange, onChanged }: { 
           })}
         </div>
       )}
+      {accounts.length > 1 && (() => {
+        const a = accounts.find((x) => x.id === current);
+        const email = a?.email ?? usage?.find((x) => x.id === current)?.email;
+        return email ? <p className="acct-who">Signed in as {email}</p> : null;
+      })()}
       {signing && <Pending login={signing.login} tool={tool.tool} />}
       {adding ? (
         <AddAccount
@@ -452,7 +508,7 @@ export function useAccountChoice(identity: Identity, tool: LocalTool | undefined
         id: a.id,
         label: a.label,
         ...(a.id === preferred ? { main: true } : {}),
-        ...(u?.email ? { email: u.email } : {}),
+        ...((a.email ?? u?.email) ? { email: (a.email ?? u?.email)! } : {}),
         ...(out ? { out: true, note: until ? `Out until ${clock(until)}` : "Out of usage" } : a.loggedIn === false ? { off: true, note: "Signed out" } : w ? { used: w.usedPercent! / 100, note: `${Math.round(w.usedPercent!)}% ${(w.label ?? "").toLowerCase()}`.trim() } : {}),
       };
     }),
@@ -488,7 +544,7 @@ export function AccountPill({ identity, tool, value, onChange, disabled, running
           const out = (a.out && !(a.outUntil && a.outUntil <= Date.now())) || (u?.out && !(u.outUntil && u.outUntil <= Date.now()));
           const until = a.outUntil ?? u?.outUntil;
           const note = out ? `Out of usage${until ? ` until ${clock(until)}` : ""}` : a.loggedIn === false ? "Signed out: sign in from your computer's tools" : tightest(u);
-          return { label: a.label, hint: a.id === preferred ? "Default" : undefined, sub: [u?.email, note].filter(Boolean).join(" · ") || undefined, checked: current === a.id, disabled: a.loggedIn === false, onSelect: () => onChange(a.id) };
+          return { label: a.label, hint: a.id === preferred ? "Default" : undefined, sub: [a.email ?? u?.email, note].filter(Boolean).join(" · ") || undefined, checked: current === a.id, disabled: a.loggedIn === false, onSelect: () => onChange(a.id) };
         }),
         ...(running ? [{ heading: "It carries on the same conversation there." }] : []),
       ]}

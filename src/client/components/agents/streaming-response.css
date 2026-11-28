@@ -1,0 +1,12 @@
+/* The kit's Message Actions as part of a response's row (streaming-response.tsx): its bar lays out among Quote, the next actions and
+   what the turn used, and a thumbs down's reasons unfold on a line of their own under the whole row, not squeezed beside it. */
+.rsp-mac { display: contents; }
+.rsp-mac .ui-mac__fold { flex-basis: 100%; order: 99; }
+/* Its place held for the moment the kit takes to load, once a session: the width of Copy and two thumbs. */
+.rsp-mac-wait { display: inline-block; width: 88px; height: 28px; }
+/* The rest of the row fades with the kit's bar until the answer is pointed at (its quiet mode): one quiet row, not two levels. */
+[data-ui-message] .rsp-actions > :not(.rsp-mac):not(.ui-mac__fold) { opacity: .6; transition: opacity 240ms ease; }
+[data-ui-message]:is(:hover, :focus-within) .rsp-actions > :not(.rsp-mac) { opacity: 1; }
+/* A folded feedback row is out of the page's tree as well as out of sight (its Send isn't a second "Send" beside the message box's),
+   once it has finished folding. */
+.rsp-mac .ui-mac__fold:not([data-open]) { visibility: hidden; transition: grid-template-rows 420ms cubic-bezier(.22, 1, .36, 1), opacity 220ms ease, visibility 0s linear 420ms; }

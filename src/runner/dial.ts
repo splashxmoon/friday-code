@@ -37,6 +37,24 @@ export const pinFor = (url: string): Pin | undefined => {
   }
 };
 
+/**
+ * This computer's own Friday (the open-source edition), which answers only what carries its install's key (local/local-key.ts):
+ * the runners it starts in its own process dial back with it, as a header, never in an address.
+ */
+const keys = new Map<string, string>();
+export function keyServer(url: string, key: string): void {
+  if (key) keys.set(originOf(url), key);
+  else keys.delete(originOf(url));
+}
+const keyHeaders = (url: string): Record<string, string> => {
+  try {
+    const key = keys.get(originOf(url));
+    return key ? { "x-friday-key": key } : {};
+  } catch {
+    return {};
+  }
+};
+
 export const fingerprintOf = (der: Buffer) => new X509Certificate(der).fingerprint256.replace(/:/g, "").toLowerCase();
 
 /** The TLS half: its own certificate as the only authority, and that one only by its fingerprint (its name is an address). */
@@ -51,7 +69,10 @@ function tlsFor(pin: Pin): Pick<tls.ConnectionOptions, "ca" | "checkServerIdenti
 /** What a WebSocket to `url` is opened with: nothing for a server nobody pinned. */
 export function dialOptions(url: string): ClientOptions {
   const pin = pinFor(url);
-  if (!pin) return {};
+  if (!pin) {
+    const own = keyHeaders(url);
+    return own["x-friday-key"] ? { headers: own } : {};
+  }
   // ws hands these to tls.connect as they are; its own type for checkServerIdentity is narrower than what tls takes.
   return { headers: { Authorization: `Bearer ${pin.token}` }, ...tlsFor(pin) } as unknown as ClientOptions;
 }
@@ -60,7 +81,7 @@ export function dialOptions(url: string): ClientOptions {
 export async function getBytes(url: string, ms = 60_000): Promise<{ status: number; body: Buffer }> {
   const pin = pinFor(url);
   if (!pin) {
-    const r = await fetch(url, { signal: AbortSignal.timeout(ms) });
+    const r = await fetch(url, { signal: AbortSignal.timeout(ms), headers: keyHeaders(url) });
     return { status: r.status, body: Buffer.from(await r.arrayBuffer()) };
   }
   const u = new URL(url);

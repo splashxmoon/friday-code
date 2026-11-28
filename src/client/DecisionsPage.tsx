@@ -5,6 +5,7 @@ import type { Identity } from "./storage.js";
 import { GO_AHEAD_WORDS, type GoAhead } from "../guardrails.js";
 import { refreshTeam, useTeamNow } from "./Teammates.js";
 import "./spend.css";
+import "./decisions.css";
 
 /**
  * A crew mate's decisions (Arun, 2026-11-15: "Trust that grows. After a run of yeses on one kind of approval, offer 'Always allow

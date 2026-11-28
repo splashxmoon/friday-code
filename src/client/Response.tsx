@@ -135,6 +135,9 @@ export interface Step {
   /** What the agent was thinking when it took this step, and a way to ask it to explain. */
   thought?: string;
   onAsk?: () => void;
+  /** The call as the tool made it, for its card (run-line.tsx, the kit's Tool Call Card): its name, arguments, what it printed, when
+   *  it started and how long it took, where the log has them. */
+  call?: { name: string; args: Record<string, unknown>; output: string; startedAt: number; ms?: number };
 }
 
 const base = (p: string) => p.replace(/\\/g, "/").split("/").filter(Boolean).at(-1) ?? p;

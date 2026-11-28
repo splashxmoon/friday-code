@@ -1,3 +1,4 @@
+import { summaryNote } from "./compact.js";
 import { formatBytes, type ResolvedFile } from "../files.js";
 import { ENGINE_NAMES, MAIN_LANE, type Attachment, type PeerNote, type SessionEvent } from "../types.js";
 import { isRedo, withoutRewound } from "../rewind.js";
@@ -41,6 +42,11 @@ export interface ContextOptions {
   budget?: number;
   /** Durable notes, replayed in full however long the session gets. */
   memory?: { key: string; text: string }[];
+  /**
+   * An own model's compaction in force (agent/compact.ts): every event up to `upTo` is sent as `summary` instead, after the opening
+   * instruction. The events stay in the log.
+   */
+  compacted?: { upTo: number; summary: string; turns: number };
 }
 
 /** Characters, not tokens: an estimate that never needs a tokenizer. */
@@ -60,7 +66,11 @@ const DEFAULT_BUDGET = 320_000;
  *    explicit placeholder instead of breaking the conversation.
  */
 export function buildContext(allEvents: SessionEvent[], opts: ContextOptions = {}): ChatMessage[] {
-  const events = withoutRewound(opts.lane ? forLane(allEvents, opts.lane, new Set(opts.inherits ?? [])) : allEvents);
+  const all = withoutRewound(opts.lane ? forLane(allEvents, opts.lane, new Set(opts.inherits ?? [])) : allEvents);
+  // Compacted: the opening instruction, then the summary, then what came after it (instructions are kept to be looked up by seq).
+  const cut = opts.compacted;
+  const opening = cut ? all.find((e) => e.body.type === "instructions.delivered") : undefined;
+  const events = cut ? all.filter((e) => e.seq > cut.upTo || e === opening || e.body.type === "instruction") : all;
   const bySeq = new Map(events.map((e) => [e.seq, e]));
   const out: ChatMessage[] = [];
   const outstanding = new Set<string>();
@@ -82,8 +92,14 @@ export function buildContext(allEvents: SessionEvent[], opts: ContextOptions = {
     flushHeld();
   };
 
+  let summarised = false;
   for (const ev of events) {
     const b = ev.body;
+    if (cut && !summarised && ev.seq > cut.upTo) {
+      summarised = true;
+      closeOutstanding("[No result recorded: the step was interrupted.]");
+      note(summaryNote(cut.summary, cut.turns));
+    }
     switch (b.type) {
       case "instructions.delivered":
         for (const seq of b.seqs) {
@@ -296,8 +312,9 @@ function clamp(output: string, name = ""): string {
  * lands on a user message, which is always a safe boundary, and what was cut is
  * declared rather than silently vanishing.
  */
+const size = (m: ChatMessage) => (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content ?? "").length) + (m.role === "assistant" && m.tool_calls ? JSON.stringify(m.tool_calls).length : 0) + 40;
+
 function trim(msgs: ChatMessage[], budget: number): ChatMessage[] {
-  const size = (m: ChatMessage) => (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content ?? "").length) + 40;
   let total = msgs.reduce((n, m) => n + size(m), 0);
   if (total <= budget) return openOnUser(msgs);
 
@@ -328,7 +345,32 @@ function trim(msgs: ChatMessage[], budget: number): ChatMessage[] {
       (did.length ? ` In them you already ran: ${did.join(", ")}. Don't run those again to find out what they said — carry on from here, and if you need one of them back, run just that one.` : "") +
       ` Everything you saved with remember is below.`,
   };
-  return openOnUser([...msgs.slice(0, keepFirst), note, ...msgs.slice(cut)]);
+  return shorten(openOnUser([...msgs.slice(0, keepFirst), note, ...msgs.slice(cut)]), budget);
+}
+
+/**
+ * Still too big once every older turn is gone: one huge output (a whole log, a big file) in the turns kept. The biggest tool
+ * results are cut down to their start and end, saying what was cut, until it fits (own models' windows, window.ts): a request
+ * that can't fit isn't sent to fail. Nothing is cut while the old turns alone make the room.
+ */
+function shorten(msgs: ChatMessage[], budget: number): ChatMessage[] {
+  let over = msgs.reduce((n, m) => n + size(m), 0) - budget;
+  if (over <= 0) return msgs;
+  const out = msgs.slice();
+  const big = out
+    .map((m, i) => ({ i, n: m.role === "tool" && typeof m.content === "string" ? m.content.length : 0 }))
+    .filter((x) => x.n > 1_500)
+    .sort((a, b) => b.n - a.n);
+  for (const { i, n } of big) {
+    if (over <= 0) break;
+    const keep = Math.max(1_200, n - over - 200);
+    const text = out[i]!.content as string;
+    const head = Math.ceil(keep * 0.6);
+    const tail = keep - head;
+    out[i] = { ...out[i]!, content: `${text.slice(0, head)}\n\n[…${n - keep} characters cut from the middle of this output to fit the model's window. Read a specific part again if you need it.]\n\n${text.slice(-tail)}` } as ChatMessage;
+    over -= n - keep - 160;
+  }
+  return out;
 }
 
 /** The tool calls inside a stretch of turns, as short names a model can read. */

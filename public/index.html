@@ -17,6 +17,13 @@
       // Frosted glass (prefs.ts applyGlass): on before the first paint, so the window never flashes solid first.
       if (localStorage.getItem("mpa.glass") === "1") document.documentElement.classList.add("glass"), window.fridayDesktop && window.fridayDesktop.glassNative && document.documentElement.classList.add("glass-native");
     } catch (e) {}
+    // The fonts and KaTeX's stylesheet below are fetched beside the page (rel="preload") and become stylesheets once they
+    // arrive. Done from here, not an onload="" on each: the page's policy runs no inline handlers (page-csp.ts). A load
+    // doesn't bubble, so it is heard on its way down.
+    document.addEventListener("load", function (e) {
+      var l = e.target;
+      if (l && l.tagName === "LINK" && l.rel === "preload" && l.getAttribute("as") === "style") l.rel = "stylesheet";
+    }, true);
   </script>
   <script>
     // Asked while the app downloads rather than after it: the first screen needs who you are, your workspace and your
@@ -50,13 +57,13 @@
   <!-- Newsreader is the serif a Work document's headings are set in, inside the document only (DIRECTION.md §9.8, 2026-10-29).
        Fetched beside the page rather than before it: as a plain stylesheet a slow font host held back the first paint for
        seconds, a blank window. The text shows in the fallback font until these arrive (display=swap). -->
-  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&family=Inter:wght@400;500;600;700&family=Work+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..500&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&family=Inter:wght@400;500;600;700&family=Work+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..500&display=swap" />
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&family=Inter:wght@400;500;600;700&family=Work+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..500&display=swap" /></noscript>
   <!-- Tailwind + shadcn tokens (AI Elements), then any CSS the libraries bundle, then the app's own styles. -->
   <link rel="stylesheet" href="/tailwind.css" />
   <!-- Typeset maths in answers (KaTeX, the version the client bundles): fetched beside the page, like the fonts above, so it
        never holds back the first paint. -->
-  <link rel="preload" as="style" href="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'" />
+  <link rel="preload" as="style" href="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.css" crossorigin="anonymous" />
   <link rel="stylesheet" href="/app.css" />
   <link rel="stylesheet" href="/style.css" />
 </head>

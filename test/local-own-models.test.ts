@@ -73,7 +73,7 @@ test("on this computer, a session on your own model runs Friday Code on it, and 
     await rm(home, { recursive: true, force: true, maxRetries: 10 }).catch(() => {});
   });
   const call = async <T,>(p: string, json?: unknown): Promise<T> => {
-    const r = await fetch(`${friday.url}${p}`, { method: json === undefined ? "GET" : "POST", headers: { "Content-Type": "application/json", "x-friday-local": "1" }, ...(json === undefined ? {} : { body: JSON.stringify(json) }) });
+    const r = await fetch(`${friday.url}${p}`, { method: json === undefined ? "GET" : "POST", headers: { "Content-Type": "application/json", "x-friday-local": "1", "x-friday-key": friday.key }, ...(json === undefined ? {} : { body: JSON.stringify(json) }) });
     const text = await r.text();
     assert.ok(r.ok, `${p}: ${r.status} ${text}`);
     return JSON.parse(text) as T;

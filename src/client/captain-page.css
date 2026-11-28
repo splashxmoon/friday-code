@@ -1,0 +1,226 @@
+/* The Captain's page (CaptainPage.tsx): the conversation as a column on the left, borrowing the window's look (managers.css
+   .mgr-one-modal) without its size, and what it runs on the right under a row of tabs. One column when narrow. */
+.cpt-page { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--bg); }
+.cpt-page.cpt-empty { display: grid; place-items: center; color: var(--text-muted); font-size: 13px; }
+.cpt-talk { height: 100%; max-height: none; border-radius: 0; border-right: 1px solid var(--border); background: var(--card); overflow: hidden; display: flex; flex-direction: column; }
+.cpt-work { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.cpt-tabs { display: flex; gap: 2px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex: none; }
+.cpt-tab { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--text-muted); background: transparent; transition: background .15s, color .15s; }
+.cpt-tab:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.cpt-tab[aria-selected="true"] { color: var(--ink); background: var(--card); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / .05); }
+.cpt-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cpt-pane { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 20px; }
+.cpt-soon { margin: 40px auto; max-width: 360px; text-align: center; color: var(--text-muted); font-size: 13px; }
+@media (max-width: 760px) {
+  .cpt-page { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; }
+  .cpt-talk { height: 70vh; border-right: 0; border-bottom: 1px solid var(--border); }
+}
+
+/* In the window's band (desktop): the Captain's header on the left half and the tabs on the right, on the row of the traffic
+   lights, as a session's header is; the page starts under the band's line, level with the sidebar's. */
+.cpt-page.in-band .cpt-work { padding-top: 0; }
+#band-left .mgr-p-head.in-band { display: flex; align-items: center; gap: 9px; min-width: 0; height: 100%; padding: 0; border: 0; background: none; }
+#band-left .mgr-p-head.in-band .mgr-p-id { display: flex; align-items: center; gap: 9px; min-width: 0; }
+#band-left .mgr-p-head.in-band .mgr-p-name { font-size: 13px; font-weight: 500; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#band-slot .cpt-tabs { padding: 0; border: 0; gap: 2px; }
+#band-slot .cpt-tab { height: 26px; }
+:is(#band-left, #band-slot) :is(.mgr-p-head.in-band, .cpt-tabs) :is(button, a) { -webkit-app-region: no-drag; }
+.cpt-stack { display: flex; flex-direction: column; gap: 16px; align-items: center; }
+.cpt-stack > * { width: 100%; max-width: 720px; }
+/* The newest thread's Diff Timeline fills the pane (its 20px padding the same above and below); any others follow under it. */
+.cpt-stack:has(> .dtl[data-fill]) { height: 100%; }
+.cpt-stack > .dtl[data-fill] { flex: none; }
+.cpt-pane > .viz-empty { margin: 40px auto; max-width: 380px; text-align: center; color: var(--text-muted); font-size: 13px; }
+/* The recap sizes its lanes by its own width (a container), so it has no width of its own to give: it takes the pane's. */
+/* Activity: the recap over each agent's changes, one centred column (Arun, 2026-11-27: "integrate the recap and changes into one page"). */
+.cpt-activity { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.cpt-activity > * { width: 100%; max-width: 1100px; }
+.cpt-activity > .arc { min-width: 0; overflow: hidden; }
+.cpt-activity > .cpt-stack > * { max-width: none; }
+.cpt-activity > .viz-empty { text-align: center; color: var(--text-muted); font-size: 13px; margin: 8px 0; }
+/* Agents: its tools over the tree. */
+.cpt-tools { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 4px; }
+.cpt-cost { overflow: hidden; border-radius: 14px; }
+/* With the band's left half on a row of its own (the sidebar folded), the page starts under it (CaptainPage.tsx measures it). */
+.cpt-page { padding-top: var(--cpt-top, 0px); }
+
+/* Agents: the tree over a panel that rises from the foot (CrewPanel): folded a bar of totals, open the lower part of the tab. */
+.cpt-crew { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; }
+/* Its scrollbar's room kept whether or not it scrolls: the tree lays out by its width (one row of cards, or a column when they'd be
+   squeezed), and a scrollbar coming and going with the column changed that width and could flip the layout back and forth. */
+/* The tree scrolls under the bottom panel without a bar of its own (Arun, 2026-11-27: "make sure there is no vertical scroll bar when
+   the bottom panel is open"); with no bar there's no width for it to take, so the tree's layout can't flip as it comes and goes. */
+.cpt-crew-tree { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; }
+/* Room for the tree bar's 24px buttons over its 20px line, inside the scroller (it clipped Resume's top edge, Arun, 2026-11-28), taken back outside so nothing moves. */
+.cpt-crew-tree { padding-top: 2px; margin-top: -2px; }
+.cpt-crew-tree::-webkit-scrollbar { display: none; }
+.cpt-pane:has(> .cpt-crew) { padding-bottom: 0; overflow: hidden; }
+.crew-panel { flex: none; margin: 0 -20px; border-top: 1px solid var(--border); background: var(--card); display: flex; flex-direction: column; height: 44px; transition: height .32s cubic-bezier(.32, .72, .24, 1); }
+.crew-panel.open { height: min(62%, 640px); box-shadow: 0 -12px 30px -18px rgb(0 0 0 / .35); }
+.crew-bar { flex: none; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px 0 16px; }
+.crew-tabs { display: flex; gap: 2px; }
+.crew-tab { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--text-muted); }
+.crew-tab:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.crew-tab[aria-selected="true"] { color: var(--ink); background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.crew-n { font-size: 11.5px; font-weight: 500; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.crew-n .add { color: var(--green); font-weight: 500; }
+.crew-n .del { color: var(--red); font-weight: 500; }
+.crew-grow { flex: 1; }
+.crew-fold { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: var(--text-muted); transition: transform .3s cubic-bezier(.22, 1, .36, 1); }
+.crew-fold:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.crew-panel.open .crew-fold { transform: rotate(180deg); }
+.crew-body { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 4px 16px 16px; }
+.crew-body > .cpt-stack { height: 100%; }
+.crew-body > .viz-empty { margin: 24px auto; text-align: center; color: var(--text-muted); font-size: 13px; }
+/* The recap's dialog: a block, so the recap (an inline-size container, with no width of its own to give) takes the dialog's whole
+   width; as a grid track it shrank to its padding and the dialog to nothing, only the dimmed page showing. Scrolls when tall. */
+.cpt-recap { display: block; overflow-x: hidden; overflow-y: auto; border-radius: 16px; }
+.cpt-recap > .arc { width: 100%; box-shadow: none; }
+/* Its counts stop short of the dialog's close button, which sat over "0 failed". */
+.cpt-recap .arc-head { padding-right: 36px; }
+/* The header's three buttons, on the right of the window's band. */
+.cpt-ib { display: inline-grid; place-items: center; width: 30px; height: 28px; border-radius: 7px; color: var(--text-muted); }
+.cpt-ib:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.cpt-ib.on { color: var(--ink); }
+#band-slot .cpt-tabs { gap: 2px; }
+:is(#band-slot) .cpt-ib { -webkit-app-region: no-drag; }
+/* The bottom panel's height is dragged by its top edge; no easing while it is. */
+.crew-panel { position: relative; }
+.crew-resize { position: absolute; left: 0; right: 0; top: -4px; height: 8px; cursor: row-resize; z-index: 5; }
+.crew-resize::after { content: ""; position: absolute; left: 0; right: 0; top: 3.5px; height: 1px; background: transparent; transition: background .15s; }
+.crew-resize:hover::after, html.cpt-dragging-y .crew-resize::after { background: var(--accent, #3b82f6); }
+html.cpt-dragging-y .crew-panel { transition: none; }
+.cpt-tree-bar { display: flex; align-items: center; height: 28px; }
+
+/* Empty states (Arun, 2026-11-27: "design better empty states ... creative and professional ... my design language"): the shape of
+   what will be here, drawn in hairlines and dashes on the page, in monochrome; only the Captain's own face has colour. */
+.cpt-ghost { display: flex; flex-direction: column; align-items: center; padding-top: 24px; color: var(--text-muted); }
+.cpt-ghost-lead { display: flex; align-items: center; gap: 8px; width: 216px; padding: 10px; border-radius: 10px; background: var(--card); box-shadow: var(--shadow-xs, 0 0 0 1px var(--border)), 0 0 0 1px var(--border); }
+.cpt-ghost-who { display: grid; line-height: 1.25; }
+.cpt-ghost-who b { font-size: 13px; font-weight: 500; color: var(--ink); }
+.cpt-ghost-who span { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; }
+.cpt-ghost-lines { display: block; width: 376px; height: 40px; overflow: visible; }
+.cpt-ghost-lines path { fill: none; stroke: var(--border-strong, var(--border)); stroke-width: 1.25; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
+.cpt-ghost-row { display: flex; gap: 8px; }
+.cpt-ghost-card { display: grid; grid-template-columns: 18px 1fr; align-items: center; gap: 6px 8px; width: 120px; padding: 9px 10px; border-radius: 10px; border: 1px dashed var(--border-strong, var(--border)); }
+.cpt-ghost-card i { width: 18px; height: 18px; border-radius: 5px; background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.cpt-ghost-card span { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.cpt-ghost-card em { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.cpt-ghost-card em.short { width: 60%; }
+.cpt-ghost-t { margin: 22px 0 4px; font-size: 14px; font-weight: 500; color: var(--ink); letter-spacing: -.01em; }
+.cpt-ghost-s { margin: 0; max-width: 340px; text-align: center; font-size: 12.5px; line-height: 1.5; }
+.cpt-zero { display: flex; flex-direction: column; align-items: center; padding: 28px 16px; color: var(--text-muted); }
+.cpt-zero-art { width: 240px; height: 72px; margin-bottom: 14px; }
+.cpt-zero-art path { fill: none; vector-effect: non-scaling-stroke; }
+.cpt-zero-art .grid { stroke: var(--border); stroke-dasharray: 2 4; }
+.cpt-zero-art .base { stroke: var(--border-strong, var(--border)); }
+.cpt-zero-art .add { stroke: color-mix(in srgb, var(--ink) 22%, transparent); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.cpt-zero-art .del { stroke: color-mix(in srgb, var(--ink) 12%, transparent); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.cpt-zero-art .bar { fill: none; stroke: var(--border-strong, var(--border)); stroke-dasharray: 3 3; }
+.cpt-zero-t { margin: 0 0 4px; font-size: 14px; font-weight: 500; color: var(--ink); letter-spacing: -.01em; }
+.cpt-zero-s { margin: 0; max-width: 360px; text-align: center; font-size: 12.5px; line-height: 1.5; }
+
+/* The empty Changes and Cost fill the panel's body, centred up and down; a panel dragged low drops the drawing and keeps the words
+   whole (at its 160px least, the title and line were cut off under the drawing). */
+.crew-body { container: crew-body / size; }
+.crew-body > .cpt-zero { box-sizing: border-box; min-height: 100%; justify-content: center; padding-block: 12px; }
+@container crew-body (max-height: 230px) { .cpt-zero-art { display: none; } }
+/* The Recap button in the crew tree's bar: as tall as the counts' chips beside it allow, not a 26px button in a 20px row. */
+:is(.viz-tree-head, .cpt-tree-bar) > .cch-btn, .viz-tree-head .cch-btn { height: 24px; margin-block: -2px; padding: 0 8px 0 6px; }
+
+/* The bottom panel's bar: Changes and Cost, whose work (All, the Captain, each agent: a strip that scrolls with no bar showing),
+   and the chevron (CrewPanel). */
+.crew-bar { gap: 12px; }
+.crew-who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); }
+.crew-who::-webkit-scrollbar { display: none; }
+.crew-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 13px; font-size: 12px; font-weight: 500; color: var(--text-muted); white-space: nowrap; }
+.crew-chip:has(.crew-chip-face) { padding-left: 4px; }
+.crew-chip:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.crew-chip.on { color: var(--ink); background: var(--card); box-shadow: 0 0 0 1px var(--border-strong, var(--border)), 0 1px 2px rgb(0 0 0 / .06); }
+.crew-chip-face { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 6px; overflow: hidden; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.crew-chip:focus-visible, .crew-row:focus-visible { outline: 2px solid var(--border-focus, var(--accent)); outline-offset: 1px; }
+.crew-fold { flex: none; }
+
+/* Its body: the waterfall or one agent's timeline fills it edge to edge, its own rows the one scroll; the crew's rows scroll in it. */
+.crew-body.flush { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.crew-body.flush > * { flex: 1; min-height: 0; }
+.crew-body.flush > .cwf-panel { display: flex; flex-direction: column; border-radius: 0; box-shadow: none; background: transparent; }
+.cwf-panel .cwf-rows { max-height: none; flex: 1; min-height: 0; }
+.cwf-panel .cwf-head { min-height: 44px; }
+.cwf-row.cwf-focus { background: color-mix(in srgb, var(--ink) 6%, transparent); box-shadow: inset 2px 0 0 var(--ink); }
+.crew-body.flush > .crew-dtl { border-radius: 0; box-shadow: none; }
+
+/* Changes, the whole crew: a row an agent, what it touched, its lines in and out on a bar scaled to the busiest, when it last edited. */
+.crew-rows { list-style: none; margin: 0; padding: 4px 0 8px; display: grid; gap: 2px; }
+.crew-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 64px 92px minmax(60px, 160px) 64px; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 6px 10px; border-radius: 9px; text-align: left; color: var(--ink); }
+.crew-row:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.crew-row-face { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; overflow: hidden; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.crew-row-who { display: grid; min-width: 0; line-height: 1.25; }
+.crew-row-who b { font-size: 12.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crew-row-who span { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; }
+.crew-row-files, .crew-row-at { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.crew-row-at { text-align: right; }
+.crew-row-n { font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.crew-row-n .add { color: var(--green); font-weight: 500; }
+.crew-row-n .del { color: var(--red); font-weight: 500; }
+.crew-row-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.crew-row-bar .add { background: var(--green); }
+.crew-row-bar .del { background: var(--red); }
+@container crew-body (max-width: 560px) {
+  .crew-row { grid-template-columns: 24px minmax(0, 1fr) 92px; }
+  .crew-row-files, .crew-row-bar, .crew-row-at { display: none; }
+}
+
+/* Motion as the rest of the app (style.css :root: --t-hover 120ms for hovers, --t-open 180ms for things opening, --t-move 240ms for
+   things that travel, one curve --ease-out; dialogs rise 4px with r5-rise): the page's own durations and curves (.32s, .36s, .42s, a
+   springy cubic) brought onto them (Arun, 2026-11-27: "MAKE SURE YOU ARE USING THE PROPER ANIMATIONS ... LIKE I HAVE THROUGHOUT MY
+   APP"). Live things keep their pulse; reduced motion is the app's own switch (style.css html.reduce-motion, the OS preference). */
+.crew-panel { transition: height var(--t-move) var(--ease-out); }
+.crew-fold { transition: transform var(--t-open) var(--ease-out), background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out); }
+.crew-tab, .crew-chip, .crew-row, .cpt-ib { transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out), box-shadow var(--t-hover) var(--ease-out); }
+.crew-resize::after { transition: background-color var(--t-hover) var(--ease-out); }
+.cpt-page .viz-tree-card { animation: r5-rise var(--t-open) var(--ease-out) backwards; transition: box-shadow var(--t-hover) var(--ease-out), opacity var(--t-hover) var(--ease-out), transform var(--t-move) var(--ease-out); }
+.cpt-page .viz-tree-wire { animation-duration: var(--t-open); animation-timing-function: var(--ease-out); }
+.cpt-page .viz-tree-chev { transition: transform var(--t-open) var(--ease-out); }
+.cpt-page .viz-tree-fold, .cpt-page .viz-tree-flag { transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out); }
+.crew-body .dtl-lines { transition: opacity var(--t-open) var(--ease-out); }
+.crew-body .dtl-bar { transition: width var(--t-move) var(--ease-out); animation-duration: var(--t-move); animation-timing-function: var(--ease-out); }
+.crew-body .dtl-piece { transition-duration: var(--t-move); transition-timing-function: var(--ease-out); animation-duration: var(--t-move); }
+/* The "Like Friday?" star ask stays off the Captain's page: it sat over the bottom panel's Changes (DoneToasts.tsx .star-ask). */
+html:has(.cpt-page) .star-ask { display: none; }
+.crew-lane { flex: none; }
+
+/* Start / Resume and Stop at the tree bar's right end (2026-11-28). */
+.cpt-tree-bar { gap: 8px; }
+.cpt-ctl { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.cpt-ctl .cch-btn { height: 24px; margin-block: -2px; padding: 0 9px 0 7px; transition: background var(--t-hover) var(--ease-out), box-shadow var(--t-hover) var(--ease-out), opacity var(--t-hover) var(--ease-out); }
+.cpt-ctl .cch-btn:disabled { cursor: default; background: transparent; }
+.cpt-ctl-err { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--red); }
+.cpt-ctl-pop { position: absolute; top: calc(100% + 8px); right: 0; z-index: 20; width: 288px; padding: 14px; border-radius: 10px; background: var(--card); box-shadow: 0 0 0 1px var(--border), 0 12px 32px -8px rgb(0 0 0 / .35); animation: cpt-pop var(--t-open) var(--ease-out); }
+@keyframes cpt-pop { from { opacity: 0; transform: translateY(-4px); } }
+/* A narrow tree (the chat open on a small window): the bar's count gives way first, then Start and Stop go to their icons. */
+.viz-tree-head:has(.cpt-ctl) { container-type: inline-size; min-width: 0; }
+.viz-tree-head:has(.cpt-ctl) .viz-tree-meta { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+@container (max-width: 470px) { .cpt-ctl-l { display: none; } .cpt-ctl .cch-btn { padding: 0 6px; } .viz-tree-head .viz-tree-total { display: none; } }
+/* The Recap page fills the crew's pane edge to edge. */
+.cpt-pane:has(> .crp) { position: relative; padding: 0; overflow: hidden; }
+/* The Stop popover (Arun, 2026-11-28: "design this better"): what it asks, the steps it's about, one clear way, then the others. */
+.cpt-pop-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.cpt-pop-head strong { font-size: 13px; font-weight: 600; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cpt-pop-ic { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
+.cpt-pop-text { margin: 0 0 8px; font-size: 12.5px; line-height: 18px; color: var(--text-muted); }
+.cpt-pop-list { list-style: none; margin: 0 0 12px; padding: 6px 8px; border-radius: 8px; background: var(--hover); display: grid; gap: 2px; }
+.cpt-pop-list li { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 12.5px; line-height: 20px; color: var(--ink); }
+.cpt-pop-list li > svg { flex: none; color: var(--green); }
+.cpt-pop-list li > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cpt-pop-list li > em { flex: none; font-style: normal; font-size: 11.5px; color: var(--faint); }
+.cpt-pop-list li.more { color: var(--faint); padding-left: 19px; }
+.cpt-ctl-pop .cpt-pop-main { width: 100%; justify-content: center; height: 30px; }
+.cpt-pop-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+.cpt-pop-row .cch-btn { justify-content: center; height: 28px; }
+.cpt-ctl-pop .cpt-pop-danger { color: var(--red); }
+.cpt-ctl-pop .cpt-pop-danger:hover { background: color-mix(in srgb, var(--red) 10%, transparent); }
+.cpt-ctl-pop .cpt-pop-main { background: var(--accent); color: var(--on-accent); box-shadow: none; font-weight: 500; }
+.cpt-ctl-pop .cpt-pop-main:hover { background: color-mix(in srgb, var(--accent) 88%, var(--bg)); }
+/* Changes: everyone's work as one timeline, or a row an agent. */
+.crew-seg { flex: none; display: inline-flex; align-items: center; gap: 2px; }

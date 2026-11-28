@@ -19,6 +19,10 @@ test("a computer's pairing link says where the other Friday is and which certifi
   assert.equal(parseComputerLink("not a link"), null);
   // Tailscale-only: plain http, which Tailscale encrypts itself.
   assert.equal(parseComputerLink("friday://computer?h=100.88.1.2&p=4390&c=7WYNQBCA&s=http")?.hub.scheme, "http");
+  // Plain HTTP only where Tailscale already encrypts: a Wi-Fi address or a .local name would send the code and token in the clear.
+  assert.equal(parseComputerLink("friday://computer?h=192.168.1.180&p=4390&c=7WYNQBCA&s=http"), null);
+  assert.equal(parseComputerLink("friday://computer?h=100.63.1.2,100.128.0.1,studio.local,evil.com&p=4390&c=7WYNQBCA&s=http"), null);
+  assert.deepEqual(parseComputerLink("friday://computer?h=192.168.1.180,100.88.1.2,studio.local,studio.tail1234.ts.net,fd7a:115c:a1e0::1&p=4390&c=7WYNQBCA&s=http")?.hub.addresses, ["100.88.1.2", "studio.tail1234.ts.net", "fd7a:115c:a1e0::1"]);
 });
 
 test("another computer reaches its link, its agents' runners and a turn's files: nothing a phone or a page reaches", () => {

@@ -91,6 +91,8 @@ export interface Need {
   why: string;
   /** For the page only: an approval's command, a review's link. */
   command?: boolean;
+  /** What a yes with "Always allow" ticked adds to the session's allow list (command-allow.ts alwaysOffer): only on its owner's commands. */
+  always?: string[];
   url?: string;
   /** A coding tool's numbered questions, each with its lettered choices: drawn as its own answer card's rows (audit CREW-17). */
   asks?: { question: string; options: { key: string; label: string; detail?: string }[] }[];

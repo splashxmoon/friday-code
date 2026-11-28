@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { tickEvery } from "./presence.js";
 import { ChevronDownIcon } from "lucide-react";
@@ -187,16 +187,17 @@ function SubRow({ r, now, open, onToggle, onJump }: { r: SubagentRow; now: numbe
  * collapses down when it is all done"): open while any works, folded when none does, and the head opens or folds it by hand,
  * which then stays as it was put.
  */
-export function Subagents({ rows }: { rows: SubagentRow[] }) {
+export function Subagents({ rows, lead }: { rows: SubagentRow[]; /** The agent that sent them off: the crew's lead. */ lead?: { name: string; tool?: EngineTool } }) {
   const t = tallyOf(rows);
   const now = useNow(t.working > 0);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [tree, setTree] = useState(false);
   const [shown, setShown] = useState<boolean | null>(null);
   const listId = useId();
   if (!rows.length) return null;
   const expanded = shown ?? t.working > 0;
   return (
-    <section className="subs" data-open={expanded} aria-label={`${rows.length} subagent${rows.length === 1 ? "" : "s"}: ${t.text}`}>
+    <section className="subs" data-open={expanded} data-crew={(expanded && !!lead) || undefined} aria-label={`${rows.length} subagent${rows.length === 1 ? "" : "s"}: ${t.text}`}>
       <button type="button" className="subs-head" aria-expanded={expanded} aria-controls={listId} title={expanded ? "Fold" : "Show each subagent"} onClick={() => setShown(!expanded)}>
         <span className="subs-icon" aria-hidden="true">
           <Icon name="gitFork" size={14} />
@@ -206,7 +207,19 @@ export function Subagents({ rows }: { rows: SubagentRow[] }) {
         {rows.length > 1 && <TallyBar rows={rows} />}
         <ChevronDownIcon className="subs-chev size-3.5" aria-hidden="true" />
       </button>
-      {expanded && (
+      {expanded && lead && (
+        <button type="button" className="subs-view in-card" aria-pressed={tree} aria-label={tree ? "Show as a list" : "Show as a crew"} title={tree ? "As a list" : `As a crew: ${lead.name} over what it sent off`} onClick={() => setTree(!tree)}>
+          <Icon name={tree ? "list" : "diagram"} size={13} />
+        </button>
+      )}
+      {expanded && lead && tree && (
+        <div className="subs-crew">
+          <Suspense fallback={null}>
+            <ReplyCrew rows={rows} lead={lead} />
+          </Suspense>
+        </div>
+      )}
+      {expanded && !(lead && tree) && (
         <ol id={listId} className="subs-list">
           {rows.map((r) => (
             <SubRow key={r.key} r={r} now={now} open={!!open[r.key]} onToggle={() => setOpen((o) => ({ ...o, [r.key]: !o[r.key] }))} />
@@ -216,6 +229,10 @@ export function Subagents({ rows }: { rows: SubagentRow[] }) {
     </section>
   );
 }
+
+/** Every agent's subagents as a crew, each agent over what it sent off (agent-viz/places.tsx, Agent Crew): loaded when picked. */
+const SessionCrew = lazy(() => import("./components/agent-viz/places.js").then((m) => ({ default: m.SessionCrew })));
+const ReplyCrew = lazy(() => import("./components/agent-viz/places.js").then((m) => ({ default: m.ReplyCrew })));
 
 /** Scrolls the conversation to the reply that sent a subagent off, and lets it flash, as the Jump menu does. */
 export function jumpTo(seq: number) {
@@ -244,6 +261,7 @@ export function SubagentsTray({ tasks, slot, agentOf }: { tasks: SubTask[]; slot
   const now = useNow(t.working > 0);
   const [open, setOpen] = useState(false);
   const [more, setMore] = useState<Record<string, boolean>>({});
+  const [tree, setTree] = useState(false);
   const [pos, setPos] = useState<{ left: number; bottom: number; maxHeight?: number }>({ left: 16, bottom: 52 });
   const at = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -300,8 +318,18 @@ export function SubagentsTray({ tasks, slot, agentOf }: { tasks: SubTask[]; slot
             <b>Subagents</b>
             <span>{t.text}</span>
             {rows.length > 1 && <TallyBar rows={rows} />}
+            <button type="button" className="subs-view" aria-pressed={tree} aria-label={tree ? "Show as a list" : "Show as a crew"} title={tree ? "As a list" : "As a crew: each agent over its subagents"} onClick={() => setTree(!tree)}>
+              <Icon name={tree ? "list" : "diagram"} size={13} />
+            </button>
           </header>
-          <div className="subs-pop-body">
+          {tree && (
+            <div className="subs-pop-body subs-crew">
+              <Suspense fallback={null}>
+                <SessionCrew tasks={subs} agentOf={agentOf} onJump={(seq) => (setOpen(false), jumpTo(seq))} />
+              </Suspense>
+            </div>
+          )}
+          <div className="subs-pop-body" hidden={tree}>
             {lanes.map(({ lane, list }) => {
               const a = agentOf(lane);
               return (

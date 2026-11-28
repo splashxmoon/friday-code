@@ -247,6 +247,41 @@ test("one tap answers in the right place; an edit sends your words; an item answ
   assert.equal((r as { status: number }).status, 404);
 });
 
+test("Always allow from the Board: offered on its owner's commands only, and a yes puts the commands on the allow list before it runs them", async () => {
+  const s = session("s1", { approvals: {}, lanes: [{ id: "l1", name: "Kit" }], laneDrivers: { l1: ME }, options: { agent: null, allow: ["npm test*"] } } as unknown as Partial<SessionState>);
+  s.approvals = { l1: { id: "ap7", seq: 20, scope: "commands", items: ["npm run build", "npm test"] } };
+  const { q, sent, live } = queue([s]);
+  const [ap] = (await q.list(ME, "w1")).filter((i) => i.kind === "approval");
+  // What a yes would add, as the thread's card's box adds it (a known tool's command and what follows it), once each.
+  assert.deepEqual(ap!.always, ["npm run build*", "npm test*"]);
+  assert.deepEqual(await q.answer(ME, "w1", ap!.id, "yes", false, true), { ok: true, said: "Run it" });
+  assert.deepEqual(sent.slice(-2), [
+    { sid: "s1", cmd: { type: "settings.update", allow: ["npm test*", "npm run build*"] } },
+    { sid: "s1", cmd: { type: "approval.answer", lane: "l1", id: "ap7", approve: true } },
+  ]);
+  // A no with the box ticked is a no: the list is left alone.
+  const before = sent.length;
+  live.set("s1", { ...s, approvals: { l1: { id: "ap8", seq: 21, scope: "commands", items: ["rm -rf build"] } } } as unknown as SessionState);
+  const [no] = (await q.list(ME, "w1")).filter((i) => i.kind === "approval");
+  assert.ok((await q.answer(ME, "w1", no!.id, "no", false, true)).ok);
+  assert.deepEqual(sent.slice(before), [{ sid: "s1", cmd: { type: "approval.answer", lane: "l1", id: "ap8", approve: false } }]);
+  // Not the session's owner, a teammate's go-ahead or a whole turn: not offered, and a yes asked to keep it is refused unrun.
+  const editor = session("s2", { ownerId: "u-sam", members: { [ME.id]: { name: ME.name, role: "editor" }, "u-sam": { name: "Sam", role: "owner" } }, lanes: [{ id: "l1", name: "Kit" }], laneDrivers: { l1: ME } } as unknown as Partial<SessionState>);
+  editor.approvals = { l1: { id: "ap1", seq: 20, scope: "commands", items: ["npm test"] } };
+  const guarded = session("s3", { lanes: [{ id: "l1", name: "Kit" }], laneDrivers: { l1: ME } } as unknown as Partial<SessionState>);
+  guarded.approvals = { l1: { id: "ap2", seq: 20, scope: "commands", items: ["npm publish"], guard: "ship" } };
+  const turn = session("s4", { lanes: [{ id: "l1", name: "Kit" }], laneDrivers: { l1: ME } } as unknown as Partial<SessionState>);
+  turn.approvals = { l1: { id: "ap3", seq: 20, scope: "turn", items: [] } };
+  const others = queue([editor, guarded, turn]);
+  const asked = (await others.q.list(ME, "w1")).filter((i) => i.kind === "approval");
+  assert.equal(asked.length, 3);
+  assert.ok(asked.every((i) => i.always === undefined));
+  const r = await others.q.answer(ME, "w1", asked.find((i) => i.id.startsWith("s2"))!.id, "yes", false, true);
+  assert.equal(r.ok, false);
+  assert.equal((r as { status: number }).status, 403);
+  assert.equal(others.sent.length, 0);
+});
+
 test("Not now puts it off for this person only, kept as put off rather than gone while it still waits (audit CREW-6)", async () => {
   const { q } = queue([session("s1", { openQuestions: question() })]);
   const [it] = await q.list(ME, "w1");

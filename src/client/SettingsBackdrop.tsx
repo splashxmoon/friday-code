@@ -14,9 +14,8 @@ import { addJob, jobOfDraft, JobCard, openSession, useJobs } from "./backdrop-jo
 import { startSession } from "./start-session.js";
 import type { Identity } from "./storage.js";
 import { MenuButton } from "./ui.js";
-import { Choice, Note, SettingsGroup, SettingsRow as Row } from "@/components/dass";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { Note, SettingsGroup, SettingsRow as Row } from "@/components/dass";
+import { Button, Switch, Choice } from "./settings-kit.js";
 
 const IDEAS = ["A slow ocean at night", "Rain running down a window", "Soft aurora over snow", "Paper and ink", "Warm sunset haze", "Stars drifting past"];
 /** For changing one: the changes people ask of a backdrop most. */

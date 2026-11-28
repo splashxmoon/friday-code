@@ -1,0 +1,32 @@
+/* A crew mate's decisions (DecisionsPage.tsx), on the kit's decision inbox and lists: section labels as the kit's small capitals,
+   what it may do on its own as removable tags, the filter as a segmented tray, and the log as 44px two-line rows in one card,
+   each answer a status chip (green allowed, red denied, amber waiting) in front of what was asked. */
+html .sp.dc .sp-head h3 { font-size: 15px; line-height: 24px; font-weight: 500; letter-spacing: 0; }
+html .sp.dc .sp-sec h4 { margin: 8px 0 0; font: 500 10px/16px var(--font); letter-spacing: .5px; text-transform: uppercase; color: var(--text-muted); }
+html .sp.dc .sp-quiet, html .sp.dc .sp-err { font-size: 13px; line-height: 20px; }
+html .sp.dc .sp-note { font-size: 12px; line-height: 16px; }
+
+/* On its own: tags, 24px at radius 6 on a soft tint with a half-pixel ring, their × a 16px square. */
+html .sp.dc .dc-trust li { height: 24px; gap: 2px; padding: 0 3px 0 8px; border: 0; border-radius: 6px; background: var(--ch-f6, var(--hover)); box-shadow: inset 0 0 0 .5px var(--border); font-size: 12px; line-height: 16px; font-weight: 500; color: var(--ink); }
+html .sp.dc .dc-trust button { width: 18px; height: 18px; border-radius: 4px; transition: background-color .14s ease, color .14s ease; }
+html .sp.dc .dc-trust button:hover { background: var(--ch-glow, var(--hover)); }
+
+/* The filter: the kit's segmented tray, the chosen one raised on the card's surface and ring. */
+html .sp.dc .sp-why { gap: 0; padding: 2px; border-radius: 8px; background: var(--ch-f3, var(--hover)); box-shadow: inset 0 0 0 .5px var(--border); }
+html .sp.dc .sp-why button { height: 24px; padding: 0 10px; border-radius: 6px; font: 500 12.5px/20px var(--font); color: var(--ink-2); transition: background-color .16s ease, color .16s ease, box-shadow .16s ease; }
+html .sp.dc .sp-why button:hover { background: none; color: var(--ink); }
+html .sp.dc .sp-why button[aria-checked="true"] { background: var(--card); color: var(--ink); box-shadow: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .06); }
+html .sp.dc .dc-n { margin-left: 5px; color: var(--faint); font-size: 11px; }
+
+/* The log: one card at radius 10 on the kit's card edge; rows 44px, two lines. */
+html .sp.dc .sp-runs { border-radius: 10px; box-shadow: var(--aui-shadow-card, inset 0 0 0 1px var(--border)); }
+html .sp.dc .dc-row { grid-template-columns: 92px minmax(0, 1fr); min-height: 44px; gap: 10px; padding: 6px 12px; }
+html .sp.dc .sp-run-ask { font-size: 13px; line-height: 20px; }
+html .sp.dc .sp-run-meta { font-size: 12px; line-height: 16px; color: var(--text-muted); }
+html .sp.dc .dc-tag { font-weight: 500; color: var(--ink); }
+html .sp.dc .dc-row code { padding: 0 4px; border-radius: 4px; background: var(--ch-f6, var(--hover)); font: 12px/18px var(--mono); color: var(--ink-2); }
+/* The answer: a chip, 18px at radius 5, its words in the state's colour on a tint of it. */
+html .sp.dc .dc-answer { height: 18px; padding: 0 6px; border-radius: 5px; background: var(--ch-f6, var(--hover)); font-size: 11px; line-height: 18px; font-weight: 500; color: var(--ink-2); }
+html .sp.dc .dc-answer.allowed, html .sp.dc .dc-answer.trusted { background: color-mix(in srgb, var(--green) 12%, transparent); color: color-mix(in srgb, var(--green) 80%, var(--ink)); }
+html .sp.dc .dc-answer.denied { background: color-mix(in srgb, var(--red) 12%, transparent); color: color-mix(in srgb, var(--red) 82%, var(--ink)); }
+html .sp.dc .dc-answer.waiting { background: color-mix(in srgb, var(--amber) 16%, transparent); color: color-mix(in srgb, var(--amber) 72%, var(--ink)); }

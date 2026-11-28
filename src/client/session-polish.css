@@ -1,0 +1,100 @@
+/* An open coding session, to the measured affectUI system (scratchpad SPEC.md: Response Stream, AI Answer, Message Actions, Code
+   Block, Agent Plan), in Friday's own tokens: user bubbles, the answer's headings, chips, tables and code, the actions under it, the
+   change card's buttons, the side panel's rows and the to-do list. app.css loads before style.css, whose rules for these carry
+   !important in places, so each rule here is scoped under .session-view and keeps !important where the one it takes over had it.
+   Kept as Friday has them, by recorded calls: the 14/22 reading size of answers and bubbles (the type direction, 2026-10-29) and the
+   message box's 14px words, 30px controls and 32px send (Arun, 2026-11-16, design A: "A"). Buttons and chips are rounded squares,
+   never pills (Arun, 2026-11-14). */
+
+/* ── A person's message: a card with a hairline ring and a tucked corner where it leans in, not a grey fill (Response Stream). */
+.session-view .group.is-user:not(.human-other) .msg-bubble {
+  padding: 8px 12px !important; border-radius: 12px 12px 4px 12px !important;
+  background: var(--card) !important; box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / .04);
+}
+.session-view .msg-meta { line-height: 16px; }
+
+/* ── The agent's answer: names and headings at 500, the measured steps (title 15/24, item 14/20), bold lead-ins at 500. */
+.session-view .rsp-who { font-weight: 500; }
+.session-view .rsp-answer :is(h1, h2) { margin-bottom: 6px; font-size: 15px; line-height: 24px; font-weight: 500; letter-spacing: 0; }
+.session-view .rsp-answer h3 { margin-bottom: 4px; font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0; }
+.session-view .rsp-answer :is(h4, h5, h6) { font-size: 12px; line-height: 16px; font-weight: 500; }
+.session-view .rsp-answer :is(strong, b, .font-semibold) { font-weight: 500; }
+.session-view .rsp-answer :is(ul, ol):not(.steps) { padding-left: 18px; }
+
+/* A file named in the answer: a quiet tinted chip in the line (Collaboration Stream's attachment chip), 20 tall, radius 5, no frame,
+   the path in mono at 12 with no second box round it. */
+.session-view .rsp-answer .file-chip {
+  height: 20px; gap: 4px; padding: 0 6px 0 5px; vertical-align: -4px; border: 0; border-radius: calc(var(--r-sm) - 1px);
+  background: var(--hover); color: var(--ink-2); line-height: 20px;
+}
+.session-view .rsp-answer .file-chip:hover { background: var(--hover-strong); color: var(--ink); }
+.session-view .rsp-answer .file-chip code { padding: 0; border: 0; background: none; color: inherit; font: 400 12px/20px var(--mono); }
+.session-view .rsp-answer .file-chip .file-icon { width: 12px; height: 12px; }
+
+/* A table of figures: 40px rows at 13/400, a 36px head at 12/500 in the muted ink (Data Table). */
+.session-view .rsp [data-streamdown="table"] th { height: 35px; padding: 10px 14px; font-size: 12px; line-height: 16px; font-weight: 500; }
+.session-view .rsp [data-streamdown="table"] td { height: 39px; padding: 10px 14px; font-size: 13px; line-height: 20px; }
+
+/* A code block (Code Block): a 36px head with the language at 12/500 and a 24px copy button, the code at 12/20 mono. */
+.session-view .rsp .ans-code-head { height: 36px; padding: 0 6px 0 14px; }
+.session-view .rsp .ans-code-lang { font: 500 12px/16px var(--font); text-transform: none; }
+.session-view .rsp .ans-code-head .icon-btn { width: 24px; height: 24px; border-radius: var(--r-sm); }
+.session-view .rsp .ans-code-body { padding: 10px 14px !important; font: 12px/20px var(--mono); }
+
+/* ── Under an answer (Message Actions): 28px ghost icon buttons a 6px radius, 2px apart; Keep this going a small ghost button. */
+.session-view .rsp-actions button.grid { width: 28px; height: 28px; border-radius: var(--r-sm); transition: background-color .16s ease, color .16s ease; }
+.session-view .rsp-actions .rsp-text-btn {
+  min-height: 0; height: 24px; padding: 0 8px; border-radius: var(--r-sm); font: 500 12px/20px var(--font);
+  transition: background-color .16s ease, color .16s ease;
+}
+.session-view .rsp-actions .rsp-text-btn:hover { background: var(--hover); }
+/* The turn's token count, a button that opens where they went (CostWaterfall.tsx): ghost, 22 tall, a small bars mark. */
+.session-view .rsp-act-used { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px; border: 0; border-radius: 6px; background: none; color: var(--faint); font: 400 12px/16px var(--font); cursor: pointer; transition: background-color .16s ease, color .16s ease; }
+.session-view .rsp-act-used svg { width: 12px; height: 12px; flex: none; }
+.session-view .rsp-act-used:hover, .session-view .rsp-act-used:focus-visible { background: var(--hover); color: var(--ink); outline: none; }
+.session-view .rsp-act-used[aria-expanded="true"] { background: var(--hover-strong); color: var(--ink); }
+/* While its card loads: its place held, so the reply below doesn't jump twice. */
+.cwf-wait { height: 196px; margin: 8px 0 4px; max-width: 760px; border-radius: 12px; background: var(--hover); animation: cwf-wait 1.1s ease-in-out infinite alternate; }
+@keyframes cwf-wait { to { opacity: .55; } }
+
+/* ── The change card's buttons: 28 tall, radius 6, 13/500 (Button); the split Commit keeps its two halves square where they meet. */
+.session-view .cc-head .cc-btn { padding: 0 10px; border-radius: var(--r-sm); font-size: 13px; line-height: 20px; }
+.session-view .cc-head .cc-toggle { border-radius: var(--r-sm); }
+.session-view .cc-head .cc-split { border-radius: var(--r-sm); }
+.session-view .cc-head .cc-split > .cc-btn:first-child { border-radius: var(--r-sm) 0 0 var(--r-sm); }
+.session-view .cc-head .cc-split > .cc-split-more { padding: 0; border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+
+/* ── The side panel (the thread card): rows and buttons a 6px radius. */
+.session-view .tc .tc-row, .session-view .tc .tc-agent { border-radius: var(--r-sm); }
+.session-view .tc .tc-foot-btn { border-radius: var(--r-sm); font-size: 13px; line-height: 20px; }
+
+/* ── The to-do list over the box (Agent Plan): a card of radius 10, never a pill when folded; its rows 32 tall at radius 6. */
+.session-view .dock-todo > section, .session-view .dock-todo > section > button { border-radius: calc(var(--r-md) + 2px); }
+.session-view .dock-todo li { min-height: 32px; border-radius: var(--r-sm); }
+
+/* ── The reply's head: "Waiting on you" while it asks, a chip by the name in amber on its own (no "Working" chip, Arun 11-27). */
+.session-view .rsp-head .rsp-needs {
+  display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: calc(var(--r-sm) - 1px);
+  font: 500 11px/16px var(--font); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.session-view .rsp-head .rsp-needs { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--needs); }
+.session-view .rsp-head .rsp-needs.is-theirs { background: var(--hover); color: var(--text-muted); }
+
+/* ── The change card's open-in-Code: its <> mark alone, a 28px square (the mock's diff button); its name and ⌘E stay in its tip. */
+.session-view .cc-head > .cc-code { width: 28px; padding: 0; justify-content: center; }
+.session-view .cc-head > .cc-code > .cc-code-word { display: none; }
+.session-view .cc-head > .cc-code > .cc-code-ic { display: block; }
+
+/* ── Cards of their own in the feed, in the reply's column and its full width rather than out at the avatar's edge: what an agent
+   asks to run, and a check's tests (the feed keeps them in its own order, after the change card). */
+.session-view .feed-item > :is(.apv, .tpc, .pcc-folded) { margin-left: 36px; width: calc(100% - 36px); max-width: none; }
+@media (max-width: 640px) { .session-view .feed-item > :is(.apv, .tpc, .pcc-folded) { margin-left: 34px; width: calc(100% - 34px); } }
+/* A phone: the window's whole width for them, where the avatar's column would leave the card too little. */
+@media (max-width: 480px) { .session-view .feed-item > :is(.apv, .tpc, .pcc-folded) { margin-left: 0; width: 100%; } }
+
+/* ── A finished-work toast ("Like Friday?") sits over the message box rather than on it: the tool picker and send are at the box's
+   right edge now, where the toast's corner was. */
+body:has(.session-view .composer-dock) .done-toasts { bottom: 124px; }
+/* The chat never scrolls sideways: what runs past its width is clipped where it is, never a scrollbar under the reply (Arun,
+   2026-11-27: "THERE SHOULD BE NO HORINZTONAL SCROLL BAR IN THE CODING SESSIONS TOO"). */
+.session-view [data-slot="session.feed"], .session-view [data-slot="session.feed"] > * { overflow-x: clip; }

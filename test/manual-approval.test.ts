@@ -22,6 +22,11 @@ test("Claude Code: Manual refuses commands, and a yes allows exactly the ones as
   assert.deepEqual(allowedIn(manual), ["Skill"], "no commands unasked: only the person's skills, which are instructions to read");
   const granted = ADAPTERS.claude.args(spec({ grant: { scope: "commands", items: ["npm test", "ls -la"] } }));
   assert.deepEqual(granted.slice(granted.indexOf("--allowedTools"), granted.indexOf("--allowedTools") + 5), ["--allowedTools", "Bash(npm test)", "PowerShell(npm test)", "Bash(ls -la)", "PowerShell(ls -la)"]);
+  // Security L12: Claude Code reads * in a rule as "anything", so a command with one would be allowed as more than was shown.
+  const starred = ADAPTERS.claude.args(spec({ ask: true, grant: { scope: "commands", items: ["npm test", "rm -rf build/*", "git log:*"] } }));
+  assert.deepEqual(allowedIn(starred).filter((x) => /^(Bash|PowerShell)\(/.test(x)), ["Bash(npm test)", "PowerShell(npm test)"], "it is asked about again instead, and the yes is to that run");
+  const onlyStarred = ADAPTERS.claude.args(spec({ ask: true, grant: { scope: "commands", items: ["ls *"] } }));
+  assert.ok(!onlyStarred.some((x) => x.includes("ls *")) && onlyStarred.every((x, i) => x !== "--allowedTools" || !(onlyStarred[i + 1] ?? "--").startsWith("--")), "and no empty --allowedTools is left behind");
   const auto = ADAPTERS.claude.args(spec({ mode: "full" }));
   assert.ok(auto.includes("Bash") && auto.includes("PowerShell"), "Auto allows any command, in either shell");
 });

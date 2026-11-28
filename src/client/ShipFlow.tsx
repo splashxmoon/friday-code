@@ -7,6 +7,7 @@ import { commitPaths } from "../commit-paths.js";
 import { scriptsIn, type Script } from "./Problems.js";
 import type { Send } from "./useSession.js";
 import { Check } from "./ui.js";
+import "./ship-flow.css";
 
 /**
  * From the changes to a pull request, docked at the foot of the Changes panel (Arun, 2026-11-03: the Changes panel "like this",

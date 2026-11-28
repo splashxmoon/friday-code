@@ -3,3 +3,59 @@
 /* A card's rows share their columns, so the bars start in one place however long a window's name ("Claude and GPT 5-hour"). */
 ul.lh-wrows { display: grid; grid-template-columns: minmax(64px, max-content) minmax(48px, 1fr) 38px 50px; column-gap: 10px; row-gap: 11px; }
 ul.lh-wrows > .lh-wrow { grid-column: 1 / -1; grid-template-columns: subgrid; }
+
+/* The card as the polish pass drew it (friday-polish.html #usage): what's left as the headline, each window a named meter, the
+   plan and the state as kit badges (rounded squares), a strip of days, and the cost a quiet footer. app.css loads
+   before style.css, so these name the section to outrank its .lh-card rules. */
+/* Every card one size, the tallest's, with its cost at the foot (Arun, 2026-11-27: "all of these need to be the consistent size"). */
+.lh-cards { align-items: stretch; grid-auto-rows: 1fr; }
+section.lh-card { gap: 12px; padding: 14px; }
+/* No red edge on a card that's full or out: the chip and the meter say it (colour only for state, once). */
+section.lh-card[data-level] { box-shadow: inset 0 0 0 1px var(--border); }
+section.lh-card.out { gap: 8px; }
+section.lh-card .lh-card-head { gap: 8px; }
+section.lh-card .lh-card-head > b { flex: 0 0 auto; max-width: 60%; }
+/* The plan gives way first (Arun, 2026-11-20): it ends in … before the name or the state does. */
+.lh-card-head .lh-planchip { flex: 0 1 auto; min-width: 0; }
+.lh-card-reset { margin-left: auto; color: var(--faint); font-size: var(--t-12); white-space: nowrap; }
+section.lh-card .lh-hero { gap: 4px; }
+section.lh-card .lh-hero-n { flex-wrap: nowrap; column-gap: 8px; }
+section.lh-card .lh-hero-big { flex: none; font: 600 34px/1 var(--font); letter-spacing: -.03em; }
+section.lh-card .lh-hero-unit { min-width: 0; color: var(--text-muted); font-size: var(--t-13); font-weight: 400; text-wrap: pretty; }
+section.lh-card .lh-wrows { padding-top: 0; border-top: 0; row-gap: 8px; }
+section.lh-card ul.lh-wrows { grid-template-columns: minmax(64px, max-content) minmax(48px, 1fr) 42px max-content; }
+section.lh-card .lh-wrow-n { font-weight: 400; }
+section.lh-card .lh-wrow-in { color: var(--faint); font-size: 11.5px; }
+/* The meter as the kit draws it: 5px, square-ish ends, the fill in ink, amber and red only for state. */
+section.lh-card .lh-meter { height: 5px; border-radius: 3px; background: var(--chart-track); }
+section.lh-card .lh-meter-fill { border-radius: 3px; background: var(--ink); }
+section.lh-card .lh-meter-fill.warm { background: var(--amber); }
+section.lh-card .lh-meter-fill.hot { background: var(--red); }
+/* A narrow card (three across): the head wraps with the plan under the name (Arun, 2026-11-20), the headline drops the reset the
+   rows already say, and each row puts its meter under its name and figures, so a long name ("Claude and GPT 5-hour") never runs
+   into its bar. */
+@container (max-width: 340px) {
+  section.lh-card .lh-card-head { flex-wrap: wrap; row-gap: 4px; }
+  .lh-card-head .lh-planchip { order: 9; margin-left: 24px; }
+  section.lh-card .lh-hero-reset { display: none; }
+  section.lh-card ul.lh-wrows { grid-template-columns: minmax(0, 1fr) 42px max-content; row-gap: 10px; }
+  section.lh-card ul.lh-wrows > .lh-wrow { row-gap: 5px; }
+  section.lh-card .lh-wrow-name { grid-column: 1; grid-row: 1; overflow: hidden; text-overflow: ellipsis; }
+  section.lh-card .lh-wrow-n { grid-column: 2; grid-row: 1; }
+  section.lh-card .lh-wrow-in { grid-column: 3; grid-row: 1; }
+  section.lh-card .lh-wrow > .lh-meter { grid-column: 1 / -1; grid-row: 2; }
+}
+/* The five-hour window day by day: today in ink, the rest quiet, a day it ran out in red. */
+.lh-days { display: grid; gap: 6px; }
+.lh-days-head { display: flex; justify-content: space-between; gap: 8px; color: var(--faint); font-size: var(--t-11); }
+.lh-days-lbl { letter-spacing: .06em; text-transform: uppercase; }
+.lh-days-bars { display: flex; align-items: flex-end; gap: 3px; height: 34px; }
+.lh-days-bars i { flex: 1; min-width: 0; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--border-strong); transition: background-color var(--t-hover) var(--ease-out); }
+.lh-days-bars i:hover { background: var(--text-muted); }
+.lh-days-bars i.today { background: var(--ink); }
+.lh-days-bars i.hot { background: var(--red); }
+.lh-days-bars i.none { height: 2px; opacity: .5; }
+section.lh-card .lh-cost { margin-top: auto; padding-top: 10px; font-size: var(--t-13); }
+section.lh-card .lh-cost-n.unknown { color: var(--text-muted); font-weight: 400; }
+/* Add price ends its row: the kit button sets its own margin, so it's named here. */
+section.lh-card .lh-cost > .ui-buttonc { margin-left: auto; }

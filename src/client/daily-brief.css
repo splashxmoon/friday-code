@@ -158,7 +158,7 @@ button.dn-tx:focus-visible { outline: 2px solid var(--border-focus, var(--live))
 .dn-files + .dn-room::before, .db-proof + .dn-room::before { content: "· "; }
 .dn-earlier { position: relative; padding: 0 0 12px; color: var(--faint); font-size: 11.5px; }
 .dn-now { position: relative; display: flex; align-items: center; gap: 8px; margin: 2px 0 14px -26px; }
-.dn-now span { z-index: 1; display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 99px; background: var(--live); color: #fff; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dn-now span { z-index: 1; display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: var(--r-sm, 6px); background: var(--live); color: #fff; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dn-now::after { content: ""; flex: 1; height: 1.5px; border-radius: 2px; background: var(--live); opacity: .45; }
 .dn-wait { position: relative; margin: 0 0 14px; padding: 11px 12px 12px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--card); box-shadow: var(--shadow-xs, none); }
 .dn-wait-who { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 12px; }

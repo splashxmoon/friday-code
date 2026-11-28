@@ -13,7 +13,7 @@
 .vsc-stage > .vsc-opening, .vsc-stage > .vsc-empty.over { position: absolute; inset: 0; z-index: 1; }
 .vsc-cover { opacity: 1; transition: opacity 150ms var(--ease-out); }
 .vsc-cover.fading { opacity: 0; pointer-events: none; }
-.vsc-agent-btn { position: absolute; top: 10px; right: 12px; z-index: 2; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 50%; background: var(--card); color: var(--ink-2); cursor: pointer; transition: background var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out); }
+.vsc-agent-btn { position: absolute; top: 10px; right: 12px; z-index: 2; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: var(--r-md, 8px); background: var(--card); color: var(--ink-2); cursor: pointer; transition: background var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out); }
 .vsc-agent-btn:hover { background: var(--hover); color: var(--ink); }
 .vsc-agent-btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 /* Where an ask from VS Code landed: the box flashes once. */
@@ -62,3 +62,27 @@
 
 /* A Settings card whose row had nothing to show (the coding tools' auto-update row before it has loaded) is not drawn as an empty box. */
 .set-card:empty { display: none; }
+
+/* ── The install, opening and empty cards measured to the shared kit (affect-pro SPEC.md §1, 2026-11-27): the kit's EmptyState (a
+   tile at radius 11, the title 13/500/20, a 13/400/20 line), the list as 36px rows between hairlines, a 4px meter at radius 2 with its
+   fill on the SHEET curve, 16px kbd at radius 4, links 12/400/16; the agent button a 28px square at radius 6 on a ring. */
+.vsc-mark { width: 42px; height: 42px; margin: 0; border-radius: 11px; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.vsc-mark svg, .vsc-mark img { width: 22px; height: 22px; }
+.vsc-card { gap: 0; }
+.vsc-card h2, .vsc-opening b { margin-top: 16px; font: 500 13px/20px var(--font); }
+.vsc-lede, .vsc-opening p { margin: 4px 0 0; color: var(--text-muted); font-size: 13px; line-height: 20px; text-wrap: balance; }
+.vsc-gets { margin: 16px 0 18px; }
+.vsc-gets li { min-height: 36px; box-sizing: border-box; padding: 8px 4px 8px 20px; font-size: 13px; line-height: 20px; }
+.vsc-gets li::before { top: 15px; }
+.vsc-gets li:last-child { border-bottom: 1px solid var(--border); }
+.vsc-gets kbd { display: inline-grid; place-items: center; min-width: 16px; height: 16px; box-sizing: border-box; padding: 0 4px; border: 0; border-radius: 4px; background: transparent; box-shadow: inset 0 0 0 .5px var(--border-strong); vertical-align: 1px; font: 500 10.5px/16px var(--font); }
+.vsc-act { gap: 8px; }
+.vsc-act .btn, .vsc-acts .btn { height: 28px; padding: 0 10px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+.vsc-fine { font-size: 12px; line-height: 16px; }
+.vsc-link { font-size: 12px; line-height: 16px; transition: color .14s ease, text-decoration-color .14s ease; }
+.vsc-bar { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.vsc-bar > i { border-radius: 2px; transition: width .6s cubic-bezier(.32, .72, .24, 1); }
+.vsc-pline { font-size: 12px; line-height: 16px; }
+.vsc-note { padding: 8px 16px; font-size: 12px; line-height: 16px; }
+.vsc-agent-btn { border: 0; border-radius: 6px; box-shadow: var(--ia-ring, 0 0 0 .5px var(--border-strong)); }
+.vsc-agent-btn svg { width: 16px; height: 16px; }

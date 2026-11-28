@@ -14,3 +14,10 @@
 .rt-bar .rb-text { white-space: nowrap; }
 .rt-bar .rb-acts { flex-wrap: wrap; justify-content: flex-end; }
 .rt-bar .rb-btn { white-space: nowrap; }
+
+/* ── Measured to the shared kit (affect-pro SPEC.md §1, 2026-11-27): the line 12/400/16, the why a well at radius 8 with its title
+   13/500/20 over 12/400/16. */
+.rt-auto-line { font-size: 12px; line-height: 16px; }
+.rt-auto-card { padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--ink) 4%, transparent); box-shadow: inset 0 0 0 .5px var(--border); }
+.rt-auto-why { font: 500 13px/20px var(--font); }
+.rt-auto-note, .rt-auto-off { font-size: 12px; line-height: 16px; }

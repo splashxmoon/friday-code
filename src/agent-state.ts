@@ -131,6 +131,7 @@ export function plainError(raw: string | undefined | null): string {
   if (signedOut(e)) return "not signed in on its computer";
   if (/cannot find module|MODULE_NOT_FOUND|\bspawn\s+\S+\s+(?:ENOENT|EACCES)\b|command not found|didn't start|failed to start/i.test(e)) return "its tool didn't start";
   if (/\btests? (?:failed|failing)\b|\b\d+ failing\b|\bfailed tests?\b/i.test(e)) return "tests failed";
+  if (/^Out of room:/.test(e)) return "it ran out of room in its window";
   if (/context (?:length|window)|too many tokens|prompt is too long|maximum context/i.test(e)) return "the conversation got too long for its model";
   if (/\b(?:401|403)\b|invalid (?:api )?key|unauthori[sz]ed|forbidden|permission denied/i.test(e)) return "its key or sign-in was refused";
   if (RESTARTED.test(e)) return "the server restarted mid-turn";

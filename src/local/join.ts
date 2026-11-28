@@ -72,6 +72,9 @@ export function whyNot(e: unknown): JoinProblem["kind"] {
 
 const KEY = "friday:join:hub";
 
+/** Tailscale's addresses (100.64.0.0/10, fd7a:115c:a1e0::/48) and MagicDNS names, and this computer's own loopback. */
+const PRIVATE_WIRE = /^(100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}|fd7a:115c:a1e0:[0-9a-f:]*|[\w-]+(\.[\w-]+)*\.ts\.net|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|::1|localhost)$/i;
+
 export function parseComputerLink(link: string): { hub: Omit<Hub, "token" | "pem">; code: string } | null {
   let u: URL;
   try {
@@ -81,13 +84,17 @@ export function parseComputerLink(link: string): { hub: Omit<Hub, "token" | "pem
   }
   if (u.protocol !== "friday:" || (u.hostname || u.pathname.replace(/^\/+/, "").split("?")[0]) !== "computer") return null;
   const q = u.searchParams;
+  const scheme = q.get("s") === "http" ? "http" : "https";
   const addresses = (q.get("h") ?? "")
     .split(",")
     .map((a) => a.trim())
-    .filter((a) => /^[\w.:-]{1,64}$/.test(a));
+    .filter((a) => /^[\w.:-]{1,64}$/.test(a))
+    // A plain-HTTP link sends the code, then the device token, in the clear: only where Tailscale already encrypts (its
+    // addresses and names) or on this computer itself, as the listener offers it (phone.ts). A pasted link naming a Wi-Fi
+    // address with s=http used to be taken (2026-11-27 security review).
+    .filter((a) => scheme === "https" || PRIVATE_WIRE.test(a));
   const port = Number(q.get("p"));
   const code = (q.get("c") ?? "").trim();
-  const scheme = q.get("s") === "http" ? "http" : "https";
   const fingerprint = (q.get("f") ?? "").toLowerCase();
   if (!addresses.length || !Number.isInteger(port) || port < 1 || port > 65535 || code.length < 6) return null;
   // A secure link without the certificate to pin is no use: it could be anyone's.

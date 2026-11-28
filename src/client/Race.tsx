@@ -28,6 +28,7 @@ import type { Send } from "./useSession.js";
  */
 
 import { RACE_PREFIX } from "./race-prefix.js";
+import "./branch-race.css";
 export { RACE_PREFIX };
 
 type Racer = "friday" | EngineTool;

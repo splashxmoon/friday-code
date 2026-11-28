@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefO
 import { createPortal } from "react-dom";
 import { FocusScope } from "radix-ui/internal";
 import { Avatar, Icon, type IconName } from "./icons.js";
+import "./chrome.css";
 
 /**
  * Draws a floating surface (a menu, a picker, a card) on the page, in a layer that works over an open dialog too.
@@ -485,17 +486,25 @@ function MenuPopup({ anchor, items, onClose, above, beside, compact, end, trigge
   // A line under a name wraps when it is long, and each wrapped line is another 16px: counting only the first left the menu too short and scrolling.
   const underLen = (it: MenuItem) => (it && typeof it === "object" && "sub" in it && it.sub ? it.sub.length : below(it).length);
   const perLine = Math.max(24, Math.floor((width - 76) / 6.3));
-  const estHeight = items.reduce((h, it) => h + ("node" in it ? (it.height ?? 64) : "who" in it ? 62 : "heading" in it ? 30 : underLen(it) ? 52 + 16 * (Math.ceil(underLen(it) / perLine) - 1) : 34), 12);
+  const estHeight = items.reduce((h, it) => h + ("node" in it ? (it.height ?? 64) : "who" in it ? 62 : "heading" in it ? 30 : underLen(it) ? 53 + 16 * (Math.ceil(underLen(it) / perLine) - 1) : 37), 10);
   const place = placeCard(anchor, width, { want: Math.min(estHeight, cap ?? MENU_MAX), min: 180, gap: 4, ...(above ? { prefer: "above" as const } : {}), ...(beside ? { beside } : {}), ...(end ? { end } : {}) });
   // A choice of several opens on the one chosen, as the model picker does; anything else on its first row (useDismiss).
+  // Again once it's drawn: focus on a row not yet visible doesn't take, and useDismiss's own first-row focus then won (Arun,
+  // 2026-11-28: "Ask first" ringed while "Run to ready" was the one picked).
   useEffect(() => {
-    ref.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]:not([disabled])')?.focus();
+    const pick = () => ref.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]:not([disabled])')?.focus();
+    pick();
+    const t = setTimeout(pick, 0);
+    return () => clearTimeout(t);
   }, []);
   return floating(
     <div
       ref={ref}
       className={compact ? "menu compact" : "menu"}
       role="menu"
+      // Which corner it grows from: the trigger's (the stylesheet's transform-origin), above or below it, from its start or its end.
+      data-side={place.top === "auto" ? "top" : "bottom"}
+      data-align={end ? "end" : "start"}
       // A menu opened from inside a card belongs to that card. It is drawn on the page, outside it, so without this a press on
       // one of its rows reads as a press outside the card, and the card closes before the row has been chosen.
       data-owned-floating=""
@@ -698,7 +707,7 @@ export type PickerOption<T extends string | number> = { value: T; label: string;
  * Friday's own select (Arun, 2026-11-03: "i said to fix the native stuff please run a full app audit"): the choice on a field-like
  * button, Friday's menu under it, never the system's. `className` sizes it as the select it replaces did.
  */
-export function Picker<T extends string | number>({ value, options, onChange, label, className = "", disabled, placeholder = "Choose…", heading, above }: { value: T; options: PickerOption<T>[]; onChange: (v: T) => void; /** What it picks, for a screen reader and its tooltip. */ label: string; className?: string; disabled?: boolean; placeholder?: string; /** A line over the choices. */ heading?: string; /** Always open above the field. */ above?: boolean }) {
+export function Picker<T extends string | number>({ value, options, onChange, label, className = "", disabled, placeholder = "Choose…", heading, above, stack }: { value: T; options: PickerOption<T>[]; onChange: (v: T) => void; /** What it picks, for a screen reader and its tooltip. */ label: string; className?: string; disabled?: boolean; placeholder?: string; /** A line over the choices. */ heading?: string; /** Always open above the field. */ above?: boolean; /** Each hint on a line under its name, the menu a set width lined up with the field's end: for long hints in a narrow window (Arun, 2026-11-28: the Captain settings' menus ran out of the window). */ stack?: boolean }) {
   const cur = options.find((o) => o.value === value);
   // Its longest row, a name and its hint at about 7px a letter, the tick and the padding round them.
   const least = Math.round(Math.max(...options.map((o) => o.label.length * 7.4 + (o.hint ? o.hint.length * 6.6 + 8 : 0)), 60) + (options.some((o) => o.mark) ? 26 : 0) + 46);
@@ -718,11 +727,11 @@ export function Picker<T extends string | number>({ value, options, onChange, la
       label={label}
       // As wide as the field and no wider, its rows tight, a hint on the row beside its name (Arun, 2026-11-03: "it is too big even
       // when there is really nothing there just a bunch of empty space").
-      fit={least}
+      {...(stack ? { end: true } : { fit: least })}
       compact
       maxHeight={340}
       {...(above ? { above: true } : {})}
-      items={() => [heading ? { heading } : null, ...options.map((o) => ({ label: o.label, checked: o.value === value, ...(o.sub ? { sub: o.sub } : {}), ...(o.mark ? { mark: o.mark } : {}), ...(o.hint ? { after: <span className="pick-hint">{o.hint}</span> } : {}), ...(o.disabled ? { disabled: true } : {}), onSelect: () => onChange(o.value) }))]}
+      items={() => [heading ? { heading } : null, ...options.map((o) => ({ label: o.label, checked: o.value === value, ...(o.sub || (stack && o.hint) ? { sub: [o.sub, stack ? o.hint : ""].filter(Boolean).join(" · ") } : {}), ...(o.mark ? { mark: o.mark } : {}), ...(o.hint && !stack ? { after: <span className="pick-hint">{o.hint}</span> } : {}), ...(o.disabled ? { disabled: true } : {}), onSelect: () => onChange(o.value) }))]}
     />
   );
 }

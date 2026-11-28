@@ -52,7 +52,9 @@ import { md } from "./markdown.js";
 
 /** This session's workspace, Solo or Team (Team.tsx): the hosted Friday's question. Every session in the local edition is Solo. */
 const sessionWorkspace: { useSessionPlan: (sid: string, invite?: string, member?: string) => SessionPlan | null } = { useSessionPlan: () => null };
-import type { Identity, RecentSession, RepoUse } from "./storage.js";
+import { loadRecents, type Identity, type RecentSession, type RepoUse } from "./storage.js";
+import { useNeedSids } from "./need-sids.js";
+import { TreeMark } from "./tree-mark.js";
 import { Check, ActionNote, InlineEdit, MenuButton, Segmented, SessionSkeleton, ShownText, Switch, inBand, isTyping, onBand, useConfirm, useDismiss, type MenuItem } from "./ui.js";
 import { getMode, IdeChatContext, openInCode, registerIdeTaker } from "./ide/mode.js";
 import { visibleComposer } from "./prefill.js";
@@ -60,7 +62,7 @@ import { useSession, type Send } from "./useSession.js";
 import type { Focus } from "../focus.js";
 import { CLASS_LABEL, COMMAND_CLASSES, type CommandClass } from "../command-class.js";
 import { FocusContext, herePublisher } from "./focusStore.js";
-import { MateHeaderTitle, mateOn, RoomMenu, TeamFaces, teamTitle } from "./Teammates.js";
+import { MateHeaderTitle, mateOn, RoomMenu, TeamFaces, teamTitle, threadLaneOf } from "./Teammates.js";
 import { setMateTab, useMateTab } from "./mate-tab.js";
 const TeamPlan = lazy(() => import("./TeamPlan.js"));
 const RememberOffer = lazy(() => import("./RememberOffer.js"));
@@ -72,7 +74,7 @@ import TaskBoard from "./TaskBoard.js";
 import { ALL, AgentsContext, agentKey, agentsStore, focusAgent, focusedAgent, jumpToNeeds, nextKey, openedAt, setColumns, syncAddress, useAgents, useColumns, useFocusedAgent, useSeen } from "./agentFocus.js";
 import { AGENT_DRAG, closeColumn, dropAgent, evenWidths, fitColumns, maxColumns, pickInColumn, resizeAt, unreadByLane } from "./agentNav.js";
 import { agentLook, laneLabel } from "./handoff-ui.js";
-import { handBackWhenDone, handingBack, setTuiOn, tuiIsOn, useTuiView, ViewToggle } from "./Terminal.js";
+import { handBackWhenDone, setTuiOn, tuiIsOn } from "./Terminal.js";
 import { hubOf } from "../agents-hub.js";
 import { clearDiffRequest, readDiffRequest, showDiffSoon } from "./focusDiff.js";
 import { HandoverDialog } from "./Handover.js";
@@ -616,9 +618,12 @@ export function SessionView({
   })();
   // An agent that has left can't stay in view.
   const loaded = !!s.state;
+  // Never a crew mate thread's own crew mate, whose lane a thread nobody has written in yet doesn't have: Activity.tsx focuses that
+  // lane whenever the view is on All, and the two passed it back and forth until the screen gave up (Arun, 2026-11-27: the crew
+  // mate's page "couldn't draw this screen", React #185, after a thread was deleted and a blank one opened in its place).
   useEffect(() => {
-    if (loaded && focused !== ALL && focused !== MAIN_LANE && !laneIds.split(",").includes(focused)) focusAgent(sid, ALL);
-  }, [focused, laneIds, sid, loaded]);
+    if (loaded && focused !== ALL && focused !== MAIN_LANE && !laneIds.split(",").includes(focused) && !(s.state?.options.team && threadLaneOf(sid) === focused)) focusAgent(sid, ALL);
+  }, [focused, laneIds, sid, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
   // "/" jumps to the message box.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -750,9 +755,16 @@ export function SessionView({
     act("md-copy", "Copy this session as Markdown", "copy", () => void exportMarkdown("copy"));
     act("md-save", "Save this session as Markdown", "download", () => void exportMarkdown("save"));
     act("ask", "Write to the agent", "message", () => visibleComposer()?.focus(), "/");
-    // The header's two, by name: its terminal switch, and the settings its gear used to open.
+    // The terminal view (its header switch is the project overview's button now, 2026-11-27), the overview, and the settings its
+    // gear used to open. Back to chat hands every agent of yours open in its own screen back to Friday once its tool is done with
+    // what it is doing there, never in the middle of it (Arun, 2026-10-30: "dont make the thing stop when witching from GUI to TUI").
     if (isLocal() && !st.options.work && !st.options.team) {
-      act("tui", tuiIsOn() ? "Back to chat view" : "Terminal view", "terminalSquare", () => setTuiOn(!tuiIsOn()));
+      act("tui", tuiIsOn() ? "Back to chat view" : "Terminal view", "terminalSquare", () => {
+        if (!tuiIsOn()) return setTuiOn(true);
+        setTuiOn(false);
+        for (const l of Object.keys(st.terminals ?? {}).filter((l) => st.engines[l]?.hostId === who.id)) handBackWhenDone(sid, invite, l, { unless: tuiIsOn });
+      });
+      act("overview", "Project overview", "board", () => dispatchEvent(new CustomEvent("friday:project-overview", { detail: { sid } })), "⌘⇧O");
       act("settings", "Session settings", "settings", () => dispatchEvent(new Event("friday:session-settings")));
       // The rest handed on to your crew or a crew room, from the session's own menu (Code and Crew, connected, 2026-11-13): this
       // edition's sessions have no People menu, so it is here, beside the session's settings.
@@ -1762,8 +1774,9 @@ function TopBar({
         {/* The local edition's in its place: this session's settings, and the line about Friday Team (SessionMenu). */}
         {isLocal() && gear && (
           <SessionMenu button={!!state.options.work} settings={owner ? <SettingsBody solo invite={invite} state={state} send={send} meter={{ on: meterOn, set: (v) => (setMeterOn(v), localStorage.setItem("mpa.meter", v ? "1" : "0")) }} /> : undefined}>
-            {/* A Code session's terminal switch, where its gear was: every agent as a terminal, or back to chat (Terminal.tsx). */}
-            {!state.options.work && <HeaderTuiSwitch sid={sid} invite={invite} state={state} me={me} />}
+            {/* The project overview where the terminal switch was (Arun, 2026-11-27: "get rid of the terminal button in the header and
+                replace it some other button for this view"); the terminal view stays in ⌘K ("Terminal view"). */}
+            {!state.options.work && <OverviewButton sid={sid} />}
           </SessionMenu>
         )}
         {/* A room's settings with the header's other buttons, where a Code session has its gear, rather than an "…" beside its name (Arun, 2026-10-27: "place the edit room button somewhere better"). */}
@@ -2419,29 +2432,27 @@ function SplitRail({ sid, state, events, me, shown, active, room }: { sid: strin
   );
 }
 
-/** The terminal view's switch in a Code session's header: on, every agent there (and in every session) shows as a terminal. */
-function HeaderTuiSwitch({ sid, invite, state, me }: { sid: string; invite: string; state: SessionState; me: { id: string } }) {
-  const tui = useTuiSwitch(sid, invite, state, me);
-  return <ViewToggle className="in-head" size={18} on={tui.on} name={tui.name} onToggle={tui.toggle} />;
+/**
+ * The project overview's button in the header, with ⌘⇧O: opens its page (App route "overview", ProjectOverview.tsx), every thread
+ * of this session's project and its agents as a map. An amber dot while any thread of the project waits on you (need-sids.ts).
+ */
+function OverviewButton({ sid }: { sid: string }) {
+  const needs = useNeedSids();
+  const recents = loadRecents();
+  const me = recents.find((r) => r.sid === sid);
+  const repo = me?.repos?.[0]?.name;
+  const waiting = recents.some((r) => (me?.projectId ? r.projectId === me.projectId : repo ? !r.projectId && r.repos?.[0]?.name === repo : r.sid === sid) && needs.has(r.sid));
+  const open = useCallback(() => dispatchEvent(new CustomEvent("friday:project-overview", { detail: { sid } })), [sid]);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => (e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyO" && (e.preventDefault(), open());
+    addEventListener("keydown", key);
+    return () => removeEventListener("keydown", key);
+  }, [open]);
+  return (
+    <button type="button" className="panel-tab icon pov-btn" aria-label={`Project overview${waiting ? ", something needs you" : ""}`} title="Project overview · ⌘⇧O" onClick={open}>
+      <TreeMark size={18} />
+      {waiting && <i className="panel-tab-dot pov-btn-dot" />}
+    </button>
+  );
 }
 
-/** The terminal view's switch, for its button and for the phone header's ⋯. */
-function useTuiSwitch(sid: string, invite: string, state: SessionState, me: { id: string }) {
-  const [on, setOn] = useTuiView();
-  const lane = useFocusedAgent(sid);
-  // Open in its own screen and not on its way back: lit, though the view is off.
-  const native = lane !== ALL && !!state.terminals?.[lane] && state.engines[lane]?.hostId === me.id && !handingBack(sid, lane);
-  return {
-    on: on || native,
-    name: lane === ALL ? "every agent" : laneLabel(state, lane),
-    toggle: () => {
-      if (!on && !native) return setOn(true);
-      // Off: back to chat, and every agent of yours open in its own screen handed back to Friday once its tool is done with what
-      // it is doing there, never in the middle of it (Arun, 2026-10-30: "dont make the thing stop when witching from GUI to
-      // TUI or TUI to GUI"). Switched on again before then, they stay.
-      const mine = Object.keys(state.terminals ?? {}).filter((l) => state.engines[l]?.hostId === me.id);
-      setOn(false);
-      for (const l of mine) handBackWhenDone(sid, invite, l, { unless: tuiIsOn });
-    },
-  };
-}

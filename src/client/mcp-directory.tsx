@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ConnectionView } from "../runner/connections.js";
 import { Button } from "@/components/ui/button";
+import { Button as KitButton } from "@/components/affect/button";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { CircleAlertIcon, CircleCheckIcon } from "lucide-react";
+import { ClaudeMark } from "./BrandMarks.js";
 import { Icon, type IconName } from "./icons.js";
 import { hostApi } from "./local.js";
 import { CATEGORIES, MCP_CATALOG, type CatalogEntry, type Category } from "./mcp-catalog.js";
@@ -38,13 +42,13 @@ const trim = (u: string) => u.replace(/\/+$/, "");
 export const serverFor = (e: CatalogEntry, servers: ConnectionView[]) => servers.find((s) => s.catalog === e.id) ?? servers.find((s) => s.url && trim(s.url) === trim(e.url));
 
 /** The service's own mark: its logo from its own site, the drawn mark until that loads or when it won't. */
-export function ServiceMark({ entry, size = 20 }: { entry: CatalogEntry; size?: number }) {
+export function ServiceMark({ entry, size = 20, tile = size + 14 }: { entry: CatalogEntry; size?: number; /** The tile around it: 28 on a card or a row, 36 at the head of its drawer. */ tile?: number }) {
   const sources = useMemo(() => [...(entry.logo ? [entry.logo] : []), ...(entry.domain ? [`https://${entry.domain}/favicon.ico`, `https://www.google.com/s2/favicons?domain=${entry.domain}&sz=64`] : [])], [entry]);
   const [step, setStep] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const src = sources[step];
   return (
-    <span className="mdir-mark" style={{ width: size + 14, height: size + 14 }}>
+    <span className="mdir-mark" style={{ width: tile, height: tile }}>
       {(!src || !loaded) && <Icon name={entry.mark} size={size - 2} />}
       {src && (
         <img
@@ -126,18 +130,23 @@ function ServiceSheet({ identity, entry, servers, builtIn, onClose, onChanged }:
   };
 
   const st = here?.status;
+  // Connected when opened: its drawer from the right (the approved mock, 2026-11-27). Not yet: the sheet in the middle, to connect.
+  const [drawer] = useState(!!here);
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="mdir-sheet sm:max-w-[480px]">
-        <DialogHeader>
-          <div className="mdir-sheet-head">
-            <ServiceMark entry={entry} size={26} />
-            <div>
-              <DialogTitle>{entry.name}</DialogTitle>
-              <DialogDescription>{entry.blurb}</DialogDescription>
+    <Frame drawer={drawer} onClose={onClose}>
+        {drawer && here ? (
+          <DrawerHead mark={<ServiceMark entry={entry} size={22} tile={36} />} name={entry.name} sub={subOf(here)} server={here} />
+        ) : (
+          <DialogHeader>
+            <div className="mdir-sheet-head">
+              <ServiceMark entry={entry} size={26} />
+              <div>
+                <DialogTitle>{entry.name}</DialogTitle>
+                <DialogDescription>{entry.blurb}</DialogDescription>
+              </div>
             </div>
-          </div>
-        </DialogHeader>
+          </DialogHeader>
+        )}
 
         {here && (
           <Manage
@@ -268,18 +277,61 @@ function ServiceSheet({ identity, entry, servers, builtIn, onClose, onChanged }:
           </p>
         )}
         <p className="mdir-foot">Every coding tool here gets it on its next turn. Its sign-in stays on this computer, in a file only you can read.</p>
-      </DialogContent>
+    </Frame>
+  );
+}
+
+/** A service's sheet: a drawer from the right for one connected, the dialog in the middle for one to connect. */
+function Frame({ drawer, onClose, children }: { drawer: boolean; onClose: () => void; children: ReactNode }) {
+  return drawer ? (
+    <Sheet open onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="mdir-sheet mdir-drawer">
+        {children}
+      </SheetContent>
+    </Sheet>
+  ) : (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="mdir-sheet sm:max-w-[480px]">{children}</DialogContent>
     </Dialog>
   );
+}
+
+/** The drawer's head: its mark, its name with how it's connected under it, and its state. */
+function DrawerHead({ mark, name, sub, server, mono }: { mark: ReactNode; name: string; sub: string; server: ConnectionView; /** What it runs, for one of your own. */ mono?: boolean }) {
+  return (
+    <div className="mdir-drawer-head">
+      {mark}
+      <span className="mdir-drawer-title">
+        <DialogTitle>{name}</DialogTitle>
+        <DialogDescription className={mono ? "mdir-own-line" : undefined} title={mono ? sub : undefined}>
+          {sub}
+        </DialogDescription>
+      </span>
+      <StateChip state={stateOf(server)} />
+    </div>
+  );
+}
+
+/** How a connected service is in, in a line under its name: signed in or a key, and how many tools. */
+function subOf(s: ConnectionView): string {
+  const st = s.status;
+  if (!st) return "Not tested yet";
+  if (!st.ok) return st.kind === "auth" || st.kind === "signin" ? "Its sign-in or key was refused" : "It didn't answer";
+  const n = st.tools ?? st.names?.length ?? 0;
+  return `${s.signedIn ? "Signed in as you" : s.envKeys.length + s.headerKeys.length ? "With your key" : "Connected"} · ${n} tool${n === 1 ? "" : "s"}`;
 }
 
 /** What a server runs, in a line: the command and its arguments, or the address. */
 export const lineOf = (s: Pick<ConnectionView, "transport" | "command" | "args" | "url">) => (s.transport === "stdio" ? [s.command, ...(s.args ?? [])].join(" ") : (s.url ?? ""));
 
+/** Who gets a server: every coding tool Friday runs mounts the list (runner/connections.ts), but Cursor reads only its own. */
+const WHO: { tool: string; own?: true }[] = [{ tool: "Claude Code" }, { tool: "Codex" }, { tool: "Amp and the ACP tools" }, { tool: "Cursor", own: true }];
+
 /**
- * What a connected server has, and the ways to manage it, at the top of its sheet (Arun, 2026-11-17: "also add ability to
- * disconnect/manage and stuff"): its state and On for every tool, its tools folded to a line, Test again, the way back in
- * (sign in again, a new key), and Disconnect with a confirm in place.
+ * What a connected server has, and the ways to manage it (Arun, 2026-11-17: "also add ability to disconnect/manage and stuff"),
+ * as the approved mock's drawer lays it out (2026-11-27): who gets it, its tools, then Disconnect on the left and Test again and the
+ * way back in (sign in again, a new key) on the right; Disconnect asks first, in place. Who gets it is one switch for every tool,
+ * which is all the server's list holds: the tools under it say whether each gets it, with no switch of their own to pretend one.
  */
 function Manage({ identity, server, name, again, onChanged, onGone }: { identity: Identity; server: ConnectionView; name: string; /** Signing in again, or a new key: what this kind of server takes. */ again?: { label: string; run: () => void }; onChanged: () => Promise<ConnectionView[]>; onGone: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -301,42 +353,44 @@ function Manage({ identity, server, name, again, onChanged, onGone }: { identity
   };
   const st = server.status;
   const names = st?.ok ? (st.names ?? []) : [];
+  const shown = allTools ? names : names.slice(0, 5);
   return (
     <div className="mdir-manage">
-      <div className="mdir-manage-top">
-        <span className={`mdir-pill ${!st ? "" : st.ok && server.enabled ? "on" : st.ok ? "off" : "bad"}`}>
-          <i aria-hidden="true" />
-          {!st ? "Not tested yet" : st.ok ? `${server.enabled ? "Connected" : "Off"}${names.length ? "" : ` · ${st.tools} tool${st.tools === 1 ? "" : "s"}`}${server.signedIn ? " · signed in" : ""}` : st.kind === "auth" ? "Key refused" : st.kind === "signin" ? "Needs sign-in" : "Didn't answer"}
-        </span>
-        <label className="mdir-toggle">
-          <span>On for every tool</span>
+      {st && !st.ok && st.error && <p className="mdir-why">{st.error}</p>}
+      <span className="mdir-lbl">Who gets it</span>
+      <div className="mdir-box">
+        <label className="mdir-box-row mdir-toggle">
+          <span>Every coding tool here</span>
           <Switch aria-label={`${name}: on for every tool`} checked={server.enabled} disabled={busy} onCheckedChange={(on) => void run("connections.update", { enabled: on })} />
         </label>
+        {WHO.map((w) => (
+          <div key={w.tool} className="mdir-box-row">
+            <span>{w.tool}</span>
+            <span className="mdir-faint">{w.own ? "Reads its own list" : server.enabled ? "Gets it" : "Off"}</span>
+          </div>
+        ))}
       </div>
-      {st && !st.ok && st.error && <p className="mdir-why">{st.error}</p>}
       {names.length > 0 && (
-        <div className="mdir-tools">
-          <button type="button" className="mdir-tools-line" aria-expanded={allTools} onClick={() => setAllTools((v) => !v)}>
-            <Icon name="wrench" size={13} />
-            <span className="mdir-tools-sum">
-              <b>
-                {names.length} tool{names.length === 1 ? "" : "s"}
-              </b>
-              {!allTools && <span> · {names.slice(0, 3).map(toolWords).join(", ")}{names.length > 3 ? ` and ${names.length - 3} more` : ""}</span>}
-            </span>
-            <span className="mdir-tools-more">{allTools ? "Hide" : "Show all"}</span>
-            <Icon name={allTools ? "chevronUp" : "chevronDown"} size={13} />
-          </button>
-          {allTools && (
-            <ul className="mdir-tools-list" aria-label="Its tools">
-              {names.map((n) => (
-                <li key={n} title={n}>
-                  {toolWords(n)}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <>
+          <span className="mdir-lbl">
+            Tools <span className="mdir-num">{names.length}</span>
+          </span>
+          <ul className="mdir-box mdir-tools-list" aria-label="Its tools">
+            {shown.map((n) => (
+              <li key={n} className="mdir-box-row" title={toolWords(n)}>
+                <code>{n}</code>
+              </li>
+            ))}
+            {names.length > 5 && (
+              <li>
+                <button type="button" className="mdir-box-row mdir-box-more" aria-expanded={allTools} onClick={() => setAllTools((v) => !v)}>
+                  {allTools ? "Show fewer" : `Show all ${names.length}`}
+                  <Icon name={allTools ? "chevronUp" : "chevronDown"} size={13} />
+                </button>
+              </li>
+            )}
+          </ul>
+        </>
       )}
       {/* Disconnecting asks first, in a panel of its own in the actions' place: the question, what it does, then Keep or Disconnect
           (Arun, 2026-11-17: "design the disconnect mcp confirmation layout better"). */}
@@ -357,18 +411,18 @@ function Manage({ identity, server, name, again, onChanged, onGone }: { identity
         </div>
       ) : (
         <div className="mdir-manage-acts">
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => void run("connections.test")}>
-            <Icon name="refresh" size={13} /> {busy ? "Checking…" : "Test again"}
-          </Button>
-          {again && (
-            <Button variant="outline" size="sm" disabled={busy} onClick={again.run}>
-              {again.label}
-            </Button>
-          )}
-          <span className="mdir-grow" />
-          <Button variant="ghost" size="sm" className="mdir-danger" disabled={busy} onClick={() => setConfirmOff(true)}>
+          <KitButton size="sm" variant="ghost" disabled={busy} onClick={() => setConfirmOff(true)}>
             Disconnect
-          </Button>
+          </KitButton>
+          <span className="mdir-grow" />
+          <KitButton size="sm" variant="secondary" disabled={busy} icon={<Icon name="refresh" size={13} />} onClick={() => void run("connections.test")}>
+            {busy ? "Checking…" : "Test again"}
+          </KitButton>
+          {again && (
+            <KitButton size="sm" variant="secondary" disabled={busy} onClick={again.run}>
+              {again.label}
+            </KitButton>
+          )}
         </div>
       )}
       {err && (
@@ -404,21 +458,8 @@ function OwnSheet({ identity, server, onClose, onChanged }: { identity: Identity
     }
   };
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="mdir-sheet sm:max-w-[480px]">
-        <DialogHeader>
-          <div className="mdir-sheet-head">
-            <span className="mdir-mark mdir-own" style={{ width: 40, height: 40 }} aria-hidden="true">
-              <Icon name={server.transport === "stdio" ? "terminal" : "link"} size={20} />
-            </span>
-            <div className="min-w-0">
-              <DialogTitle>{server.name}</DialogTitle>
-              <DialogDescription className="mdir-own-line" title={lineOf(server)}>
-                {lineOf(server)}
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
+    <Frame drawer onClose={onClose}>
+        <DrawerHead mark={<OwnMark server={server} tile={36} />} name={server.name} sub={lineOf(server)} server={server} mono />
         <Manage identity={identity} server={server} name={server.name} onChanged={onChanged} onGone={onClose} again={hasKeys && !fixing ? { label: server.status?.kind === "auth" ? "Fix its keys" : "Change its keys", run: () => setFixing(true) } : undefined} />
         {fixing && (
           <form
@@ -453,8 +494,16 @@ function OwnSheet({ identity, server, onClose, onChanged }: { identity: Identity
           </form>
         )}
         <p className="mdir-foot">Every coding tool here gets it on its next turn. Its keys stay on this computer, in a file only you can read.</p>
-      </DialogContent>
-    </Dialog>
+    </Frame>
+  );
+}
+
+/** A server of one's own: drawn, a terminal for one that runs here, a link for one that's reached. */
+function OwnMark({ server, tile }: { server: ConnectionView; tile: number }) {
+  return (
+    <span className="mdir-mark mdir-own" style={{ width: tile, height: tile }} aria-hidden="true">
+      <Icon name={server.transport === "stdio" ? "terminal" : "link"} size={Math.round(tile / 2)} />
+    </span>
   );
 }
 
@@ -486,130 +535,191 @@ const KIND_ICON: Record<Category, IconName> = {
   Infrastructure: "server",
 };
 
-/** How a service connects, in a word for its row: what pressing it will ask. */
-function howWord(e: CatalogEntry, builtIn: boolean): string {
-  if (e.local) return "Runs here";
-  if (e.auth === "token") return e.tokenOptional ? "Optional key" : "Key";
-  if (e.auth === "none") return "Connect";
-  return e.needsClient && !builtIn ? "Your app" : "Sign in";
+/** A server's state: connected, off, its sign-in or key refused (Needs sign in), or not answering. */
+type State = "on" | "off" | "signin" | "bad";
+const stateOf = (s: ConnectionView): State => (!s.status ? "off" : s.status.ok ? (s.enabled ? "on" : "off") : s.status.kind === "auth" || s.status.kind === "signin" ? "signin" : "bad");
+const STATE_WORDS: Record<State, string> = { on: "Connected", off: "Off", signin: "Sign in again", bad: "Didn't answer" };
+
+/** A state as a chip: green connected, amber when it needs you, grey off. Colour says state and nothing else. */
+function StateChip({ state }: { state: State }) {
+  return (
+    <span className={`mdir-how ${state}`}>
+      {state !== "off" && <i aria-hidden="true" />}
+      {STATE_WORDS[state]}
+    </span>
+  );
 }
+
+/** A connected server in a line: how many tools, and who gets them; or why it isn't working. */
+function metaOf(s: ConnectionView): string {
+  const st = s.status;
+  if (!st) return "Not tested yet";
+  if (!st.ok) return st.error ?? "It didn't answer.";
+  const n = st.tools ?? st.names?.length ?? 0;
+  return `${n} tool${n === 1 ? "" : "s"} · ${s.enabled ? "every coding tool" : "off for every tool"}`;
+}
+
+/** How a service connects: its chip when that's worth saying (Your app, Runs here), its card's one button, and the line beside it. */
+function howOf(e: CatalogEntry, builtIn: boolean): { chip?: string; act: string; hint: string } {
+  if (e.local) return { chip: "Runs here", act: "Set up", hint: "Runs on this computer" };
+  if (e.auth === "token") return e.tokenOptional ? { act: "Connect", hint: "A key is optional" } : { act: "Add key", hint: "With a key of yours" };
+  if (e.auth === "none") return { act: "Connect", hint: "Nothing to sign in to" };
+  if (e.needsClient && !builtIn) return { chip: "Your app", act: "Connect", hint: "With an app of yours" };
+  return { act: "Sign in", hint: `Sign in with ${e.name}` };
+}
+
+type Kind = Category | "" | "connected" | "signin";
 
 /**
  * The directory (Arun, 2026-11-17: "redesign this better please..... looks too much, like better filters, layout and everythign....
- * also show all of them and add better design details too"): every service, grouped by kind, as cards (its logo, name, what it
- * does in two lines, and how it connects, or, connected, its state and a way to manage it: "also add ability to disconnect/manage
- * and stuff..... i want these to be like cards"), with the kinds down the left to filter by, each with its count, the ones
- * connected first, and a search over all of them.
+ * also show all of them and add better design details too"), as the approved Customize mock draws it (2026-11-27: "good!"): one
+ * header line (the switch, the search with its / key, then the page's actions), the kinds down a rail with their counts, and every
+ * service as a card with one button. Your own tools are not over the catalogue (Arun, 2026-11-27: "i dont want the connected
+ * plugins to be at the top i want to add something to view your connected tools"): Connected and Needs sign in head the rail,
+ * under Yours, and open a list of only yours, what you connected through Friday and then what your coding tools brought; a card
+ * for one already connected says so, with Manage.
  */
 export function Directory({
   identity,
   servers: read,
   builtInApps,
+  claudeCodeNames,
+  lead,
   actions,
   trouble,
   onChanged,
+  onCustom,
 }: {
   identity: Identity;
   /** What this computer has connected; null until it has been read, when every card would say "not connected" and then flip. */
   servers: ConnectionView[] | null;
   /** The providers Friday signs in to with its own app (runner/builtin-apps.ts). */ builtInApps: string[];
-  /** Beside the search: the Claude Code switch and Custom server (McpServers.tsx). */ actions?: ReactNode;
+  /** Claude Code's own servers, while they're handed to the other tools too (McpServers.tsx ClaudeCodeSwitch). */ claudeCodeNames: string[];
+  /** The header line's start: Customize's switch (customize-switch.tsx). */ lead?: ReactNode;
+  /** The header line's end: the Claude Code switch and Custom server (McpServers.tsx). */ actions?: ReactNode;
   /** Why the list couldn't be read, with Try again: in the cards' place before it ever was, over them after. */
   trouble?: ReactNode;
   onChanged: () => Promise<ConnectionView[]>;
+  /** Custom server's sheet, from a search that found nothing. */ onCustom: () => void;
 }) {
   const servers = read ?? [];
   const [q, setQ] = useState("");
-  const [picked, setKind] = useState<Category | "" | "connected">("");
+  const [picked, setKind] = useState<Kind>("");
   const [open, setOpen] = useState<CatalogEntry | null>(null);
   const [openOwn, setOpenOwn] = useState("");
+  const search = useRef<HTMLInputElement>(null);
   const needle = q.trim().toLowerCase();
-  const stateOf = (e: CatalogEntry) => {
-    const s = serverFor(e, servers);
-    return !s ? "" : s.status?.ok && s.enabled ? "on" : s.status && !s.status.ok ? "bad" : "off";
-  };
+  // / searches, as on Skills; Escape in the search clears it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey || document.querySelector("[role=dialog]")) return;
+      const t = e.target;
+      if (t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      e.preventDefault();
+      search.current?.focus();
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, []);
   // Its name, what it does, its kind, and its address, so "google" finds Gmail.
   const matches = (e: CatalogEntry) => !needle || `${e.name} ${e.blurb} ${e.category} ${e.url ?? ""}`.toLowerCase().includes(needle);
   const catalog = MCP_CATALOG.filter((e) => !NOT_HERE_YET.has(e.id) || serverFor(e, servers));
-  const connected = catalog.filter((e) => stateOf(e));
-  // Servers of one's own (Custom server): none of the directory's. Shown first, as cards of their own.
-  const own = servers.filter((s) => !MCP_CATALOG.some((e) => serverFor(e, [s])));
-  // The last one disconnected while looking at the connected ones: back to all of them.
-  const kind = picked === "connected" && !connected.length && !own.length ? "" : picked;
-  const ownShown = kind === "" || kind === "connected" ? own.filter((s) => !needle || `${s.name} ${lineOf(s)}`.toLowerCase().includes(needle)) : [];
-  const ownOpen = own.find((s) => s.id === openOwn);
-  const groups: { title: string; list: CatalogEntry[] }[] =
-    kind === "connected"
-      ? [{ title: "Connected", list: connected.filter(matches) }]
-      : (kind ? [kind] : CATEGORIES).map((c) => ({ title: c, list: catalog.filter((e) => e.category === c && matches(e)) }));
-  const shownCount = groups.reduce((n, g) => n + g.list.length, 0) + ownShown.length;
-  const ownCard = (s: ConnectionView) => {
-    const state = s.status?.ok && s.enabled ? "on" : s.status && !s.status.ok ? "bad" : "off";
+  const entryOf = (s: ConnectionView) => MCP_CATALOG.find((e) => serverFor(e, [s]));
+  // Yours: every server connected through Friday, the directory's and your own (Custom server), in the order they were added.
+  const nameOf = (s: ConnectionView) => entryOf(s)?.name ?? s.name;
+  const mineMatch = (s: ConnectionView) => !needle || `${nameOf(s)} ${lineOf(s)}`.toLowerCase().includes(needle);
+  const signin = servers.filter((s) => stateOf(s) === "signin");
+  const theirs = claudeCodeNames.filter((n) => !needle || n.toLowerCase().includes(needle));
+  const yours = servers.length + claudeCodeNames.length > 0;
+  // The last one disconnected, or signed back in, while looking at them: back to what's left.
+  const kind: Kind = picked === "signin" && !signin.length ? (yours ? "connected" : "") : picked === "connected" && !yours ? "" : picked;
+  const cards = catalog.filter((e) => (!kind || e.category === kind) && matches(e));
+  const allFound = catalog.filter(matches).length;
+  const ownOpen = servers.find((s) => s.id === openOwn);
+  const openServer = (s: ConnectionView) => {
+    const e = entryOf(s);
+    if (e) setOpen(e);
+    else setOpenOwn(s.id);
+  };
+
+  const card = (e: CatalogEntry) => {
+    const s = serverFor(e, servers);
+    const state = s ? stateOf(s) : null;
+    const builtIn = !!e.needsClient && builtInApps.includes(e.needsClient);
+    const how = howOf(e, builtIn);
+    const manage = state === "on" || state === "off";
+    return (
+      // The whole card opens it for a pointer; its one button is the way in for the keyboard and a screen reader.
+      <li key={e.id} className={`mdir-card${state ? ` is-${state}` : ""}`} onClick={() => setOpen(e)}>
+        <span className="mdir-card-top">
+          <ServiceMark entry={e} size={16} tile={28} />
+          <b className="mdir-name">{e.name}</b>
+          {state ? <StateChip state={state} /> : how.chip && <span className="mdir-how">{how.chip}</span>}
+        </span>
+        <span className="mdir-blurb">{e.blurb}</span>
+        <span className="mdir-card-foot">
+          <span className={`mdir-card-hint${s ? " is-on" : ""}`}>{s ? metaOf(s) : how.hint}</span>
+          <KitButton
+            size="sm"
+            variant={manage ? "ghost" : "secondary"}
+            className="mdir-act"
+            aria-label={`${e.name}: ${state === "on" ? "connected, manage" : state === "off" ? "off, manage" : state ? "needs you" : how.act.toLowerCase()}`}
+            onClick={(ev) => (ev.stopPropagation(), setOpen(e))}
+          >
+            {manage ? "Manage" : state ? "Sign in" : how.act}
+          </KitButton>
+        </span>
+      </li>
+    );
+  };
+  // One of yours in the Connected list: its mark, its name, how many tools and who gets them, its state; it opens its drawer.
+  const row = (s: ConnectionView) => {
+    const e = entryOf(s);
+    const state = stateOf(s);
+    const name = nameOf(s);
     return (
       <li key={s.id}>
-        <button type="button" className={`mdir-card is-${state}`} onClick={() => setOpenOwn(s.id)} aria-label={`${s.name}: ${state === "on" ? "connected" : state === "bad" ? "needs you" : "off"}, manage`}>
-          <span className="mdir-card-top">
-            <span className="mdir-mark mdir-own" style={{ width: 34, height: 34 }} aria-hidden="true">
-              <Icon name={s.transport === "stdio" ? "terminal" : "link"} size={17} />
-            </span>
-            <span className={`mdir-how ${state}`}>
-              <i aria-hidden="true" />
-              {state === "on" ? "Connected" : state === "bad" ? "Needs you" : "Off"}
-            </span>
+        <button type="button" className="mdir-row" onClick={() => openServer(s)} aria-label={`${name}: ${state === "on" ? "connected" : state === "off" ? "off" : "needs you"}, manage`}>
+          {e ? <ServiceMark entry={e} size={16} tile={28} /> : <OwnMark server={s} tile={28} />}
+          <span className="mdir-row-text">
+            <b>{name}</b>
+            <span>{metaOf(s)}</span>
           </span>
-          <span className="mdir-name">{s.name}</span>
-          <span className="mdir-blurb mdir-own-line">{lineOf(s)}</span>
-          <span className="mdir-manage-hint">
-            Manage <Icon name="chevronRight" size={12} />
-          </span>
+          <StateChip state={state} />
+          <Icon name="chevronRight" size={14} className="mdir-row-chev" />
         </button>
       </li>
     );
   };
-  const row = (e: CatalogEntry) => {
-    const state = stateOf(e);
-    const builtIn = !!e.needsClient && builtInApps.includes(e.needsClient);
-    return (
-      <li key={e.id}>
-        <button type="button" className={`mdir-card${state ? ` is-${state}` : ""}`} onClick={() => setOpen(e)} aria-label={`${e.name}: ${state === "on" ? "connected, manage" : state === "bad" ? "needs you" : state === "off" ? "off, manage" : howWord(e, builtIn).toLowerCase()}`}>
-          <span className="mdir-card-top">
-            <ServiceMark entry={e} size={20} />
-            {state ? (
-              <span className={`mdir-how ${state}`}>
-                <i aria-hidden="true" />
-                {state === "on" ? "Connected" : state === "bad" ? "Needs you" : "Off"}
-              </span>
-            ) : (
-              <span className="mdir-how">{howWord(e, builtIn)}</span>
-            )}
-          </span>
-          <span className="mdir-name">{e.name}</span>
-          <span className="mdir-blurb">{e.blurb}</span>
-          {state && (
-            <span className="mdir-manage-hint">
-              Manage <Icon name="chevronRight" size={12} />
-            </span>
-          )}
-        </button>
-      </li>
-    );
-  };
-  const filter = (id: Category | "" | "connected", label: string, n: number) => (
+  const filter = (id: Kind, label: string, n: number, icon: ReactNode, amber = false) => (
     <button key={id || "all"} type="button" className={`mdir-filter${n ? "" : " none"}`} aria-pressed={kind === id} onClick={() => setKind(id)}>
-      <Icon name={id === "" ? "grid" : id === "connected" ? "plug" : KIND_ICON[id]} size={14} />
+      {icon}
       <span>{label}</span>
-      <span className="mdir-count">{n}</span>
+      <span className={`mdir-count${amber && n ? " is-amber" : ""}`}>{n}</span>
     </button>
   );
+  const shownMine = kind === "signin" ? signin.filter(mineMatch) : servers.filter(mineMatch);
   return (
     <section className="mdir" aria-label="Connect a service">
-      {/* Search on the left, what to add on the right, as the Agent Board and Skills have them (Arun, 2026-11-19: "move the search bar
-          on the mcp page to the left side of the page too, like how it is on other pages"). How many services is in its placeholder. */}
+      {/* One line (the approved mock, 2026-11-27): Customize's switch, the search on the left as the other pages have it (Arun,
+          2026-11-19: "move the search bar on the mcp page to the left side of the page too, like how it is on other pages"), then
+          the page's actions, the white one at the right end. How many services is in the search's placeholder. */}
       <div className="mdir-head">
+        {lead}
         <label className="mdir-search">
           <Icon name="search" size={14} />
-          <input type="search" placeholder={`Search ${catalog.length} services`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search services" />
+          <input
+            ref={search}
+            type="search"
+            placeholder={`Search ${catalog.length} services`}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && q && (e.stopPropagation(), setQ(""))}
+            aria-label="Search services"
+          />
+          {!q && <kbd className="mdir-kbd">/</kbd>}
         </label>
+        <span className="mdir-grow" />
         <div className="mdir-head-acts">{actions}</div>
       </div>
       {read === null ? (
@@ -621,61 +731,104 @@ export function Directory({
           </div>
           {trouble ?? (
             <div className="mdir-list" role="status" aria-label="Reading your plugins">
-              <section className="mdir-group" aria-hidden="true">
-                <Skeleton w={132} h={14} className="mdir-skel-head" />
-                <ul className="mdir-cards">
-                  {Array.from({ length: 9 }, (_, i) => (
-                    <li key={i}>
-                      <span className="mdir-card mdir-card-skel">
-                        <span className="mdir-card-top">
-                          <Skeleton w={34} h={34} r={9} />
-                          <Skeleton w={52} h={18} r={999} />
-                        </span>
-                        <Skeleton w={`${44 + ((i * 13) % 30)}%`} h={12} />
-                        <SkeletonLines lines={2} gap={6} />
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
+              <ul className="mdir-cards" aria-hidden="true">
+                {Array.from({ length: 12 }, (_, i) => (
+                  <li key={i} className="mdir-card mdir-card-skel">
+                    <span className="mdir-card-top">
+                      <Skeleton w={28} h={28} r={7} />
+                      <Skeleton w={`${40 + ((i * 13) % 30)}%`} h={12} />
+                    </span>
+                    <SkeletonLines lines={2} gap={6} />
+                    <span className="mdir-card-foot">
+                      <Skeleton w={56} h={24} r={6} />
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
       ) : (
-      <div className="mdir-body mdir-landed">
-        <nav className="mdir-filters" aria-label="Kinds of service">
-          {filter("", "All", catalog.filter(matches).length)}
-          {connected.length + own.length > 0 && filter("connected", "Connected", connected.filter(matches).length + own.filter((s) => !needle || `${s.name} ${lineOf(s)}`.toLowerCase().includes(needle)).length)}
-          <span className="mdir-sep" aria-hidden="true" />
-          {CATEGORIES.filter((c) => catalog.some((e) => e.category === c)).map((c) => filter(c, c, catalog.filter((e) => e.category === c && matches(e)).length))}
-        </nav>
-        <div className="mdir-list">
-          {trouble}
-          {ownShown.length > 0 && (
-            <section className="mdir-group" aria-label="Your own servers">
-              <h3 className="mdir-group-head">
-                <Icon name="server" size={15} />
-                Your own <span>{ownShown.length}</span>
-              </h3>
-              <ul className="mdir-cards">{ownShown.map(ownCard)}</ul>
-            </section>
-          )}
-          {groups
-            .filter((g) => g.list.length)
-            .map((g) => (
-              <section key={g.title} className="mdir-group" aria-label={g.title}>
-                {(groups.length > 1 || kind === "connected") && (
-                  <h3 className="mdir-group-head">
-                    <Icon name={g.title === "Connected" ? "plug" : KIND_ICON[g.title as Category]} size={15} />
-                    {g.title} <span>{g.list.length}</span>
-                  </h3>
-                )}
-                <ul className="mdir-cards">{g.list.map(row)}</ul>
+        <div className="mdir-body mdir-landed">
+          <nav className="mdir-filters" aria-label="Kinds of service">
+            {yours && (
+              <>
+                <span className="mdir-rail-label">Yours</span>
+                {filter("connected", "Connected", servers.filter(mineMatch).length, <CircleCheckIcon aria-hidden="true" />)}
+                {signin.length > 0 && filter("signin", "Needs sign in", signin.filter(mineMatch).length, <CircleAlertIcon aria-hidden="true" />, true)}
+                <span className="mdir-rail-label">Add more</span>
+              </>
+            )}
+            {filter("", "All", allFound, <Icon name="grid" size={14} />)}
+            {CATEGORIES.filter((c) => catalog.some((e) => e.category === c)).map((c) => filter(c, c, catalog.filter((e) => e.category === c && matches(e)).length, <Icon name={KIND_ICON[c]} size={14} />))}
+          </nav>
+          {kind === "connected" || kind === "signin" ? (
+            <div className="mdir-list mdir-yours" key={kind}>
+              {trouble}
+              <section className="mdir-group" aria-label={kind === "connected" ? "Connected" : "Needs sign in"}>
+                <h3 className="mdir-sec-h">
+                  <b>{kind === "connected" ? "Connected" : "Needs sign in"}</b>
+                  <span className="mdir-sec-n">{shownMine.length}</span>
+                  <span>{kind === "connected" ? "Every coding tool on this computer gets these unless you turn one off" : "Sign in again and every coding tool has them back"}</span>
+                </h3>
+                {shownMine.length ? <ul className="mdir-rows">{shownMine.map(row)}</ul> : <p className="mdir-empty">{needle ? `None of yours matches “${q.trim()}”.` : "Nothing connected through Friday yet. Pick a service under Add more."}</p>}
               </section>
-            ))}
-          {!shownCount && <p className="mdir-empty">No service matches “{q.trim()}”. Paste its address or command below instead.</p>}
+              {kind === "connected" && theirs.length > 0 && (
+                <section className="mdir-group" aria-label="From your coding tools">
+                  <h3 className="mdir-sec-h">
+                    <b>From your coding tools</b>
+                    <span className="mdir-sec-n">{theirs.length}</span>
+                    <span>Servers Claude Code already has, shown while its switch is on</span>
+                  </h3>
+                  {/* Claude Code's own: Friday hands them on, but they're managed in Claude Code, so a row here has nothing to open. */}
+                  <ul className="mdir-rows">
+                    {theirs.map((n) => (
+                      <li key={n} className="mdir-row is-static">
+                        <span className="mdir-mark mdir-own" style={{ width: 28, height: 28 }} aria-hidden="true">
+                          <ClaudeMark size={14} />
+                        </span>
+                        <span className="mdir-row-text">
+                          <b>{n}</b>
+                          <span>Claude Code</span>
+                        </span>
+                        <span className="mdir-how">Claude Code's</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </div>
+          ) : (
+            <div className="mdir-list" key={kind || "all"}>
+              {trouble}
+              {cards.length ? (
+                <ul className="mdir-cards" aria-label={kind || "Every service"}>
+                  {cards.map(card)}
+                </ul>
+              ) : kind && allFound ? (
+                <div className="mdir-none">
+                  <b>
+                    None in {kind} called “{q.trim()}”
+                  </b>
+                  <span>
+                    {allFound} in other kinds {allFound === 1 ? "is" : "are"}.
+                  </span>
+                  <KitButton size="sm" variant="secondary" onClick={() => setKind("")}>
+                    Show all {allFound}
+                  </KitButton>
+                </div>
+              ) : (
+                <div className="mdir-none">
+                  <b>No service called “{q.trim()}”</b>
+                  <span>Check the spelling, or add any MCP server yourself.</span>
+                  <KitButton size="sm" variant="secondary" icon={<Icon name="plus" size={14} />} onClick={onCustom}>
+                    Custom server
+                  </KitButton>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      </div>
       )}
       {ownOpen && <OwnSheet identity={identity} server={ownOpen} onClose={() => setOpenOwn("")} onChanged={onChanged} />}
       {open && <ServiceSheet identity={identity} entry={open} servers={servers} builtIn={!!open.needsClient && builtInApps.includes(open.needsClient)} onClose={() => setOpen(null)} onChanged={onChanged} />}

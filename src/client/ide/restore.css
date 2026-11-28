@@ -19,3 +19,13 @@
 .ia-missed span { color: var(--ink-2); }
 .ia-link { margin-left: 6px; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .ia-link:hover { color: var(--ink); }
+
+/* ── Measured to the shared kit (affect-pro SPEC.md §1, 2026-11-27): the bar's words 12/400/16 (the name 500), its actions 24px ghost
+   buttons at radius 6 and 12/500, the one that moves it on a quiet fill. */
+.rb { padding: 6px 8px 6px 12px; font: 400 12px/16px var(--font); }
+.rb-dot { margin-top: 5px; }
+.rb-text b { font-weight: 500; }
+.rb-btn { height: 24px; padding: 0 8px; border-radius: 6px; font: 500 12px/20px var(--font); }
+.rb-go { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.rb-go:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.ia-missed { font-size: 12px; line-height: 16px; }

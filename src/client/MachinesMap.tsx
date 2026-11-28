@@ -4,6 +4,7 @@ import { busyness, rankComputers, toolName, type MachineFacts, type PlaceCandida
 import { EngineMark } from "./BrandMarks.js";
 import { Icon } from "./icons.js";
 import { lastSeen, type State } from "./Computers.js";
+import { hostLine, openHost, type HostView } from "./hosts.js";
 import "./machines-map.css";
 
 /**
@@ -48,14 +49,17 @@ interface Node {
   tools: { tool: string; name: string; loggedIn?: boolean | null }[];
   facts: MachineFacts | null;
   problem?: string;
+  /** A machine that runs on its own (a host, opened here over SSH), not one lending its tools to this one. */
+  host?: HostView;
 }
 type Pos = Record<string, { x: number; y: number }>;
 
-function nodesOf(state: State): Node[] {
+function nodesOf(state: State, hosts: HostView[]): Node[] {
   const here: Node = { id: "here", name: state.here?.name || "This computer", here: true, connected: true, platform: state.here?.platform, tools: state.here?.tools ?? [], facts: state.here?.facts ?? null };
   return [
     here,
     ...state.computers.map((c) => ({ id: c.id, name: c.name, here: false, connected: c.connected, platform: c.platform, seen: c.seen, address: c.address, tools: c.tools, facts: c.facts ?? null, problem: c.problem })),
+    ...hosts.map((h): Node => ({ id: `host-${h.id}`, name: h.label, here: false, connected: h.link === "up", seen: h.lastSeen, tools: [], facts: null, host: h })),
   ];
 }
 
@@ -95,10 +99,11 @@ const readJson = <T,>(key: string, fallback: T): T => {
   }
 };
 
-export function MachinesMap({ state, onAdd }: { state: State; onAdd?: () => void }) {
-  const nodes = nodesOf(state);
-  const ranked = rankComputers(nodes.map((n): PlaceCandidate => ({ id: n.id, name: n.name, connected: n.connected, tools: n.tools, facts: n.facts })));
-  const best = ranked[0]?.ok && nodes.length > 1 ? ranked[0] : null;
+export function MachinesMap({ state, hosts = [], onAdd }: { state: State; /** The machines that run on their own, drawn with a line that says SSH. */ hosts?: HostView[]; onAdd?: () => void }) {
+  const nodes = nodesOf(state, hosts);
+  // Placement picks among the computers sessions here can run on: a host runs its own.
+  const ranked = rankComputers(nodes.filter((n) => !n.host).map((n): PlaceCandidate => ({ id: n.id, name: n.name, connected: n.connected, tools: n.tools, facts: n.facts })));
+  const best = ranked[0]?.ok && ranked.length > 1 ? ranked[0] : null;
   const wrap = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: readJson<number>(HEIGHT_KEY, 240) });
   const [moved, setMoved] = useState<Pos>(() => readJson<Pos>(POS_KEY, {}));
@@ -205,7 +210,7 @@ export function MachinesMap({ state, onAdd }: { state: State; onAdd?: () => void
       const my = (y0 + y1) / 2;
       d = `M${x0},${y0} C${x0},${my} ${x1},${my} ${x1},${y1}`;
     }
-    return { id: n.id, d, x: (x0 + x1) / 2, y: (y0 + y1) / 2, on: n.connected, busy: !!n.facts?.agents, label: routeOf(n.address, n.connected) };
+    return { id: n.id, d, x: (x0 + x1) / 2, y: (y0 + y1) / 2, on: n.connected, busy: n.host ? !!n.host.running : !!n.facts?.agents, label: n.host ? (n.connected ? "SSH" : "Not connected") : routeOf(n.address, n.connected), ssh: !!n.host };
   });
 
   return (
@@ -236,7 +241,7 @@ export function MachinesMap({ state, onAdd }: { state: State; onAdd?: () => void
       >
         <svg className="cmap-lines" width={size.w} height={height} aria-hidden="true">
           {lines.map((l) => (
-            <g key={l.id} className={l.on ? "on" : "off"}>
+            <g key={l.id} className={`${l.on ? "on" : "off"}${l.ssh ? " ssh" : ""}`}>
               <path d={l.d} />
               {l.busy && l.on && (
                 <circle r="2.5" className="cmap-pulse">
@@ -287,7 +292,11 @@ export function MachinesMap({ state, onAdd }: { state: State; onAdd?: () => void
  */
 function Tile({ n, x, y, best, open, dragging, onDown, onKey }: { n: Node; x: number; y: number; best: string[] | null; open: boolean; dragging: boolean; onDown: (e: ReactPointerEvent) => void; onKey: () => void }) {
   const f = n.facts;
-  const doing = !n.connected
+  const doing = n.host
+    ? n.host.link === "up"
+      ? `On its own · ${n.host.running ? `${n.host.running} running` : "Idle"}`
+      : hostLine(n.host)
+    : !n.connected
     ? n.problem
       ? "Needs pairing again"
       : `Last seen ${n.seen ? lastSeen(n.seen) : "a while ago"}`
@@ -322,6 +331,24 @@ function Tile({ n, x, y, best, open, dragging, onDown, onKey }: { n: Node; x: nu
 }
 
 function Details({ n, best }: { n: Node; best: string[] | null }) {
+  // A host's own Friday has the rest: where it is, how it stands, and a press to open it.
+  if (n.host) {
+    const h = n.host;
+    return (
+      <>
+        <div className="cmap-info-head">
+          <b>{n.name}</b>
+          <span className="muted small">{[`${h.ssh} over SSH`, h.os?.split(" ")[0] === "Darwin" ? "macOS" : h.os?.split(" ")[0], h.version ? `Friday ${h.version}` : ""].filter(Boolean).join(" · ")}</span>
+        </div>
+        <div className="cmap-why">
+          {h.link === "up" ? "Runs on its own: its sessions keep going when this computer sleeps. " : `${hostLine(h)}. `}
+          <button type="button" className="link-btn small" disabled={h.link !== "up"} onClick={() => openHost(h)}>
+            Open {n.name}
+          </button>
+        </div>
+      </>
+    );
+  }
   const f = n.facts;
   const signed = n.tools.filter((t) => t.loggedIn === true);
   const busy = busyness(f);

@@ -1,0 +1,87 @@
+/* The Sessions sidebar in the measured affectUI system (scratchpad SPEC §1, running-now, command-menu, agent-inbox): 28px controls
+   at radius 6, section labels 10/500 uppercase with their count in T3 (T4 read as nothing at 10px), rows at radius 6 whose tint fades in .14s, chips 18 tall at
+   radius 5 in 11/500, kbds 20 tall at radius 5 on an inset ring, the kit's card edge for the notice in its foot. Named under
+   `html .sb-panel-inner` to outweigh the older layers in style.css, which app.css loads before. The Captain cards (managers.css)
+   are their own and untouched here. */
+html .sb-panel-inner {
+  --sp-fill: var(--aui-subtle, color-mix(in srgb, var(--ink) 5%, transparent));
+  --sp-t2: color-mix(in srgb, var(--ink) 62%, transparent);
+  --sp-t3: color-mix(in srgb, var(--ink) 48%, transparent);
+  --sp-t4: color-mix(in srgb, var(--ink) 30%, transparent);
+}
+
+/* ── New thread and its filter: one 32px row, the kbd as the command menu draws it ── */
+html .sb-panel-inner .sb-new-row .sb-new { height: 32px; gap: 8px; padding: 0 6px 0 8px; border-radius: 6px; font: 500 13px/20px var(--font); transition: background-color .14s ease; }
+html .sb-panel-inner .sb-new-row .sb-new:hover { background: var(--sp-fill) !important; }
+html .sb-panel-inner .sb-new-row .sb-new > svg:first-child { width: 16px; height: 16px; color: var(--sp-t3); }
+html .sb-panel-inner .sb-new .dass-kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; box-sizing: border-box; margin-left: auto; padding: 0 5px; border: 0; border-radius: 5px; background: none; box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--ink) 16%, transparent); color: var(--sp-t3); font: 500 11px/16px var(--font); letter-spacing: .02em; transition: color .14s ease; }
+html .sb-panel-inner .sb-new:hover .dass-kbd { color: var(--sp-t2); }
+html .sb-panel-inner .sb-new-row .sb-filter-btn { border-radius: 6px; color: var(--sp-t3); transition: background-color .14s ease, color .14s ease; }
+html .sb-panel-inner .sb-new-row .sb-filter-btn:is(:hover, .on, [aria-expanded="true"]) { background: var(--sp-fill); color: var(--ink); }
+
+/* ── Section labels (Needs you, Recent, pinned, a folder's group): the eyebrow, 10/500 uppercase, its count in T3 ── */
+html .sb-panel-inner .sb-tray:not(.sb-card) [data-sidebar="group-label"] { height: 28px; gap: 6px; color: var(--sp-t3); font: 500 10px/16px var(--font); letter-spacing: .5px; text-transform: uppercase; transition: color .14s ease; }
+html .sb-panel-inner .sb-tray:not(.sb-card) [data-sidebar="group-label"]:hover { color: var(--ink); }
+html .sb-panel-inner .sb-tray:not(.sb-card) [data-sidebar="group-label"] .sb-group-count { color: var(--sp-t3); font: 500 11px/16px var(--font); letter-spacing: 0; }
+html .sb-panel-inner .sb-tray:not(.sb-card) [data-sidebar="group-label"] :is(.normal-case, .sb-gstate) { text-transform: none; letter-spacing: 0; }
+html .sb-panel-inner .sb-tray [data-sidebar="group-label"] .sb-fold-chev { color: var(--sp-t4); }
+
+/* ── A fold (a project's card, Needs you, Pinned, Recent, the Captains: sidebar-fold.tsx): its body's grid row goes 0fr↔1fr and its
+   chevron turns in the same .26s (Arun, 2026-11-27: "iron out any laggy/buggy closing and opening of the project cards"). The chevron
+   is turned by Tailwind's rotate-90, the rotate property, so a transition on transform never moved it: it snapped. The body clips
+   only while it moves or is shut, and not above or to its sides, where a card's rail runs up to its tile. ── */
+html .sb-panel-inner .sb-fold-chev { transition: rotate .26s cubic-bezier(.32, .72, .24, 1); }
+.sb-fold { display: grid; grid-template-rows: 0fr; grid-template-columns: minmax(0, 1fr); min-width: 0; transition: grid-template-rows .26s cubic-bezier(.32, .72, .24, 1); }
+/* One column the sidebar's width: its auto column took its widest row's, so a crew mate's long last line ran the sidebar sideways
+   (Arun, 2026-11-27: "fix side bar threre shouldnt be horinztonal scroll at all"). */
+.sb-fold > .sb-fold-in { min-width: 0; }
+.sb-fold[data-open] { grid-template-rows: 1fr; }
+.sb-fold > .sb-fold-in { min-height: 0; clip-path: inset(-40px -40px 0 -40px); }
+.sb-fold[data-open]:not([data-fold-moving]) > .sb-fold-in { clip-path: none; }
+/* The threads fade and lift as they fold and come back as they open, so the shrinking edge never shows a row cut through its middle
+   (Arun, 2026-11-27: "collapsing of the project cards is not smooth and buggy visually"): gone in the first half of the close, in
+   after a beat on the open. */
+.sb-fold > .sb-fold-in { opacity: 1; transform: none; transition: opacity .2s ease .06s, transform .26s cubic-bezier(.32, .72, .24, 1); }
+.sb-fold:not([data-open]) > .sb-fold-in { opacity: 0; transform: translateY(-6px); transition: opacity .12s ease, transform .26s cubic-bezier(.32, .72, .24, 1); }
+html.reduce-motion :is(.sb-fold, .sb-fold-chev, .sb-fold-in) { transition: none !important; }
+html .sb-panel-inner .sb-needs-icon svg { width: 12px; height: 12px; }
+
+/* ── A thread's row: radius 6, the tint under the pointer fading in .14s; the title 13.5/500 and the ring a size up as Arun asked
+   for (2026-11-19: "make it slightly bigger with better typography"), the line under it 12/400 T3; two lines make a 48px row. */
+html .sb-panel-inner .sb-scroll .dass-row.sb-row { border-radius: 6px; transition: background-color .14s ease; }
+html .sb-panel-inner .sb-scroll .sb-row:has(> .dass-row-sub:not(:empty)) { min-height: 48px; }
+html .sb-panel-inner .sb-row .dass-row-time { color: var(--sp-t3); font-size: 12px; line-height: 16px; }
+html .sb-panel-inner .sb-row > .dass-row-sub { color: var(--sp-t3); }
+html .sb-panel-inner .sb-row .dass-row-act :is(.icon-btn, button) { border-radius: 6px; color: var(--sp-t3); transition: background-color .14s ease, color .14s ease; }
+html .sb-panel-inner .sb-row .dass-row-act :is(.icon-btn, button):hover { background: var(--sp-fill); color: var(--ink); }
+
+/* ── Chips: "1 needs you" as the kit's warning chip, 18 tall at radius 5, 11/500 amber on its tint ── */
+html .sb-panel-inner .sb-gstate.needs { height: 18px; box-sizing: border-box; padding: 0 6px; border-radius: 5px; background: color-mix(in srgb, var(--amber) 16%, transparent); color: color-mix(in srgb, var(--amber) 72%, var(--ink)); font: 500 11px/18px var(--font); }
+html.dark .sb-panel-inner .sb-gstate.needs { color: var(--amber); }
+html .sb-panel-inner .sb-gstate.live { font: 500 11px/16px var(--font); color: var(--sp-t3); }
+
+/* ── The notice in its foot ("Working with other people…"): a card on the kit's edge at radius 10, 12/400 T2, a 22px close ── */
+html .sb-panel-inner .sb-list-foot .team-tip.in-foot { gap: 8px; padding: 8px 6px 8px 10px; border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--aui-shadow-card, 0 0 0 1px var(--border)); color: var(--sp-t2); font-size: 12px; line-height: 16px; }
+html .sb-panel-inner .sb-list-foot .team-tip.in-foot .team-tip-go { margin: -8px -6px -8px -10px; padding: 8px 6px 8px 10px; border-radius: 10px; gap: 8px; color: inherit; transition: background-color .14s ease, color .14s ease; }
+html .sb-panel-inner .sb-list-foot .team-tip.in-foot .team-tip-go:hover { background: var(--sp-fill); color: var(--ink); }
+html .sb-panel-inner .sb-list-foot .team-tip.in-foot .team-tip-go > svg { color: var(--sp-t3); opacity: 1; }
+html .sb-panel-inner .sb-list-foot .team-tip.in-foot b { color: var(--ink); font-weight: 500; }
+html .sb-panel-inner .sb-list-foot .team-tip.in-foot .team-tip-x { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: 6px; color: var(--sp-t3); opacity: 1; transition: background-color .14s ease, color .14s ease; }
+html .sb-panel-inner .sb-list-foot .team-tip.in-foot .team-tip-x:hover { background: var(--sp-fill); color: var(--ink); }
+
+/* ── The rail: 36px places at radius 8, the open one lifted as the kit's segmented control lifts its chosen item ── */
+html .sb-panel-inner .oss-rail-group, html .sb-panel-inner .oss-rail-foot { gap: 4px; }
+html .sb-panel-inner .oss-rail-btn:not(.oss-rail-ring) { width: 36px; height: 36px; border-radius: 8px; color: var(--sp-t3); transition: background-color .14s ease, color .14s ease, box-shadow .18s ease; }
+html .sb-panel-inner .oss-rail-btn:hover { background: var(--sp-fill); color: var(--ink); }
+html .sb-panel-inner .oss-rail-btn[data-active] { background: var(--card); color: var(--ink); box-shadow: var(--aui-shadow-card, 0 0 0 1px var(--border)), 0 1px 2px rgb(0 0 0 / .06); }
+html .sb-panel-inner .oss-rail-btn > svg { width: 18px; height: 18px; }
+html .sb-panel-inner .oss-rail-sep { width: 20px; margin: 6px 0; background: var(--border); }
+html .sb-panel-inner .oss-rail-n { font: 500 10px/16px var(--font); font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  html .sb-panel-inner :is(.sb-new, .sb-filter-btn, .sb-row, .oss-rail-btn, .sb-fold-chev, .sb-fold, .sb-fold-in) { transition: none !important; }
+}
+/* The crew list never scrolls sideways: a long line ends in an ellipsis inside the row (Arun, 2026-11-27: "there shouldnt be
+   horinztonal scroll at all"). */
+html .oss-crew-scroll { overflow-x: hidden; }
+html .oss-crew-scroll :is(.oss-crew-item, .sb-fold, .sb-fold-in) { min-width: 0; max-width: 100%; }

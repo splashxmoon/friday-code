@@ -59,7 +59,7 @@ test("a review's verdict: approved, sent back, or neither, which is no verdict r
   assert.equal(reviewVerdict("Found a problem: a double tap creates two charges."), "fail");
   // From Arun's crews: both had passed as approvals.
   assert.equal(reviewVerdict(""), "unclear");
-  assert.equal(reviewVerdict("I'm still holding: arundass told everyone to stop and said we'll resume later."), "unclear");
+  assert.equal(reviewVerdict("I'm still holding: ada told everyone to stop and said we'll resume later."), "unclear");
   assert.equal(reviewVerdict("Manager's g-deploy patch is right. Leaving out kiosk.html was the correct call."), "unclear");
 });
 

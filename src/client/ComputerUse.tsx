@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { SettingsRow } from "@/components/dass";
-import { Switch as Toggle } from "@/components/ui/switch";
+import { Switch as Toggle } from "./settings-kit.js";
 import type { ComputerStatus } from "../runner/computer.js";
 import { Icon } from "./icons.js";
 import { hostApi } from "./local.js";

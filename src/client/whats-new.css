@@ -3,29 +3,42 @@
 /* In the desktop app a sheet keeps clear of the window's own bar, 40px (the Mac's traffic lights, the minimise and close on
    Windows and Linux): centred in what's below it, as the app's dialogs are, so its close never sits in the part that drags. */
 html.desktop .wn-overlay { padding-top: 52px; }
-.wn { position: relative; width: min(544px, 100%); overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); box-shadow: 0 1px 0 color-mix(in srgb, #fff 4%, transparent) inset, 0 18px 48px -16px rgb(0 0 0 / .45), 0 4px 12px -6px rgb(0 0 0 / .25); animation: wn-in var(--t-open, .18s) var(--ease-out, ease-out); }
-:root:not(.dark) .wn { box-shadow: 0 18px 48px -18px rgb(0 0 0 / .22), 0 4px 12px -6px rgb(0 0 0 / .1); }
-@keyframes wn-in { from { opacity: 0; transform: translateY(6px) scale(.985); } }
+/* The kit's Dialog: radius 14 on the popover's surface, edge and drop (chrome.css), no border, rising 6px from 97% on EXPO. Glass
+   keeps it frosted and firm: the page's see-through --panel let the home screen read through the welcome. */
+.wn { position: relative; width: min(544px, 100%); overflow: hidden; border: 0; border-radius: 14px; background: var(--ch-pop, var(--card)); box-shadow: var(--ch-sh-pop); animation: wn-in .24s var(--ch-expo, ease-out) both; }
+html.glass .wn { -webkit-backdrop-filter: blur(28px) saturate(1.6); backdrop-filter: blur(28px) saturate(1.6); }
+@keyframes wn-in { from { opacity: 0; transform: translateY(6px) scale(.97); } }
 @media (prefers-reduced-motion: reduce) { .wn { animation: none; } }
 .wn-hero { display: grid; place-items: center; height: 148px; border-bottom: 1px solid var(--border); background:
-  radial-gradient(60% 90% at 50% 100%, color-mix(in srgb, var(--ink) 7%, transparent), transparent 70%),
-  color-mix(in srgb, var(--ink) 3%, var(--panel)); }
+  radial-gradient(60% 90% at 50% 100%, color-mix(in srgb, var(--ink) 6%, transparent), transparent 70%),
+  color-mix(in srgb, var(--ink) 2.4%, transparent); }
 .wn-faces { display: flex; align-items: flex-end; gap: 14px; padding-top: 22px; }
 .wn-faces > span { display: block; }
-.wn-ver { position: absolute; left: 20px; top: 16px; height: 22px; padding: 0 8px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--ink-2); font: 500 12px/20px var(--mono, ui-monospace, monospace); font-variant-numeric: tabular-nums; }
-.wn-x { position: absolute; right: 14px; top: 14px; display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 7px; background: transparent; color: var(--text-muted); cursor: pointer; }
-.wn-x:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
-.wn-body { padding: 20px 24px 6px; }
-.wn-body h2 { margin: 0; color: var(--ink); font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
-.wn-sub { margin: 6px 0 14px; color: var(--text-muted); font-size: 13px; line-height: 18px; text-wrap: pretty; }
+/* The version: a chip, 20px at radius 5 on the card's own surface and ring. */
+.wn-ver { position: absolute; left: 20px; top: 16px; height: 20px; padding: 0 6px; box-sizing: border-box; border: 0; border-radius: 5px; background: var(--ch-pop, var(--card)); box-shadow: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .05); color: var(--ink-2); font: 500 11px/20px var(--mono, ui-monospace, monospace); font-variant-numeric: tabular-nums; }
+/* The kit dialog's ×: 28px at radius 6, quiet until the pointer is on it. */
+.wn-x { position: absolute; right: 12px; top: 12px; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; transition: background-color .14s ease, color .14s ease, transform .16s var(--ch-expo, ease-out); }
+.wn-x:hover { background: var(--ch-glow, color-mix(in srgb, var(--ink) 7%, transparent)); color: var(--ink); }
+.wn-x:active { transform: scale(.94); }
+.wn-body { padding: 16px 20px 4px; }
+.wn-body h2 { margin: 0; color: var(--ink); font-size: 15px; line-height: 24px; font-weight: 500; letter-spacing: 0; }
+.wn-sub { margin: 4px 0 14px; color: var(--text-muted); font-size: 13px; line-height: 20px; text-wrap: pretty; }
 .wn-back { gap: 4px; }
 .wn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; margin: 0; padding: 12px 0 8px; border-top: 1px solid var(--border); list-style: none; }
 .wn-grid li { display: flex; align-items: flex-start; gap: 11px; min-width: 0; padding: 8px 0; }
-.wn-tile { display: grid; flex: none; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink-2); }
-.wn-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.wn-item b { overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 500; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+/* The kit's logo tile: 24px at radius 6 on the card's surface and ring, its icon a step quieter. */
+.wn-tile { display: grid; flex: none; place-items: center; width: 24px; height: 24px; margin-top: -2px; border-radius: 6px; background: var(--ch-pop, var(--card)); box-shadow: 0 0 0 .5px var(--border-strong), 0 1px 1px -1px rgb(0 0 0 / .1); color: var(--text-muted); }
+.wn-tile svg { width: 14px; height: 14px; }
+.wn-item { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.wn-item b { overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 500; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
 .wn-item span { color: var(--text-muted); font-size: 12px; line-height: 16px; }
-.wn-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 24px 18px; }
+/* The foot: 49px over a hairline, the way on at its end (the kit's stepper form and dialog). */
+.wn-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 49px; box-sizing: border-box; padding: 0 12px 0 20px; border-top: 1px solid var(--border); }
+.wn.ob .wn-foot { padding: 0 12px; }
+.wn-foot .btn.small { height: 28px; padding: 0 10px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+.wn-foot .btn.small.ghost { border: 0; background: var(--ch-btn, var(--card)); box-shadow: 0 0 0 .5px var(--border-strong), 0 1px 1px -1px rgb(0 0 0 / .1), 0 1px 2px rgb(0 0 0 / .05); color: var(--ink); }
+.wn-foot .btn.small.ghost:hover { box-shadow: 0 0 0 .5px var(--border-hover), 0 1px 3px rgb(0 0 0 / .08); }
+.wn-foot .wn-back svg { width: 14px; height: 14px; }
 .wn-foot-end { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
 .wn-notes { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--text-muted); font: inherit; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap; cursor: pointer; }
 .wn-notes:hover { color: var(--ink); }
@@ -61,18 +74,13 @@ html.desktop .wn.ob { max-height: min(536px, calc(100dvh - 76px)); }
 /* The scrollbar in the sheet's right margin, never over the rows' buttons (Windows and Linux draw one that takes room). */
 .ob-scroll { margin-right: -16px; padding-right: calc(16px - var(--sb, 0px)); }
 .ob-wait { display: flex; align-items: center; justify-content: center; gap: 8px; height: 100%; min-height: 96px; margin: 0; color: var(--text-muted); font-size: 13px; }
-.ob-steps { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px 0 9px; font-family: inherit; }
-.ob-steps i { width: 6px; height: 6px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 18%, transparent); transition: width var(--t-hover, .15s) var(--ease-out, ease-out); }
-.ob-steps i.done { background: color-mix(in srgb, var(--ink) 45%, transparent); }
-.ob-steps i.on { width: 16px; border-radius: 99px; background: var(--ink); }
-.ob-steps span { margin-left: 5px; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 /* The coding tools where the faces stand: one even row on the hero's middle line. */
 .ob-marks { display: flex; align-items: center; justify-content: center; gap: 16px; padding-top: 12px; }
 .ob-mark { position: relative; display: grid; flex: none; place-items: center; border: 1px solid var(--border); border-radius: 30%; background: var(--panel); box-shadow: 0 6px 16px -10px rgb(0 0 0 / .45); }
 .ob-mark:not(.ready) > svg { opacity: .5; }
 .ob-ok { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--green); color: #fff; box-shadow: 0 0 0 2px var(--panel); }
 .ob-label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 0 4px; border-top: 1px solid var(--border); }
-.ob-label b { color: var(--ink); font-size: 12.5px; font-weight: 600; }
+.ob-label b { color: var(--ink-2); font-size: 12px; line-height: 16px; font-weight: 500; }
 .ob-label span { color: var(--text-muted); font-size: 12px; }
 .ob-label span[data-ready] { color: color-mix(in srgb, var(--green) 85%, var(--ink)); }
 .ob-list { display: flex; flex-direction: column; margin: 0; padding: 4px 0 6px; border-top: 1px solid var(--border); list-style: none; }
@@ -81,9 +89,9 @@ html.desktop .wn.ob { max-height: min(536px, calc(100dvh - 76px)); }
 .ob-row > .wn-item { flex: 1; }
 .ob-row .wn-item .usage-notice-link { padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .ob-row-body { flex: 1 1 100%; padding: 4px 0 2px 43px; }
-.ob-tile { width: 32px; height: 32px; border-radius: 9px; color: var(--ink); }
+.ob-tile { width: 28px; height: 28px; border-radius: 7px; color: var(--ink-2); }
 .ob-ready { display: inline-flex; align-items: center; gap: 5px; color: color-mix(in srgb, var(--green) 85%, var(--ink)); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
-.ob .btn.small { height: 28px; padding: 0 12px; font-size: 12.5px; }
+.ob .btn.small { height: 28px; padding: 0 10px; border-radius: 6px; font-size: 13px; font-weight: 500; }
 /* The tool rows (MachineBadge, welcome): hairline rows, as the sheet's own lists, not boxed cards. */
 .ob-tools .mb-welcome .mb-tools { gap: 0; }
 .ob-tools .mb-welcome .mb-tool { min-height: 48px; padding: 8px 0; border: 0; border-radius: 0; background: none; }
@@ -97,7 +105,7 @@ html.desktop .wn.ob { max-height: min(536px, calc(100dvh - 76px)); }
 .ob-tools .mb-welcome .mb-tool-state::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
 .ob-tools .mb-welcome .mb-tool.in .mb-tool-state::before { background: var(--green); }
 .ob-tools .mb-welcome .mb-tool.out .mb-tool-state::before { background: var(--amber); }
-.ob-tools .mb-welcome .btn.small.mb-tool-go { height: 28px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; }
+.ob-tools .mb-welcome .btn.small.mb-tool-go { height: 28px; padding: 0 12px; border-radius: var(--r-md, 8px); font-size: 12.5px; }
 .ob-tools .mb-welcome .mb-more { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
 .ob-tools .mb-welcome .mb-more .more-tools { justify-content: flex-start; padding: 10px 0 2px 43px; }
 
@@ -107,8 +115,33 @@ html.desktop .wn.ob { max-height: min(536px, calc(100dvh - 76px)); }
 .ob-tools .mb-welcome .btn.small.mb-tool-go { border-radius: var(--r-md); }
 
 /* A release's own headline, "What's new in Friday" small over it (WhatsNew.tsx). */
-.wn-kicker { display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 12px; font-weight: 500; letter-spacing: 0.01em; }
-.wn-body .wn-kicker + h2 { font-size: 22px; line-height: 1.2; letter-spacing: -.015em; }
+.wn-kicker { display: block; margin-bottom: 2px; color: var(--text-muted); font-size: 10px; line-height: 16px; font-weight: 500; letter-spacing: .5px; text-transform: uppercase; }
 /* Star on GitHub, beside the notes, Got it alone on the right. */
 .wn-star { margin-left: 4px; margin-right: auto; }
 .wn-star svg { color: #c9951a; }
+
+/* The welcome's steps (Setup.tsx), as the kit's stepper form: three equal columns under the hero, each a 2px bar that fills as it
+   is reached over its number and its name in small capitals; the step you're on in ink, a done one with a check, the next ones
+   quiet. The step's content slides in from the side it is heading to. */
+.ob-stepper { display: grid; flex: none; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 12px 16px 0; list-style: none; }
+.ob-step {
+  display: grid; grid-template-columns: 12px minmax(0, 1fr); align-items: center; gap: 6px 6px; width: 100%; padding: 4px 4px 2px; border: 0;
+  border-radius: 6px; background: none; font: inherit; text-align: left; cursor: pointer; transition: background-color .1s ease;
+}
+.ob-step:disabled, .ob-step[data-at="on"] { cursor: default; }
+.ob-step:disabled { opacity: 1; }
+.ob-step[data-at="done"]:hover { background: var(--ch-glow, var(--hover)); }
+.ob-step:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+.ob-step-bar { grid-column: 1 / -1; height: 2px; border-radius: 1px; background: var(--ch-f6, var(--border)); transition: background-color .3s var(--ch-expo, ease-out); }
+.ob-step[data-at] .ob-step-bar { background: var(--ink); }
+.ob-step-n { display: grid; place-items: center; height: 16px; color: var(--faint); opacity: .7; font: 500 10px/16px var(--font); font-variant-numeric: tabular-nums; }
+.ob-step[data-at] .ob-step-n { color: var(--ink); opacity: 1; animation: ob-n-in .26s var(--ch-expo, ease-out); }
+.ob-step-name { overflow: hidden; color: var(--text-muted); font: 500 10px/16px var(--font); letter-spacing: .5px; text-transform: uppercase; text-overflow: ellipsis; white-space: nowrap; transition: color .2s ease; }
+.ob-step[data-at="on"] .ob-step-name { color: var(--ink); }
+@keyframes ob-n-in { from { opacity: 0; transform: scale(.6); } }
+.wn.ob > .wn-body { padding-top: 12px; }
+.wn.ob > .wn-body[data-way="on"] { animation: ob-in-on .32s var(--ch-expo, ease-out) both; }
+.wn.ob > .wn-body[data-way="back"] { animation: ob-in-back .32s var(--ch-expo, ease-out) both; }
+@keyframes ob-in-on { from { opacity: 0; transform: translateX(16px); } }
+@keyframes ob-in-back { from { opacity: 0; transform: translateX(-16px); } }
+@media (prefers-reduced-motion: reduce) { .wn.ob > .wn-body, .ob-step-n { animation: none !important; } .ob-step, .ob-step-bar, .ob-step-name { transition: none; } }

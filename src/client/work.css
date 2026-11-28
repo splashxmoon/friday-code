@@ -6,8 +6,8 @@
 :root { --font-doc: "Newsreader", "Iowan Old Style", "Charter", Georgia, serif; }
 
 /* Code or Work, in the sidebar. */
-.work-seg { display: inline-flex; padding: 2px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--card); }
-.work-seg button { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: var(--text-muted); font: inherit; font-size: 13px; cursor: pointer; }
+.work-seg { display: inline-flex; padding: 2px; border: 1px solid var(--border-strong); border-radius: var(--r-md, 8px); background: var(--card); }
+.work-seg button { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px; border: 0; border-radius: var(--r-sm, 6px); background: transparent; color: var(--text-muted); font: inherit; font-size: 13px; cursor: pointer; }
 .work-seg button:hover { color: var(--ink); }
 .work-seg button.on { background: var(--muted); color: var(--ink); font-weight: 550; }
 
@@ -119,7 +119,7 @@
 .gallery-head .icon-btn { color: var(--ink-2); }
 .gallery-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 64px; }
 .gallery-stage img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--r-md); box-shadow: 0 0 0 1px var(--border); }
-.gallery-nav { position: absolute; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--card); color: var(--ink); cursor: pointer; transition: background-color var(--t-hover) var(--ease-out); }
+.gallery-nav { position: absolute; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--border-strong); border-radius: var(--r-md, 8px); background: var(--card); color: var(--ink); cursor: pointer; transition: background-color var(--t-hover) var(--ease-out); }
 .gallery-nav:hover:not(:disabled) { background: var(--hover); }
 .gallery-nav:disabled { opacity: .35; cursor: default; }
 .gallery-nav.prev { left: 14px; }
@@ -183,7 +183,7 @@
 .wr-more, .wr-all { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; padding: 4px 8px; border: 0; border-radius: var(--r-md); background: transparent; color: var(--ink-2); font: 500 12px/16px var(--font); cursor: pointer; transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out); }
 .wr-more:hover, .wr-all:hover { background: var(--hover); color: var(--ink); }
 .wr-all { align-self: flex-start; margin-left: -8px; }
-.wr-chip { flex: none; height: 26px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 999px; background: transparent; color: var(--ink-2); font: 500 12px/1 var(--font); cursor: pointer; transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out); }
+.wr-chip { flex: none; height: 26px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--r-sm, 6px); background: transparent; color: var(--ink-2); font: 500 12px/1 var(--font); cursor: pointer; transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out); }
 .wr-chip:hover { background: var(--hover); color: var(--ink); }
 
 /* Each agent's row: its mark wearing how it stands (presence.tsx: a turning ring while it works, amber with "?" while it waits on
@@ -302,7 +302,7 @@ button.wr-source:hover { background: var(--hover); }
 /* Every output, as a gallery: a find field, its kinds as filter pills (the one picked filled, never the white primary), cards. */
 .wa-bar { flex: none; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .wa-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.wa-chips button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--ink-2); font: 500 12px/1 var(--font); cursor: pointer; transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out), border-color var(--t-hover) var(--ease-out); }
+.wa-chips button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); background: transparent; color: var(--ink-2); font: 500 12px/1 var(--font); cursor: pointer; transition: background-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out), border-color var(--t-hover) var(--ease-out); }
 .wa-chips button em { color: var(--text-muted); font-style: normal; font-variant-numeric: tabular-nums; }
 .wa-chips button:hover { background: var(--hover); color: var(--ink); }
 .wa-chips button.on { border-color: transparent; background: var(--hover-strong); color: var(--ink); }
@@ -319,7 +319,7 @@ button.wr-source:hover { background: var(--hover); }
 .wa-pic.drawn { background: var(--hover); }
 .wa-pic.mosaic > img { position: absolute; width: calc(50% - 1px); height: calc(50% - 1px); inset: auto; object-fit: cover; }
 .wa-pic.mosaic > img:nth-of-type(1) { top: 0; left: 0; } .wa-pic.mosaic > img:nth-of-type(2) { top: 0; right: 0; } .wa-pic.mosaic > img:nth-of-type(3) { bottom: 0; left: 0; } .wa-pic.mosaic > img:nth-of-type(4) { bottom: 0; right: 0; }
-.wa-play { position: absolute; left: 50%; top: 50%; display: grid; place-items: center; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; background: rgb(0 0 0 / .55); color: #fff; backdrop-filter: blur(4px); }
+.wa-play { position: absolute; left: 50%; top: 50%; display: grid; place-items: center; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: var(--r-md, 8px); background: rgb(0 0 0 / .55); color: #fff; backdrop-filter: blur(4px); }
 .wa-paper, .wa-page, .wa-sheet, .wa-wave { position: absolute; inset: 14px 14px 0; display: flex; flex-direction: column; gap: 6px; padding: 14px 14px 0; border: 1px solid var(--border-strong); border-bottom: 0; border-radius: var(--r-md) var(--r-md) 0 0; background: var(--bg); overflow: hidden; }
 .wa-paper b, .wa-page b { color: var(--ink); font-size: 12px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .wa-paper b { flex: none; font-family: var(--font-doc); font-size: 16px; font-weight: 500; line-height: 1.15; letter-spacing: -0.01em; -webkit-line-clamp: 3; }
@@ -738,3 +738,16 @@ html.work-session .bench-panel .browser-url { font-family: var(--font); font-siz
 .wa-chips button { border-radius: var(--r-md); }
 .wr-chip,
 .sb-work-hint { border-radius: var(--r-sm, 6px); }
+
+/* The rail in the measured affectUI system (scratchpad SPEC §1.1/§1.2): its head 40 tall with a 15/500 title and 28px icon
+   buttons at radius 6; each part's head a 44px row in 13/500 with its count in 12/400 T3 and a chevron in T4 that turns on the
+   EXPO curve; the tint under the pointer at radius 6, fading in .14s. */
+.wr .wr-head { height: 40px; padding: 0 8px 0 16px; }
+.wr .wr-head b { font-size: 15px; font-weight: 500; line-height: 24px; }
+.wr .wr-head .wr-icon, .wr .wr-icon { width: 28px; height: 28px; border-radius: 6px; transition: background-color .14s ease, color .14s ease; }
+.wr .wr-icon:hover { background: var(--aui-subtle, var(--hover)); }
+.wr .wr-part-head { min-height: 44px; border-radius: 6px; font-weight: 500; font-size: 13px; line-height: 20px; transition: background-color .14s ease; }
+.wr .wr-part-head:hover { background: var(--aui-subtle, var(--hover)); }
+.wr .wr-part-head > svg { color: color-mix(in srgb, var(--ink) 30%, transparent); transition: transform .32s cubic-bezier(.22, 1, .36, 1), color .14s ease; }
+.wr .wr-part-head > :not(.wr-part-title):not(svg) { color: color-mix(in srgb, var(--ink) 48%, transparent); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .wr .wr-part-head, .wr .wr-part-head > svg, .wr .wr-icon { transition: none; } }

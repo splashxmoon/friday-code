@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Icon } from "./icons.js";
 import type { Send } from "./useSession.js";
 import { placeCard, useDismiss } from "./ui.js";
+import "./branch-race.css";
 
 interface Branch {
   name: string;

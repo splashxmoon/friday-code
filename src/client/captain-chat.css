@@ -1,0 +1,347 @@
+/* The Captain page's conversation column (CaptainChat.tsx): needs-you on top, the talk with its plan cards and agents' updates in
+   the middle, the box at the foot. Its messages borrow the window's (managers.css .mgr-msg, .mgr-quick, .mgr-composer). */
+.cch { display: flex; flex-direction: column; flex: 1; height: 100%; min-height: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink); }
+.cch-main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.cch-main > .cpt-work { flex: 1; min-height: 0; }
+
+/* The dock: the talk with the Captain at the foot of every tab, as wide as a reading column. */
+.cch-dock { flex: none; display: flex; flex-direction: column; gap: 8px; width: min(820px, calc(100% - 32px)); margin: 0 auto; padding: 8px 0 14px; }
+.cch-dock.wide { flex: 1; min-height: 0; padding-top: 0; }
+.cch-dock.wide .cch-scroll { flex: 1; min-height: 0; padding: 24px 4px 12px; }
+.cch-dock .cch-talk { gap: 14px; }
+.cch-peek-wrap { max-height: 46vh; overflow-y: auto; border-radius: 12px; }
+.cch-peek { display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 8px 12px; border-radius: 10px; text-align: left; background: var(--card); box-shadow: 0 0 0 1px var(--border); color: var(--ink-2, var(--ink)); }
+.cch-peek:hover { box-shadow: 0 0 0 1px var(--border-strong, var(--border)); }
+.cch-peek-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cch-peek-at { flex: none; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.cch-dock-bar { display: flex; align-items: center; gap: 6px; min-height: 28px; }
+.cch-quick { display: flex; gap: 4px; overflow: hidden; }
+.cch-dock .cch-plan { box-shadow: 0 0 0 1px var(--border), 0 10px 30px -14px rgb(0 0 0 / .3); }
+.cch-head { display: flex; align-items: center; gap: 9px; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--border); min-width: 0; }
+.cch-head.in-band { height: 100%; padding: 0; border: 0; }
+:is(#band-left) .cch-head :is(button, a) { -webkit-app-region: no-drag; }
+.cch-head { gap: 6px; }
+.cch-head .cch-state { margin-left: 4px; }
+.cch-chatbar { display: flex; align-items: center; gap: 4px; padding: 12px 0 0; }
+.cch-chatbar .menu-pill { height: 26px; }
+.cch-name { font-size: 13.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cch-state { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.cch-grow { flex: 1; }
+.cch-icon { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: var(--text-muted); }
+.cch-icon:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); }
+
+.cch-needs { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px 20px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--amber) 6%, var(--card)); }
+.cch-need { display: flex; align-items: center; gap: 8px; min-height: 28px; color: var(--ink); }
+.cch-need > svg { flex: none; color: var(--amber); }
+.cch-need-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cch-need.ans { flex-wrap: wrap; }
+.cch-need.ans .cch-need-t { flex-basis: 100%; white-space: normal; color: var(--text-muted); }
+.cch-need.ans input { flex: 1; height: 28px; padding: 0 8px; border-radius: 7px; border: 1px solid var(--border); background: var(--card); color: var(--ink); font-size: 12.5px; }
+
+.cch-btn { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 7px; font-size: 12px; font-weight: 500; color: var(--ink-2, var(--ink)); background: transparent; white-space: nowrap; flex: none; }
+.cch-btn:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.cch-btn.primary { background: var(--card); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / .06); color: var(--ink); }
+.cch-btn.primary:hover { box-shadow: 0 0 0 1px var(--border-strong, var(--border)), 0 2px 6px -2px rgb(0 0 0 / .14); }
+.cch-btn:disabled { opacity: .5; }
+.cch-btn kbd { font: 500 10.5px/16px var(--font); padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--text-muted); }
+
+.cch-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 14px 8px; }
+.cch-empty { margin: 24px auto; max-width: 360px; text-align: center; color: var(--text-muted); }
+.cch-talk { display: grid; gap: 10px; }
+.cch-say { display: grid; gap: 8px; }
+
+.cch-update { display: flex; align-items: center; gap: 8px; padding: 0 4px; font-size: 12px; color: var(--text-muted); }
+.cch-update-t { flex: 1; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cch-update { align-items: flex-start; }
+.cch-update > .cch-face, .cch-update > .cch-dot { margin-top: 1px; }
+.cch-update > .cch-dot { margin: 6px 6px 0; }
+.cch-tone { width: 6px; height: 6px; margin-top: 6px; border-radius: 50%; flex: none; background: var(--blue, #2563eb); }
+.cch-update.done .cch-tone { background: var(--green); }
+.cch-update.failed .cch-tone { background: var(--red); }
+.cch-update.needs .cch-tone { background: var(--amber); }
+.cch-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--text-muted); }
+.cch-update.done .cch-dot { background: var(--green); }
+.cch-update.failed .cch-dot { background: var(--red); }
+.cch-update.needs .cch-dot { background: var(--amber); }
+.cch-update.info .cch-dot { background: var(--blue, #2563eb); }
+.cch-link { font-size: 12px; font-weight: 500; color: var(--ink); padding: 0 4px; border-radius: 5px; }
+.cch-link:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+
+.cch-plan { border-radius: 12px; background: var(--card); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / .05); overflow: hidden; }
+.cch-plan-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px 10px; }
+.cch-plan-title { font-size: 13px; font-weight: 500; color: var(--ink); }
+.cch-plan-n { font-size: 12px; color: var(--text-muted); }
+.cch-plan-state { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.cch-plan.draft .cch-plan-state { color: var(--amber); }
+.cch-plan-bar { height: 2px; margin: 0 14px 4px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 7%, transparent); overflow: hidden; }
+.cch-plan-bar i { display: block; height: 100%; background: var(--green); border-radius: inherit; transition: width .5s cubic-bezier(.22, 1, .36, 1); }
+.cch-steps { list-style: none; margin: 0; padding: 4px 14px 6px; }
+.cch-step { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; }
+.cch-rail { position: relative; display: flex; justify-content: center; }
+.cch-rail::after { content: ""; position: absolute; top: 24px; bottom: -2px; left: 50%; width: 1px; transform: translateX(-.5px); background: var(--border); }
+.cch-step:last-child .cch-rail::after { display: none; }
+.cch-node { position: relative; z-index: 1; display: grid; place-items: center; width: 20px; height: 20px; margin-top: 6px; border-radius: 50%; font-size: 10.5px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--text-muted); background: var(--card); box-shadow: 0 0 0 1px var(--border); }
+.cch-step.running .cch-node { color: var(--blue, #2563eb); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--blue, #2563eb) 60%, transparent); }
+.cch-step.done .cch-node { color: #fff; background: var(--green); box-shadow: none; }
+.cch-step.failed .cch-node { color: #fff; background: var(--red); box-shadow: none; }
+.cch-step-body { min-width: 0; padding: 4px 0 12px; }
+.cch-step-head { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.cch-face { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; flex: none; background: color-mix(in srgb, var(--ink) 5%, transparent); overflow: hidden; }
+.cch-face.sm { width: 18px; height: 18px; border-radius: 5px; }
+.cch-who { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.cch-who b { font-size: 12.5px; font-weight: 500; color: var(--ink); }
+.cch-meta { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.cch-step-t { margin: 4px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-2, var(--ink)); overflow-wrap: anywhere; }
+.cch-step-t.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cch-step-t[role="button"] { cursor: pointer; border-radius: 6px; }
+.cch-step-t[role="button"]:hover { color: var(--ink); }
+.cch-step.done .cch-step-t { color: var(--text-muted); }
+.cch-step-r { display: flex; gap: 6px; align-items: flex-start; margin: 6px 0 0; padding: 6px 8px; border-radius: 7px; font-size: 12px; line-height: 1.45; color: var(--ink-2, var(--ink)); background: color-mix(in srgb, var(--green) 8%, transparent); }
+.cch-step-r svg { flex: none; margin-top: 2px; color: var(--green); }
+.cch-ts { height: 20px; padding: 0 7px; border-radius: 5px; font-size: 11px; font-weight: 500; line-height: 20px; white-space: nowrap; flex: none; color: var(--text-muted); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.cch-ts.running { color: var(--blue, #2563eb); background: color-mix(in srgb, var(--blue, #2563eb) 12%, transparent); }
+.cch-ts.done { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
+.cch-ts.failed { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
+.cch-ts.checking, .cch-ts.blocked { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); }
+.cch-task-in, .cch-role-in { padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg); color: var(--ink); font: inherit; font-size: 12.5px; }
+.cch-task-in { display: block; width: 100%; margin-top: 6px; resize: vertical; }
+.cch-role-in { width: 120px; height: 28px; padding: 0 8px; }
+.cch-plan-acts { display: flex; align-items: center; gap: 6px; padding: 8px 10px 8px 14px; border-top: 1px solid var(--border); }
+.cch-plan-foot { font-size: 12px; color: var(--text-muted); }
+
+.cch-foot { flex: none; display: grid; gap: 8px; padding: 8px 12px 12px; }
+.cch-auto { max-width: 180px; }
+
+/* Icon buttons in the chat's bar, and the two small cards they open (past conversations, how far it goes on its own). */
+.cch-ib { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: var(--text-muted); }
+.cch-ib:hover:not(:disabled), .cch-ib.on { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.cch-ib:disabled { opacity: .4; }
+.cch-mode { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 9px; border-radius: 8px; font-size: 12.5px; font-weight: 500; color: var(--ink-2, var(--ink)); }
+.cch-mode > svg:first-child { color: var(--text-muted); }
+.cch-mode > svg:last-child { color: var(--text-muted); transition: transform .2s ease; }
+.cch-mode:hover, .cch-mode.on { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); }
+.cch-mode.on > svg:last-child { transform: rotate(180deg); }
+.cch-pop { padding: 6px; border-radius: 12px; background: var(--card); box-shadow: 0 0 0 1px var(--border), 0 16px 36px -12px rgb(0 0 0 / .35), 0 2px 6px rgb(0 0 0 / .08); }
+.cch-pop-head { padding: 6px 8px 6px; font-size: 11px; font-weight: 500; letter-spacing: .02em; color: var(--text-muted); }
+.cch-pop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; max-height: 320px; overflow-y: auto; }
+.cch-pop-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 8px; text-align: left; color: var(--ink); }
+.cch-pop-row:hover, .cch-pop-row:focus-visible { background: color-mix(in srgb, var(--ink) 6%, transparent); outline: none; }
+.cch-pop-row:not(.mode) { flex-direction: column; align-items: flex-start; gap: 1px; }
+.cch-pop-row > svg { flex: none; color: var(--ink); }
+.cch-pop-ic { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 8px; background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--text-muted); }
+.cch-pop-row.on .cch-pop-ic { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
+.cch-pop-txt { display: grid; flex: 1; min-width: 0; gap: 1px; }
+.cch-pop-t { font-size: 13px; font-weight: 500; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.cch-pop-s { font-size: 12px; line-height: 16px; color: var(--text-muted); }
+.cch-pop-empty { margin: 0; padding: 8px 8px 10px; font-size: 12.5px; color: var(--text-muted); }
+
+/* The page's body: the chat down the left (open, folded to a strip, or closed), the crew beside it. */
+.cch-body { flex: 1; min-height: 0; display: flex; }
+.cch-body > .cch-main { flex: 1; min-width: 0; }
+.cch-dock.cch-side { position: relative; flex: none; height: auto; margin: 0; padding: 0 14px 12px; border-right: 1px solid var(--border); background: var(--card); }
+.cch-side .cch-chatbar { padding: 10px 0 4px; gap: 2px; }
+/* Its scrollbar out by the panel's edge, clear of the cards (Arun, 2026-11-28: "too close to the page content"): the pane reaches
+   into the panel's padding and pads itself back, so the content stays where it was. */
+.cch-side .cch-scroll { margin-right: -11px; padding: 12px 13px 8px 2px; }
+.cch-resize { position: absolute; top: 0; right: -4px; bottom: 0; width: 8px; cursor: col-resize; z-index: 5; }
+.cch-resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3.5px; width: 1px; background: transparent; transition: background .15s; }
+.cch-resize:hover::after, html.cpt-dragging-x .cch-resize::after { background: var(--accent, #3b82f6); }
+html.cpt-dragging-x, html.cpt-dragging-x * { cursor: col-resize !important; user-select: none; }
+html.cpt-dragging-y, html.cpt-dragging-y * { cursor: row-resize !important; user-select: none; }
+/* The chat folded to a strip (its own names: .cch-rail is a plan step's rail, and the two shared styles). */
+.cch-strip { flex: none; width: 48px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 10px; border-right: 1px solid var(--border); background: var(--card); }
+.cch-strip-face { position: relative; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; }
+.cch-strip-face:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.cch-strip-dot { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 2px var(--card); }
+.cch-flip { transform: scaleX(-1); }
+/* The quick asks sit in the empty talk as chips that wrap; the mode never wraps (Arun, 2026-11-27: "fix this too"). */
+
+.cch-empty .cch-quick { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.cch-chip { height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12.5px; font-weight: 500; color: var(--ink-2, var(--ink)); background: var(--card); box-shadow: 0 0 0 1px var(--border); white-space: nowrap; }
+.cch-chip:hover { box-shadow: 0 0 0 1px var(--border-strong, var(--border)); color: var(--ink); }
+.cch-mode { white-space: nowrap; flex: none; }
+.cch-dock-bar { justify-content: flex-end; }
+/* Icons in the chat's buttons sit on the text's middle, not its baseline (Arun, 2026-11-27: "line up icon properly"). */
+.cch-btn > svg, .cch-ib > svg, .cch-mode > svg { display: block; flex: none; }
+.cch-btn { line-height: 1; }
+/* The talk before anything is said: the Captain, how it works, goals to start from (Arun, 2026-11-27: empty states). */
+.cch-empty { display: flex; flex-direction: column; align-items: center; margin: 32px auto 8px; max-width: 340px; text-align: center; color: var(--text-muted); }
+.cch-empty-face { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 14px; border-radius: 14px; background: var(--card); box-shadow: var(--shadow-sm, 0 1px 2px rgb(0 0 0 / .08)), 0 0 0 1px var(--border); }
+.cch-empty-t { margin: 0 0 4px; font-size: 15px; font-weight: 500; letter-spacing: -.01em; color: var(--ink); }
+.cch-empty .cch-empty-s { margin: 0 0 18px; font-size: 12.5px; line-height: 1.5; }
+.cch-how { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 8px; width: 100%; text-align: left; }
+.cch-how li { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink-2, var(--ink)); counter-increment: how; }
+.cch-how li > svg { flex: none; display: block; width: 24px; height: 24px; padding: 5px; border-radius: 7px; box-sizing: border-box; background: color-mix(in srgb, var(--ink) 5%, transparent); color: var(--text-muted); }
+.cch-starts { display: grid; gap: 6px; width: 100%; }
+.cch-start { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 36px; padding: 0 12px; border-radius: 9px; font-size: 12.5px; font-weight: 500; text-align: left; color: var(--ink); background: var(--card); box-shadow: 0 0 0 1px var(--border), var(--shadow-xs, 0 1px 1px rgb(0 0 0 / .04)); transition: box-shadow var(--dass-fast, .12s) var(--dass-ease, ease), transform var(--dass-fast, .12s) var(--dass-ease, ease); }
+.cch-start > svg { display: block; flex: none; color: var(--text-muted); transition: transform var(--dass-fast, .12s) var(--dass-ease, ease); }
+.cch-start:hover { box-shadow: 0 0 0 1px var(--border-strong, var(--border)), var(--shadow-sm, 0 2px 6px -2px rgb(0 0 0 / .14)); }
+.cch-start:hover > svg { transform: translateX(2px); color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .cch-start, .cch-start > svg { transition: none; } }
+/* In the chat, over the box: a card of what needs you, answered in place. */
+.cch-needs.in-chat { margin: 0; padding: 8px 10px; border-radius: 10px; border: 0; background: color-mix(in srgb, var(--amber) 7%, var(--card)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 28%, var(--border)); }
+.cch-needs.in-chat .cch-need { flex-wrap: wrap; }
+.cch-needs.in-chat .cch-need-t { white-space: normal; flex-basis: calc(100% - 24px); }
+.cch-needs.in-chat .cch-need > .cch-btn:first-of-type { margin-left: auto; }
+/* Each item on its own, a hairline between them; its mark on its first line, not halfway down a wrapped question; a go-ahead's one
+   button beside its short line rather than alone on a row under it. */
+.cch-needs.in-chat { gap: 0; }
+.cch-needs.in-chat .cch-need { align-items: flex-start; column-gap: 8px; row-gap: 4px; padding: 6px 0; }
+.cch-needs.in-chat .cch-need + .cch-need { border-top: 1px solid color-mix(in srgb, var(--amber) 16%, var(--border)); }
+.cch-needs.in-chat .cch-need > svg { margin-top: 3px; }
+.cch-needs.in-chat .cch-need-t { line-height: 1.45; }
+.cch-needs.in-chat .cch-need:not(.ans):has(> .cch-btn:only-of-type) { flex-wrap: nowrap; align-items: center; }
+.cch-needs.in-chat .cch-need:not(.ans):has(> .cch-btn:only-of-type) > svg { margin-top: 0; }
+.cch-needs.in-chat .cch-need:not(.ans):has(> .cch-btn:only-of-type) .cch-need-t { flex: 1; flex-basis: auto; }
+.cch-plan-hold { display: flex; align-items: center; gap: 8px; margin: 0 14px 10px; padding: 8px 10px; border-radius: 8px; font-size: 12px; color: var(--ink-2, var(--ink)); background: color-mix(in srgb, var(--amber) 8%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 25%, transparent); }
+.cch-plan-hold > svg { display: block; flex: none; color: var(--amber); }
+.cch-plan-hold > span { flex: 1; min-width: 0; }
+/* What a failed or held-up step came to: in red with a cross, not the green tick of a done one. */
+.cch-step-r.off { background: color-mix(in srgb, var(--red) 8%, transparent); }
+.cch-step-r.off svg { color: var(--red); }
+/* The Captain at work on a reply: what it's doing, its clock, this turn's steps (CaptainChat.tsx CaptainWorking). */
+.cch-work { display: grid; gap: 6px; padding: 10px 12px; border-radius: 10px; background: var(--card); box-shadow: 0 0 0 1px var(--border); }
+.cch-work-head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12.5px; color: var(--ink-2, var(--ink)); }
+.cch-work-head > :nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cch-work-face { display: grid; place-items: center; flex: none; }
+.cch-work-clock { flex: none; font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.cch-work-steps { list-style: none; margin: 0; padding: 0 0 0 26px; display: grid; gap: 3px; }
+.cch-work-steps li { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 12px; color: var(--text-muted); }
+.cch-work-steps li > svg { display: block; flex: none; }
+.cch-work-steps li > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cch-work-steps li.now { color: var(--ink-2, var(--ink)); }
+.cch-work-steps li.done > svg:last-child { color: var(--green); }
+.cch-work-err { margin: 0; font-size: 12px; color: var(--red); }
+/* Past conversations: one row each, its title cut short rather than the card scrolling sideways, a bin on hover that asks once. */
+.cch-pop, .cch-pop-list { overflow-x: hidden; }
+.cch-pop-item { position: relative; display: flex; align-items: center; min-width: 0; border-radius: 8px; }
+.cch-pop-item:hover, .cch-pop-item:focus-within { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.cch-pop-item .cch-pop-row { flex: 1; min-width: 0; padding-right: 36px; }
+.cch-pop-item .cch-pop-row:hover, .cch-pop-item .cch-pop-row:focus-visible { background: transparent; }
+.cch-pop-row .cch-pop-t, .cch-pop-row .cch-pop-s { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cch-pop-del { position: absolute; right: 6px; top: 50%; translate: 0 -50%; display: inline-grid; place-items: center; height: 24px; min-width: 24px; padding: 0 6px; border-radius: 6px; color: var(--text-muted); opacity: 0; transition: opacity var(--dass-fast, .12s) var(--dass-ease, ease); }
+.cch-pop-item:hover .cch-pop-del, .cch-pop-item:focus-within .cch-pop-del, .cch-pop-del.sure { opacity: 1; }
+.cch-pop-del > svg { display: block; }
+.cch-pop-del:hover { color: var(--red); background: color-mix(in srgb, var(--red) 10%, transparent); }
+.cch-pop-del.sure { font-size: 12px; font-weight: 500; color: #fff; background: var(--red); }
+@media (prefers-reduced-motion: reduce) { .cch-pop-del { transition: none; } }
+.cch-reply { position: relative; display: grid; }
+.cch-copy { justify-self: start; display: inline-grid; place-items: center; width: 22px; height: 22px; margin-top: 2px; border-radius: 6px; color: var(--text-muted); opacity: 0; transition: opacity var(--dass-fast, .12s) var(--dass-ease, ease); }
+.cch-copy > svg { display: block; }
+.cch-reply:hover .cch-copy, .cch-copy:focus-visible { opacity: 1; }
+.cch-copy:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+/* Asking to delete, the title gives the wider red Delete its room (it ran under it, cut mid-word, not ellipsed). */
+.cch-pop-item.sure .cch-pop-row { padding-right: 72px; }
+/* A failed line says all of what to do next, not cut at two lines ("…Try…"). */
+.cch-update.failed .cch-update-t { display: block; -webkit-line-clamp: unset; overflow: visible; }
+
+/* The plan card (CaptainChat.tsx PlanCard; Arun, 2026-11-27: product/plan-card-mocks.html, after affectUI's Agent Plan): a segment
+   per step, one line per finished step, the live step and what waits on you open, a failure with Retry and Skip. App tokens only. */
+.plc { width: 100%; border-radius: 12px; background: var(--card); box-shadow: 0 0 0 .5px var(--border-strong), 0 2px 6px -2px rgb(0 0 0 / .12); overflow: hidden; }
+.plc-head { display: grid; gap: 10px; padding: 14px 16px 12px; }
+.plc-r { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.plc-r b { font-weight: 500; }
+.plc-m { color: var(--faint); font-size: 12px; white-space: nowrap; }
+.plc-right { margin-left: auto; font-size: 12px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.plc-right b { color: var(--ink); font-weight: 500; }
+.plc-amber { color: var(--amber); } .plc-red { color: var(--red); }
+.plc-seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; }
+.plc-seg i { height: 4px; border-radius: 2px; background: var(--hover-strong); }
+.plc-seg i.done { background: var(--green); } .plc-seg i.run { background: var(--live); animation: pc-pulse 1.6s ease-in-out infinite; }
+.plc-seg i.wait { background: var(--amber); } .plc-seg i.fail { background: var(--red); }
+@keyframes pc-pulse { 50% { opacity: .4; } }
+@keyframes pc-spin { to { transform: rotate(360deg); } }
+.plc-steps { list-style: none; margin: 0; padding: 2px 6px 6px; position: relative; }
+.plc-st { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr); column-gap: 10px; padding: 7px 10px; border-radius: 8px; }
+.plc-st:has(> .plc-l1:not(:disabled)):hover { background: var(--hover); }
+/* One continuous rail (Arun, 2026-11-28: "the vertical lines should be somewhat continuous"): from under each ring to the next
+   one's top, however tall an opened or working step grows; the rings sit over its ends. */
+.plc-st:not(:last-child)::after { content: ""; position: absolute; left: 19.5px; top: 26px; bottom: -10px; width: 1px; background: var(--border-strong); }
+.plc-st.done:not(:last-child)::after { background: color-mix(in srgb, var(--green) 45%, transparent); }
+.plc-st.run:not(:last-child)::after { background: linear-gradient(color-mix(in srgb, var(--live) 45%, transparent), var(--border-strong)); }
+.plc-ring { position: relative; z-index: 1; grid-row: 1; display: grid; place-items: center; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%; background: var(--card); box-shadow: inset 0 0 0 1px var(--border-strong); color: var(--faint); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.plc-ring > svg { display: block; }
+.plc-st.done .plc-ring { background: var(--green); box-shadow: none; color: #fff; }
+.plc-st.run .plc-ring { box-shadow: none; }
+.plc-st.run .plc-ring::after { content: ""; position: absolute; inset: 1px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--live) 25%, transparent); border-top-color: var(--live); animation: pc-spin .9s linear infinite; }
+.plc-st.wait .plc-ring { background: color-mix(in srgb, var(--amber) 18%, var(--card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 55%, transparent); color: var(--amber); }
+.plc-st.fail .plc-ring { background: color-mix(in srgb, var(--red) 16%, var(--card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--red) 55%, transparent); color: var(--red); }
+.plc-l1 { grid-column: 2; display: flex; align-items: center; gap: 8px; min-width: 0; height: 22px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.plc-l1:disabled { cursor: default; opacity: 1; }
+.plc-l1:focus-visible { outline: 2px solid var(--border-focus, var(--live)); outline-offset: 2px; border-radius: 4px; }
+.plc-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; color: var(--ink); }
+.plc-st.queued .plc-t { color: var(--text-muted); }
+.plc-who { flex: 0 0 auto; min-width: 0; max-width: 45%; display: inline-flex; align-items: center; gap: 5px; margin-left: auto; font-size: 12px; color: var(--faint); white-space: nowrap; }
+/* Its name and role on one line, cut short with an ellipsis rather than pushing the step's title off. */
+.plc-who-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.plc-av { flex: none; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; overflow: hidden; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.plc-when { flex: none; min-width: 34px; text-align: right; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.plc-when.live { color: var(--live); }
+.plc-chip { flex: none; display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 5px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+.plc-chip.amb { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+.plc-chip.red { background: color-mix(in srgb, var(--red) 14%, transparent); color: var(--red); }
+.plc-l2 { grid-column: 2; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 17px; color: var(--text-muted); }
+.plc-more { grid-column: 2; display: grid; gap: 8px; margin-top: 6px; min-width: 0; }
+.plc-more .plc-l2 { grid-column: auto; }
+.plc-p { margin: 0; font-size: 12px; line-height: 18px; color: var(--text-muted); overflow-wrap: anywhere; }
+.plc-p b { color: var(--ink-2, var(--ink)); font-weight: 500; }
+.plc-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: 12px; color: var(--faint); }
+.plc-facts span { display: inline-flex; align-items: center; gap: 4px; }
+.plc-facts b { color: var(--ink-2, var(--ink)); font-weight: 500; }
+.plc-files { display: flex; flex-wrap: wrap; gap: 4px; }
+.plc-files code { height: 20px; padding: 0 6px; border-radius: 5px; background: var(--hover-strong); color: var(--ink-2, var(--ink)); font: 400 11px/20px var(--mono); }
+.plc-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.plc-ask { display: grid; gap: 8px; padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--amber) 8%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 25%, transparent); }
+.plc-ask p { margin: 0; font-size: 12.5px; line-height: 18px; color: var(--ink); overflow-wrap: anywhere; }
+.plc-err { padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--red) 7%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--red) 22%, transparent); font: 400 11.5px/17px var(--mono); color: var(--red); overflow-wrap: anywhere; }
+.plc-in { padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg); color: var(--ink); font: inherit; font-size: 12.5px; }
+.plc-in.role { width: 140px; height: 26px; padding: 0 8px; }
+.plc-in.text { grid-column: 2; width: 100%; margin-top: 6px; resize: vertical; }
+.plc-in.reply { flex: 1; min-width: 120px; height: 26px; padding: 0 8px; }
+.plc-foot { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 10px 6px 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
+.plc-foot b { color: var(--ink); font-weight: 500; }
+.plc-spin { width: 12px; height: 12px; flex: none; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--live) 25%, transparent); border-top-color: var(--live); animation: pc-spin .9s linear infinite; }
+.plc-tick { display: inline-grid; color: var(--green); } .plc-tick > svg { display: block; }
+.plc-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; } .plc-dot.red { background: var(--red); }
+.plc-held { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--text-muted); }
+.plc-checked { color: var(--faint); }
+@media (prefers-reduced-motion: reduce) { .plc-seg i.run, .plc-st.run .plc-ring::after, .plc-spin { animation: none; } }
+/* A step's state is also a class (run, wait, fail, done), and the app's own .run (style.css: a flex column, 10px apart) turned the
+   running step into a column: the ring alone on a row over its title. Held as the card's grid. */
+.plc .plc-st { display: grid; gap: 0 10px; flex-direction: initial; }
+/* As the mock draws them: the first answer (and Retry) filled in ink, the others outlined; the reply box takes the rest of the row and
+   its Send shows once something is typed, so the answers stay on one line. */
+.plc-acts .cch-btn.primary { background: var(--ink); color: var(--bg); box-shadow: none; }
+.plc-acts .cch-btn.primary:hover { background: color-mix(in srgb, var(--ink) 86%, var(--bg)); box-shadow: none; }
+.plc-acts .cch-btn:not(.primary):not([type="submit"]) { box-shadow: 0 0 0 1px var(--border-strong, var(--border)); background: var(--card); }
+.plc-acts .cch-btn[type="submit"]:disabled { display: none; }
+/* Motion as the app's (captain-page.css says why): hovers 120ms, openings 180ms, travel 240ms, one curve. */
+.cch-mode > svg:last-child { transition: transform var(--t-open) var(--ease-out); }
+.cch-resize::after { transition: background-color var(--t-hover) var(--ease-out); }
+.cch-start, .cch-start > svg, .cch-pop-del, .cch-copy, .cch-ib, .cch-btn, .cch-pop-row, .cch-chip, .plc-l1 { transition-duration: var(--t-hover); transition-timing-function: var(--ease-out); }
+.cch-plan-bar i { transition: width var(--t-move) var(--ease-out); }
+.cch-ib, .cch-btn, .cch-pop-row, .cch-chip, .plc-l1 { transition-property: background-color, color, box-shadow, opacity; }
+/* Needs card: the whole question (three lines until pressed), its choices, and "N more" past two (pre-release review). */
+.cch-need.ask { flex-wrap: wrap; align-items: flex-start; }
+.cch-need.ask > svg { margin-top: 3px; }
+.cch-need-t.q { flex: 1 1 calc(100% - 24px); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.cch-need-t.q.open { display: block; -webkit-line-clamp: unset; }
+.cch-need-t.full { white-space: normal; }
+.cch-need-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; width: 100%; }
+.cch-need-more { align-self: flex-start; height: 24px; padding: 0 6px; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.cch-need-more:hover { color: var(--ink); background: var(--hover); }
+.plc-dot.amber { background: var(--amber); }
+.plc-del { grid-column: 2; justify-self: end; display: inline-grid; place-items: center; width: 24px; height: 24px; margin-top: 4px; border-radius: 6px; color: var(--text-muted); }
+.plc-del:hover:not(:disabled) { color: var(--red); background: color-mix(in srgb, var(--red) 10%, transparent); }
+.plc-del:disabled { opacity: .35; }
+.plc-del > svg { display: block; }
+.cch-btn:focus-visible, .cch-ib:focus-visible, .cch-mode:focus-visible, .cch-start:focus-visible, .cch-need-t.q:focus-visible { outline: 2px solid var(--border-focus, var(--live)); outline-offset: 1px; }
+.plc-err { font: 400 12px/18px var(--font); color: var(--ink-2, var(--ink)); background: color-mix(in srgb, var(--red) 6%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--red) 28%, transparent); }
+.plc-stop { display: grid; gap: 8px; margin: 0 10px 8px; padding: 10px 12px; border-radius: 8px; font-size: 12.5px; color: var(--ink); background: color-mix(in srgb, var(--amber) 8%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 25%, transparent); }
+.plc-stop .plc-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.plc-tool { flex: none; display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; padding-left: 6px; border-left: 1px solid var(--border); }
+.plc-why { font-style: normal; color: var(--faint); }
+/* Two attempts at a risky step (2026-11-28): the picked one marked, the other dimmed. */
+.plc-chip.grn { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); }
+.plc-st.lost .plc-t, .plc-st.lost .plc-who, .plc-st.lost .plc-l2 { opacity: .55; }
+.plc-st.lost .plc-ring { opacity: .55; }

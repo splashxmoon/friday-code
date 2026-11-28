@@ -205,6 +205,23 @@ export function appAddress(target: string, app: string | null | undefined, previ
   return h === bare(a.hostname) || /^127\./.test(h) || h === "0.0.0.0" || h === "::" || h === "::1" || h === "localhost" || h.endsWith(".localhost") || /^::ffff:(127\.|0\.0\.0\.0|7f)/.test(h);
 }
 
+/**
+ * The same, from the app's address alone, for a Friday that runs on this computer (the open-source edition, or FRIDAY_URL=local):
+ * the previews' own address is http://localhost:<port> beside the app's (local/start.ts). Never true of a Friday on the web, whose
+ * address no page of this computer can be. What takes a picture of a page for an agent, or walks one for a proof clip, is held off
+ * it as the agents' browser is (Security M3): the picture would show the person's other sessions, and a clip presses what it finds.
+ */
+export function ownLocalApp(target: string, app: string | null | undefined): boolean {
+  if (!app) return false;
+  try {
+    const a = new URL(app);
+    if (!/^(127\.\d+\.\d+\.\d+|localhost|\[::1\]|0\.0\.0\.0)$/i.test(a.hostname)) return false;
+    return appAddress(target, app, `http://localhost:${a.port}`);
+  } catch {
+    return false;
+  }
+}
+
 /** A field that takes a secret (a password, a card's number or code): never typed into by an agent, whatever it was asked. */
 export function secretField(f: { type?: string; autocomplete?: string; name?: string } | null | undefined): boolean {
   if (!f) return false;

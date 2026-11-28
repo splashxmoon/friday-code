@@ -10,9 +10,11 @@ import { ENGINE_NAMES, toolList } from "../types.js";
 import { Skeleton, SkeletonCards, SkeletonRows, barHeight } from "./ui.js";
 import { ChartColumnIcon, CircleAlertIcon, RefreshCwIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Choice, EmptyState, PageHeader, SectionHeader, surface } from "@/components/dass";
+import { PageHeader, SectionHeader, surface } from "@/components/dass";
+import { EmptyState as KitEmptyState } from "@/components/affect";
+import { Button, Choice } from "./settings-kit.js";
 import { LimitsHub } from "./LimitsHub.js";
+import "./settings-polish.css";
 import { AnimatedNumber } from "@/components/motion/animated-number";
 
 /**
@@ -198,19 +200,16 @@ export function UsagePage({ identity, solo = false }: { identity: Identity; solo
           />
 
           {failed ? (
-            <EmptyState
-              small
+            <KitEmptyState
               icon={<CircleAlertIcon />}
-              tone="bad"
               title="Couldn't read the usage"
+              text={<span role="alert">{failed}</span>}
               action={
                 <Button variant="outline" size="sm" onClick={() => setTries((t) => t + 1)}>
                   Try again
                 </Button>
               }
-            >
-              <span role="alert">{failed}</span>
-            </EmptyState>
+            />
           ) : !data ? (
             // The tiles, the chart and the table, in their places, until the figures arrive.
             <div className="flex flex-col gap-4" role="status" aria-label="Reading the usage">
@@ -221,10 +220,16 @@ export function UsagePage({ identity, solo = false }: { identity: Identity; solo
           ) : (
             <>
               {total === 0 ? (
-                <EmptyState small icon={<ChartColumnIcon />} title="Nothing counted in this range" className="py-8">
-                  {solo ? "" : "Friday's own agent is counted from its next step; "}
-                  {toolList("and")} {solo ? "are counted " : ""}from their next turn on a computer running Friday 0.1.32 or later.
-                </EmptyState>
+                <KitEmptyState
+                  icon={<ChartColumnIcon />}
+                  title="Nothing counted in this range"
+                  text={
+                    <>
+                      {solo ? "" : "Friday's own agent is counted from its next step; "}
+                      {toolList("and")} {solo ? "are counted " : ""}from their next turn on a computer running Friday 0.1.32 or later.
+                    </>
+                  }
+                />
               ) : (
                 <div className={cn(surface, "us-act")}>
                   <div className="us-act-side">

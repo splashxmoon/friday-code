@@ -1,6 +1,9 @@
-import { PRICES } from "./team-budget.js";
 import { whyRun, type Why } from "./run-why.js";
+import { addTokens as add, NO_TOKENS, plainModel, priceFor, tokensTotal, turnTokens, usdOf, type Tokens } from "./spend-price.js";
 import { ENGINE_NAMES, MAIN_LANE, type EngineTool, type SessionEvent } from "./types.js";
+
+// Tokens and list prices are spend-price.ts's, said again from here for everything that reads the audit.
+export * from "./spend-price.js";
 
 /**
  * What a crew mate or a room spent, every token accounted for (Arun, 2026-11-15: "we track everything like input, output, cache,
@@ -12,82 +15,6 @@ import { ENGINE_NAMES, MAIN_LANE, type EngineTool, type SessionEvent } from "./t
  * plan that is what the work would have cost on the API, the only dollar figure there is. A model with no known list price is
  * counted in tokens and said to be unpriced, never given a made-up figure.
  */
-
-export interface Tokens {
-  /** Read fresh, not from a cache. */
-  input: number;
-  /** Written to its cache (dearer than fresh input on Anthropic's models). */
-  cacheWrite: number;
-  /** Read back from its cache (a tenth of fresh input). */
-  cacheRead: number;
-  output: number;
-  /** Of `output`, what went on reasoning, when the tool says. */
-  reasoning: number;
-}
-
-/** Dollars per million tokens: fresh input, output, cache read, cache write. */
-export interface Price {
-  in: number;
-  out: number;
-  read: number;
-  write: number;
-}
-
-export const NO_TOKENS: Tokens = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, reasoning: 0 };
-export const tokensTotal = (t: Tokens) => t.input + t.cacheWrite + t.cacheRead + t.output;
-const add = (a: Tokens, b: Tokens): Tokens => ({ input: a.input + b.input, cacheWrite: a.cacheWrite + b.cacheWrite, cacheRead: a.cacheRead + b.cacheRead, output: a.output + b.output, reasoning: a.reasoning + b.reasoning });
-
-/**
- * OpenAI's list prices (dollars per million: fresh in, out) for the models Codex runs, as published; a cached read is a tenth of
- * fresh input and writing to the cache costs nothing extra.
- */
-const OPENAI: Record<string, [number, number]> = {
-  "gpt-5": [1.25, 10],
-  "gpt-5-codex": [1.25, 10],
-  "gpt-5.1": [1.25, 10],
-  "gpt-5.1-codex": [1.25, 10],
-  "gpt-5-mini": [0.25, 2],
-  "gpt-5.1-codex-mini": [0.25, 2],
-  "gpt-5-nano": [0.05, 0.4],
-};
-
-/** A model id as its tool reports it, plain: no date ("-20251101"), no context tag ("[1m]"), no provider ("anthropic/"). */
-export const plainModel = (id: string) =>
-  id
-    .trim()
-    .toLowerCase()
-    .replace(/^[a-z-]+\//, "")
-    .replace(/\[[^\]]*\]$/, "")
-    .replace(/-\d{8}$/, "");
-
-/** The longest key of `table` the id is or starts with ("claude-opus-4-8-thinking" is claude-opus-4-8's). */
-function lookup(table: Record<string, [number, number]>, id: string): [number, number] | null {
-  if (table[id]) return table[id]!;
-  const key = Object.keys(table)
-    .filter((k) => id.startsWith(`${k}-`) || id.startsWith(`${k}.`))
-    .sort((a, b) => b.length - a.length)[0];
-  return key ? table[key]! : null;
-}
-
-/** The list price of the model a turn ran on, or null when Friday doesn't know one. */
-export function priceFor(tool: string | undefined, model: string | undefined): Price | null {
-  if (!model) return null;
-  const id = plainModel(model);
-  const claude = lookup(PRICES, id);
-  if (claude && (tool === "claude" || id.startsWith("claude") || ["opus", "sonnet", "haiku", "fable"].includes(id))) return { in: claude[0], out: claude[1], read: claude[0] / 10, write: claude[0] * 1.25 };
-  const openai = lookup(OPENAI, id);
-  if (openai) return { in: openai[0], out: openai[1], read: openai[0] / 10, write: openai[0] };
-  return null;
-}
-
-/** What tokens cost at a price, each kind at its own rate. */
-export const usdOf = (t: Tokens, p: Price) => (t.input * p.in + t.cacheWrite * p.write + t.cacheRead * p.read + t.output * p.out) / 1e6;
-
-/** One turn's tokens from its `agent.usage`: `input` counts what it wrote to its cache, which is taken out here and kept apart. */
-export function turnTokens(b: { input: number; cached: number; output: number; cacheWrite?: number; reasoning?: number }): Tokens {
-  const write = Math.min(b.cacheWrite ?? 0, b.input);
-  return { input: b.input - write, cacheWrite: write, cacheRead: b.cached ?? 0, output: b.output ?? 0, reasoning: Math.min(b.reasoning ?? 0, b.output ?? 0) };
-}
 
 /** A run in the audit: who did it, what started it, what it used and what that comes to. */
 export interface SpendRun {
@@ -194,7 +121,7 @@ export function spendOf(places: readonly Place[], from: number, tz?: string): Sp
         tool = "friday";
       }
       if (!t || e.ts < from) continue;
-      const price = priceFor(tool, model);
+      const price = priceFor(tool, model, e.ts);
       const cost = price ? usdOf(t, price) : null;
       const name = model ? plainModel(model) : tool === "friday" ? "Friday's own model" : `${(tool && ENGINE_NAMES[tool as EngineTool]) || tool || "A coding tool"}'s own pick`;
       tokens = add(tokens, t);

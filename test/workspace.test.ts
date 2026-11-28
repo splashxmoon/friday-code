@@ -108,6 +108,11 @@ test("a CLI started from inside a Claude app session doesn't inherit that sessio
   assert.equal(env.CLAUDE_CODE_USE_BEDROCK, "1");
   // Outside a host session, a person's own proxy setting is theirs to keep.
   assert.equal(childEnv({ PATH: "/usr/bin", ANTHROPIC_BASE_URL: "http://localhost:8080" }).ANTHROPIC_BASE_URL, "http://localhost:8080");
+  // Security L10: Friday's own server's secrets are not an agent's to read; a model's key is.
+  const local = childEnv({ PATH: "/usr/bin", SESSION_SECRET: "signs-every-session", TOKEN_ENCRYPTION_KEY: "seals-tokens", OPENROUTER_API_KEY: "or-key" });
+  assert.equal(local.SESSION_SECRET, undefined);
+  assert.equal(local.TOKEN_ENCRYPTION_KEY, undefined);
+  assert.equal(local.OPENROUTER_API_KEY, "or-key");
   assert.ok(isClaudeAppBundled("/Users/a/Library/Application Support/Claude/claude-code/2.1.266/claude.app/Contents/MacOS/claude"));
   assert.ok(!isClaudeAppBundled("/opt/homebrew/bin/claude"));
 });

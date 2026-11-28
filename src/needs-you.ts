@@ -3,6 +3,7 @@ import type { LLM } from "./agent/llm.js";
 import { attentionIn, type Attention } from "./attention.js";
 import { askReply, parseChoices, type Ask } from "./ask-parse.js";
 import { CLASS_LABEL, carefulClass, classesOf, type CommandClass } from "./command-class.js";
+import { allowWith, alwaysOffer } from "./command-allow.js";
 import { limitHit } from "./limit-reset.js";
 import { stillLimited } from "./limited.js";
 import { markOf, rankNeeds, type Blocks, type Need, type NeedChoice, type NeedMark, type Suggestion } from "./needs-rank.js";
@@ -256,8 +257,9 @@ export function needsIn(state: SessionState, events: SessionEvent[], me: string,
       const rule = command ? approvalRule(ap.items) : undefined;
       const choices: NeedChoice[] = [{ label: command ? "Run it" : "Let it", value: "yes" }, { label: "Don't", value: "no" }];
       const secret = touchesSecret(...ap.items);
+      const always = alwaysOffer(state, me, lane);
       out.push({
-        need: { ...base(a, "approval", who, a.text), ...(ap.items.length > 1 ? { detail: ap.items.join("\n") } : {}), choices, free: true, command, ...(rule ? { suggestion: rule } : {}) },
+        need: { ...base(a, "approval", who, a.text), ...(ap.items.length > 1 ? { detail: ap.items.join("\n") } : {}), choices, free: true, command, ...(rule ? { suggestion: rule } : {}), ...(always ? { always } : {}) },
         act: { do: "approve", sid: state.id, lane, id: ap.id },
         context,
         ...tool,
@@ -575,7 +577,7 @@ export class NeedsYou {
    * The person's answer to one item: found again first, so an answer to something already answered, gone or not theirs says so
    * rather than landing somewhere it no longer fits. `answer` is a choice's value, or their own words where the item takes them.
    */
-  async answer(me: Me, wid: string, id: string, answer: string, edited = false): Promise<{ ok: true; said: string } | { ok: false; status: number; error: string }> {
+  async answer(me: Me, wid: string, id: string, answer: string, edited = false, always = false): Promise<{ ok: true; said: string } | { ok: false; status: number; error: string }> {
     const sid = id.startsWith("crew~") || id.startsWith("wf~") || id.startsWith("cap~") ? "" : id.split("~")[0]!;
     const found = (await this.collect(me, wid, sid ? [sid] : [])).find((f) => f.need.id === id);
     if (!found) return { ok: false, status: 404, error: "That's no longer waiting on you: it was answered or went away." };
@@ -594,6 +596,14 @@ export class NeedsYou {
           await run(a.sid, { type: "instruct", text, lane: a.lane });
           break;
         case "approve":
+          // Always allow ticked: the allow list takes its commands first, as the thread's card does, so a list that refuses them
+          // (not the owner's, say) never lets the command through unasked.
+          if (always && choice?.value === "yes") {
+            const state = await this.d.store.state(a.sid);
+            const entries = alwaysOffer(state, me.id, a.lane);
+            if (!entries) return { ok: false, status: 403, error: "Only the session's owner can let commands like this through from now on." };
+            await run(a.sid, { type: "settings.update", allow: allowWith(state, entries) });
+          }
           await run(a.sid, { type: "approval.answer", lane: a.lane, id: a.id, approve: choice?.value === "yes" });
           // Your own words instead: a no, and what to do instead.
           if (!choice) await run(a.sid, { type: "instruct", text, lane: a.lane });

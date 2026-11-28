@@ -1,0 +1,81 @@
+/* A coding thread's cards, redesigned 2026-11-27 (the polish mock's "asking", "checks" and out-of-usage sections): what an agent asks
+   to run, and running out of usage. app.css loads before style.css, so each rule here is scoped one class deeper than the one it
+   takes over from. Buttons and chips are rounded squares, never pills (Arun, 2026-11-14). Geometry and type follow the measured
+   affectUI spec (Permission Request, Approval Card): cards 10, inner tiles 8, buttons 6 and 28 tall, chips 5 and 18 tall; titles and
+   buttons 13/500/20, body 12 to 13/400, meta 12/400/16, chips 11/500/16. Radii are worked from the app's own tokens. */
+
+/* ── A permission card: what will run in a code block, the risk as a coloured chip, Always allow a box to tick, Run it last. */
+.apv.apv { gap: 10px; padding: 14px 14px 12px 16px; border-color: var(--border); border-radius: calc(var(--r-md) + 2px); outline: none; }
+.apv.apv:focus-visible { box-shadow: 0 0 0 2px var(--border-focus); }
+.apv .apv-head { gap: 8px; font: 500 13px/20px var(--font); }
+.apv .apv-waited { font-size: 12px; line-height: 16px; color: var(--faint); }
+.apv .apv-head > svg { color: var(--text-muted); }
+.apv .apv-risk {
+  margin-left: auto; display: inline-flex; align-items: center; flex: none; height: 18px; padding: 0 6px; border-radius: calc(var(--r-sm) - 1px);
+  background: var(--hover); color: var(--text-muted); font: 500 11px/16px var(--font); white-space: nowrap;
+}
+.apv .apv-risk[data-tone="bad"] { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
+.apv .apv-risk[data-tone="warn"] { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--amber); }
+.apv .apv-risk + .apv-stamp { margin-left: 8px; }
+.apv ul.apv-items {
+  gap: 2px; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--code-bg); overflow-x: auto;
+}
+.apv ul.apv-items li { display: flex; align-items: baseline; gap: 8px; flex-wrap: nowrap; }
+.apv ul.apv-items code { padding: 0; border: 0; background: none; font: 12px/18px var(--mono); color: var(--ink); }
+.apv .apv-prompt { flex: none; font: 12px/18px var(--mono); color: var(--faint); user-select: none; }
+/* What it touches, under the command in the muted ink: no rule at its side (no side stripes), no line over the answers. */
+.apv .apv-note { font: 400 12px/18px var(--font); color: var(--text-muted); }
+.apv .apv-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin: 2px 0 0; }
+.apv .apv-check { display: inline-flex; align-items: center; gap: 8px; min-width: 0; margin-right: auto; font: 400 13px/20px var(--font); color: var(--text-muted); cursor: pointer; white-space: nowrap; }
+.apv .apv-check-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.apv .apv-check:hover { color: var(--ink); }
+.apv .apv-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.apv .apv-actions .btn.small { height: 28px; padding: 0 10px; gap: 8px; border-radius: var(--r-sm); font: 500 13px/20px var(--font); transition: background-color .16s ease, transform .12s cubic-bezier(.22, 1, .36, 1); }
+.apv .apv-actions .btn.small:has(kbd) { padding: 0 8px 0 12px; }
+.apv .apv-actions .btn.small.ghost { color: var(--text-muted); }
+.apv .apv-actions .btn.small.ghost:hover:not(:disabled) { color: var(--ink); }
+/* The keys on the buttons, a hairline each: they answer the latest card asking from the feed or an empty message box. */
+.apv .apv-actions .btn kbd { display: inline-grid; height: 18px; min-width: 18px; padding: 0 4px; border: 1px solid var(--border-strong); border-radius: calc(var(--r-sm) - 2px); background: transparent; color: var(--faint); font: 500 10px/16px var(--font); }
+.apv .apv-actions .btn.primary kbd { border-color: color-mix(in srgb, var(--on-accent) 28%, transparent); color: color-mix(in srgb, var(--on-accent) 72%, transparent); }
+@media (max-width: 520px) { .apv .apv-check { flex-basis: 100%; } }
+
+/* ── Out of usage: a small card with the clock, until when on the first line, why on the second, its answers at the end. */
+.limit-card {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; max-width: 620px; margin: 8px 0 0; padding: 10px 10px 10px 16px;
+  border: 1px solid var(--border); border-radius: calc(var(--r-md) + 2px); background: var(--card);
+}
+.limit-card > svg { flex: none; width: 16px; height: 16px; color: var(--amber); }
+.limit-card .limit-words { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.limit-card .limit-title { color: var(--ink); font: 500 13px/20px var(--font); }
+.limit-card .limit-why { color: var(--faint); font: 400 12px/16px var(--font); }
+.limit-card .limit-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex: none; margin-left: auto; }
+.limit-card .limit-actions .btn.small { height: 28px; padding: 0 10px; border-radius: var(--r-sm); font: 500 13px/20px var(--font); }
+
+/* Each card rises in a few pixels as it arrives, on the spec's expo curve; still for anyone who asks for less motion. */
+@keyframes tp-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.apv.apv:not(.done), .limit-card { animation: tp-in .4s cubic-bezier(.22, 1, .36, 1); }
+@media (prefers-reduced-motion: reduce) { .apv.apv, .limit-card { animation: none; } }
+html.reduce-motion .apv.apv, html.reduce-motion .limit-card { animation: none; }
+
+/* ── A crew mate's permission card (Activity.tsx MatePermission), the same card as the session's: radius 10, the risk as its chip
+   rather than an amber wash over the card, "Kit waits here" at the row's start, Deny quiet with Esc, Allow once last with ⌘↵. */
+.mp.mp, .mp.mp.careful { gap: 10px; max-width: none; padding: 14px 14px 12px 16px; border-color: var(--border); border-radius: calc(var(--r-md) + 2px); background: var(--card); }
+.mp.mp:not(.done) { animation: tp-in .4s cubic-bezier(.22, 1, .36, 1); }
+.mp .mp-head { gap: 8px; font: 500 13px/20px var(--font); }
+.mp .mp-head b { font-weight: 500; }
+.mp .mp-head .apv-risk { margin-left: auto; display: inline-flex; align-items: center; flex: none; height: 18px; padding: 0 6px; border-radius: calc(var(--r-sm) - 1px); background: var(--hover); color: var(--text-muted); font: 500 11px/16px var(--font); white-space: nowrap; }
+.mp .mp-head .apv-risk[data-tone="bad"] { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
+.mp .mp-head .apv-risk[data-tone="warn"] { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--amber); }
+.mp .mp-risk { font: 400 12px/18px var(--font); }
+.mp .mp-cmds { align-items: stretch; }
+.mp .mp-cmds code { display: block; padding: 9px 11px; border-color: var(--border); border-radius: var(--r-md); background: var(--code-bg); font: 12px/18px var(--mono); }
+.mp .mp-cmds code::before { content: "$ "; color: var(--faint); user-select: none; }
+.mp .mp-acts, .mp .mp-acts.mp-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 2px; }
+.mp .mp-acts > .mp-wait { order: 0; margin: 0 auto 0 0; font: 400 12px/16px var(--font); color: var(--faint); }
+.mp .mp-acts .mp-btn { order: 0; width: auto; height: 28px; padding: 0 10px; gap: 8px; display: inline-flex; align-items: center; border-radius: var(--r-sm); font: 500 13px/20px var(--font); }
+.mp .mp-acts .mp-btn:has(kbd) { padding: 0 8px 0 12px; }
+.mp .mp-acts .mp-btn.quiet { border-color: transparent; }
+.mp .mp-acts .mp-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.mp .mp-acts .mp-btn kbd { height: 18px; min-width: 18px; padding: 0 4px; border: 1px solid var(--border-strong); border-radius: calc(var(--r-sm) - 2px); background: transparent; color: var(--faint); font: 500 10px/16px var(--font); }
+.mp .mp-acts .mp-btn.primary kbd { border-color: color-mix(in srgb, var(--on-accent) 28%, transparent); color: color-mix(in srgb, var(--on-accent) 72%, transparent); }
+@media (max-width: 520px) { .mp .mp-acts > .mp-wait { flex-basis: 100%; } }

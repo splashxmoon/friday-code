@@ -142,14 +142,27 @@ export async function resolveAttachments(store: FileStore, sid: string, atts: At
 }
 
 /**
- * The headers an uploaded file is served with. Markup (HTML, XML, script) is never rendered on the app's own origin: it comes
- * down as a file to save. An SVG is a picture people attach, so it is served as one, to draw in the chat, with a policy that
- * runs no script in it and loads nothing from it, even opened in a tab of its own (audit CODE-7, Arun 2026-11-04).
+ * The headers an uploaded file is served with. Its type is whatever the uploader's request said, so only the few kinds that
+ * are safe to show on Friday's own address go out as themselves: pictures, PDFs, video and sound. Text of any kind goes out
+ * as plain text, and everything else (markup and script first of all) comes down as a file to save. It used to be the other
+ * way round, a list of what to refuse, and a type the list didn't know that a browser reads as a document with script in it
+ * opened as a page on the app's origin, acting as whoever clicked the attachment (2026-11-27 security review).
+ *
+ * An SVG is a picture people attach, so it is served as one, to draw in the chat, with a policy that runs no script in it and
+ * loads nothing from it, even opened in a tab of its own (audit CODE-7, Arun 2026-11-04). The same policy goes on everything
+ * else a browser could lay out as a page. Not on a PDF, a video or a sound: nothing in those runs as the page, and under
+ * `sandbox` the browser's own viewer and player for them don't work (the player asks again for the file, signed out).
  */
+const SHUT = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 export function uploadedFileHeaders(type: string): { "Content-Type": string; "Content-Security-Policy"?: string } {
-  if (/^image\/svg\+xml\b/i.test(type)) return { "Content-Type": "image/svg+xml", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox" };
-  if (/html|svg|xml|javascript/i.test(type)) return { "Content-Type": "application/octet-stream" };
-  return { "Content-Type": type };
+  const t = type.split(";")[0]!.trim().toLowerCase();
+  if (t === "image/svg+xml") return { "Content-Type": "image/svg+xml", "Content-Security-Policy": SHUT };
+  if (/^image\/(png|jpe?g|gif|webp|avif|bmp)$/.test(t)) return { "Content-Type": t, "Content-Security-Policy": SHUT };
+  if (t === "application/pdf" || /^(video|audio)\/[\w.+-]+$/.test(t)) return { "Content-Type": t };
+  // Markup and script stay files to save, as they were; so does a stylesheet language that carries script (XSLT).
+  if (/html|svg|xml|xsl|javascript|ecmascript/.test(t)) return { "Content-Type": "application/octet-stream", "Content-Security-Policy": SHUT };
+  if (t.startsWith("text/") || /^application\/(([\w.-]+\+)?json|(x-)?yaml|(x-)?typescript|(x-)?toml|markdown|x-sh)$/.test(t)) return { "Content-Type": "text/plain; charset=utf-8", "Content-Security-Policy": SHUT };
+  return { "Content-Type": "application/octet-stream", "Content-Security-Policy": SHUT };
 }
 
 export function formatBytes(n: number): string {

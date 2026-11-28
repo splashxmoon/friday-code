@@ -125,7 +125,8 @@ export function GitMenu({ state, sid, invite, send, children, clickToo, below }:
         }}
       >
         {children}
-        {at && <ContextMenu compact at={at} items={items} onClose={() => setAt(null)} />}
+        {/* A touch wider than a compact menu, so "Copy session as Markdown" and its kin sit on one line with room (Arun, 2026-11-27: "make this slgihtly wider"). */}
+        {at && <ContextMenu compact width={252} at={at} items={items} onClose={() => setAt(null)} />}
         {note && (
           <span className="muted small" role="status" onClick={() => setNote("")}>
             {note}

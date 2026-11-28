@@ -34,9 +34,10 @@ const DANGER = ["--output", "--hard", "--force", "--delete", "--exec", "--exec-b
  * A path segment that is a secret, wherever it is, in any case: a Mac's disk doesn't tell .ENV from .env, or .GIT from .git (Fable's
  * probe of the allowlist, 2026-11-11).
  */
-const SECRET =
+export const SECRET_NAME =
   /^(?:\.env.*|\.dev\.vars|.+\.tfvars(\.json)?|terraform\.tfstate.*|secrets?(\.\w+)?|tokens?\.json|\.secrets|credentials.*|service-account.*\.json|\.pgpass|\.htpasswd|\.vault-token|kubeconfig|\.ssh|\.aws|\.gnupg|\.netrc|\.npmrc|\.pypirc|\.docker|\.kube|\.zsh_history|\.bash_history|\.git-credentials|\.git|id_(rsa|ed25519|ecdsa|dsa)(\.pub)?|.*\.(pem|key|p12|pfx|keystore|jks))$|\.env$|\.env\./i;
 /** Names a glob of files must not take in: if it matches one of these, it could reach a secret. */
+const SECRET = SECRET_NAME;
 const SECRET_SAMPLES = [".env", ".env.local", ".envrc", ".git", ".ssh", ".aws", ".npmrc", ".netrc", ".pgpass", ".htpasswd", ".vault-token", "id_rsa", "id_ed25519", "x.pem", "x.key", "credentials", "credentials.json", "secrets.yml", "secrets", "terraform.tfstate", "prod.env", "kubeconfig"];
 function globMayHitSecret(glob: string): boolean {
   const last = glob.split("/").filter(Boolean).at(-1) ?? glob;
@@ -524,4 +525,18 @@ export const allowPrefix = (command: string): string => {
  * "rm -rf" anything and a line of several commands is allowed as pressed (command-allow.ts entryFor).
  */
 export const alwaysAllowEntry = (command: string): string => entryFor(command);
+
+/**
+ * "Always allow" from outside the session, on the Agent Board's and the Agents page's go-ahead cards: what a yes would add to the
+ * session's allow list, the same entries the thread's permission card adds (alwaysAllowEntry). Offered as that card offers it: a
+ * command (not a turn), not a teammate's go-ahead (a guard, which trust answers), and to the session's owner alone, whose list it is.
+ */
+export function alwaysOffer(state: Pick<SessionState, "approvals" | "members">, me: string, lane: string): string[] | null {
+  const ap = state.approvals[lane];
+  if (!ap || ap.scope !== "commands" || ap.guard || !ap.items.length || state.members[me]?.role !== "owner") return null;
+  return [...new Set(ap.items.map(alwaysAllowEntry))];
+}
+
+/** The session's allow list with these entries added, each once, as the card's settings.update sends it. */
+export const allowWith = (state: Pick<SessionState, "options">, entries: readonly string[]): string[] => [...new Set([...(state.options.allow ?? []), ...entries])];
 

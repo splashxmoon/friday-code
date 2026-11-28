@@ -12,6 +12,7 @@ import type { Identity, RecentSession } from "./storage.js";
 import { isTeamSid, useTeamNow } from "./Teammates.js";
 import { answerUsage, noticeDue, useUsageSharing, WHAT } from "./UsageSharing.js";
 import { CrewFaces, markWhatsNewSeen } from "./WhatsNew.js";
+import { FirstLaunch, introDue } from "./FirstLaunch.js";
 import { Switch } from "@/components/ui/switch";
 
 /**
@@ -65,6 +66,9 @@ interface Step {
 }
 
 /** Which step to show first: the first that still needs something, else the last. */
+/** The welcome's three steps, by name, for its stepper. */
+const OB_STEPS = ["Welcome", "Coding tool", "Extras"] as const;
+
 export function firstOpen(steps: { done: boolean }[]): number {
   const i = steps.findIndex((s) => !s.done);
   return i === -1 ? steps.length - 1 : i;
@@ -86,6 +90,8 @@ export function Setup({ identity, recents, onDone }: { identity: Identity; recen
   const known = !isLocal() || !!t || teamLate;
   const hasHistory = recents.some((r) => !isTeamSid(r.sid));
   const [open, setOpen] = useState(false);
+  // The first launch plays before the first welcome (FirstLaunch.tsx), then hands on to it: playing, the sheet coming up, done.
+  const [intro, setIntro] = useState<"play" | "reveal" | null>(() => (isLocal() && !!identity.id && introDue(!!read(k)) ? "play" : null));
   const { state: machine, refresh } = useMachine(identity);
   const connected = machine.mode === "local" || machine.mode === "linked";
   const tools = machine.tools.filter((t) => t.path);
@@ -104,7 +110,11 @@ export function Setup({ identity, recents, onDone }: { identity: Identity; recen
     return () => clearTimeout(t);
   }, [identity.id, hasHistory, k, unready, known]);
   useEffect(() => {
-    const on = () => setOpen(true);
+    const on = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (d === "intro" || d === "again-intro") setIntro("play");
+      setOpen(true);
+    };
     window.addEventListener("friday:setup", on);
     return () => window.removeEventListener("friday:setup", on);
   }, []);
@@ -165,6 +175,8 @@ export function Setup({ identity, recents, onDone }: { identity: Identity; recen
   const [at, setAt] = useState(0);
   // The open-source welcome's own three steps, from the first each time it opens.
   const [ob, setOb] = useState(0);
+  // Which way the steps last moved, so the next one slides in from the side it is heading to (the kit's stepper form).
+  const obWay = useRef<"on" | "back">("on");
   const gutter = useGutter();
   // Each step as tall as it is, up to the window's room, eased between them in 180ms: the last step's two rows sat over a 130px
   // gap at the tools' height (audit REST-6, Arun 2026-11-04).
@@ -252,7 +264,9 @@ export function Setup({ identity, recents, onDone }: { identity: Identity; recen
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [open]);
-  if (!open) return null;
+  // Played over everything, open or not yet: the welcome usually opens under it a few seconds in.
+  const introEl = intro ? <FirstLaunch onHandOff={() => setIntro("reveal")} onDone={() => setIntro(null)} /> : null;
+  if (!open) return introEl;
 
   const i = Math.min(at, steps.length - 1);
   const last = i === steps.length - 1;
@@ -269,24 +283,34 @@ export function Setup({ identity, recents, onDone }: { identity: Identity; recen
     const toSign = tools.find((t) => t.loggedIn === false);
     const status = machine.mode === "checking" ? "Looking…" : ready ? `${shownReady.length <= 1 ? ready.name : `${shownReady.length} tools`} ready` : toSign ? "Sign in to one to start" : "Install one to start";
     const n = Math.min(ob, 2);
-    const back = () => setOb(n - 1);
-    return createPortal(
-      <div className="overlay setup-overlay wn-overlay" role="dialog" aria-modal="true" aria-label="Welcome to Friday">
+    const go = (k: number) => ((obWay.current = k < n ? "back" : "on"), setOb(k));
+    const back = () => go(n - 1);
+    const welcome = createPortal(
+      <div className={`overlay setup-overlay wn-overlay${intro === "play" ? " fl-under" : intro === "reveal" ? " fl-reveal" : ""}`} role="dialog" aria-modal="true" aria-label="Welcome to Friday">
         <section className="wn ob" ref={sheet}>
           <div className={`wn-hero${n === 1 ? " ob-hero-tools" : ""}`} aria-hidden="true">
             {n === 1 ? <ToolMarks ready={shownReady.map((t) => t.tool)} /> : <CrewFaces />}
           </div>
-          <span className="wn-ver ob-steps" aria-label={`Step ${n + 1} of 3`}>
-            {[0, 1, 2].map((k) => (
-              <i key={k} className={k === n ? "on" : k < n ? "done" : ""} />
+          {/* The steps as the kit's stepper form draws them: a thin bar each that fills as it is reached, over its number and name;
+              a step already done goes back to it. */}
+          <ol className="ob-stepper" aria-label={`Step ${n + 1} of 3`}>
+            {OB_STEPS.map((name, k) => (
+              <li key={name}>
+                <button type="button" className="ob-step" data-at={k === n ? "on" : k < n ? "done" : undefined} aria-current={k === n ? "step" : undefined} disabled={k > n} onClick={() => k < n && go(k)}>
+                  <span className="ob-step-bar" aria-hidden="true" />
+                  <span className="ob-step-n" aria-hidden="true">
+                    {k < n ? <Icon name="check" size={10} /> : k + 1}
+                  </span>
+                  <span className="ob-step-name">{name}</span>
+                </button>
+              </li>
             ))}
-            <span>{n + 1} of 3</span>
-          </span>
+          </ol>
           <button type="button" className="wn-x" aria-label="Set up later" title="Set up later" onClick={() => finish(false)}>
             <Icon name="x" size={14} />
           </button>
 
-          <div className="wn-body" key={n}>
+          <div className="wn-body" key={n} data-way={obWay.current}>
             {n === 0 && (
               <>
                 <h2>Welcome to Friday</h2>
@@ -407,7 +431,7 @@ export function Setup({ identity, recents, onDone }: { identity: Identity; recen
               </button>
             )}
             {n < 2 ? (
-              <button type="button" className="btn small primary wn-got" autoFocus onClick={() => setOb(n + 1)}>
+              <button type="button" className="btn small primary wn-got" autoFocus onClick={() => go(n + 1)}>
                 {n === 0 ? "Get started" : "Next"}
               </button>
             ) : (
@@ -419,6 +443,12 @@ export function Setup({ identity, recents, onDone }: { identity: Identity; recen
         </section>
       </div>,
       document.body,
+    );
+    return (
+      <>
+        {introEl}
+        {welcome}
+      </>
     );
   }
 

@@ -126,3 +126,84 @@ test("guarded Auto routes Claude Code's shell through Friday's go-ahead list; Fu
   assert.ok(plain.includes("Bash"));
   assert.ok(allowed(guarded).length >= 1);
 });
+
+// Security M1: the list read the first word of a line, so a wrapper, an option before the subcommand or a `cd` walked past it.
+test("a command inside a wrapper is judged as the command it is", () => {
+  for (const [c, want] of [
+    [`bash -c "gh pr merge 12 --squash"`, "ask:ship"],
+    [`sh -c 'git push --force origin main'`, "ask:ship"],
+    [`zsh -lc "npm publish"`, "ask:ship"],
+    [`/bin/bash -c "sudo rm -rf /var/log"`, "never"],
+    [`bash -c "rm -rf ~"`, "never"],
+    [`bash -c 'bash -c "gh pr create --fill"'`, "ask:ship"],
+    [`eval "gh pr merge 12"`, "ask:ship"],
+    [`eval gh release create v1.0.0`, "ask:ship"],
+    [`bash <<< "gh pr merge 12"`, "ask:ship"],
+    [`echo "gh pr merge 12" | bash`, "ask:safety"],
+    [`echo $(gh pr merge 12)`, "ask:ship"],
+    ["echo `npm publish`", "ask:ship"],
+    [`X='gh pr merge 12'; $X`, "ask:ship"],
+    [`bash -c '$CMD'`, "ask:safety"],
+    // What another command prints, run as a command: nothing to read until it has run.
+    [`eval "$(ssh-agent -s)"`, "ask:safety"],
+    [`(cd /tmp && gh pr merge 12)`, "ask:ship"],
+    [`env -i PATH=/usr/bin git push --force origin rex/retry`, "ask:ship"],
+    [`timeout 30 gh pr merge 12`, "ask:ship"],
+    [`nice -n 5 npm publish`, "ask:ship"],
+    [`/usr/bin/git push --force origin rex/retry`, "ask:ship"],
+    [`find . -name '*.tgz' -exec npm publish {} \;`, "ask:ship"],
+    [`python3 -c "import subprocess; subprocess.run(['gh','pr','merge','12'])"`, "ask:safety"],
+    [`python -c "import os; os.system('npm publish')"`, "ask:safety"],
+    [`node -e "require('child_process').execSync('gh pr merge 12')"`, "ask:safety"],
+    [`perl -e 'system("npm publish")'`, "ask:safety"],
+    [`osascript -e 'do shell script "gh pr merge 12"'`, "ask:safety"],
+    [`git -c alias.p='push --force origin main' p`, "ask:safety"],
+  ] as const)
+    assert.equal(kind(c), want, c);
+  // As its words, the way Codex hands a command over.
+  assert.equal(guardTool("shell", { command: ["bash", "-lc", "gh pr merge 12 --squash"] }, at).kind, "ask");
+  assert.equal(guardTool("shell", { command: ["bash", "-lc", "npm test"] }, at).kind, "run");
+});
+
+test("an option before the subcommand does not hide it", () => {
+  for (const [c, want] of [
+    [`git -C ${home}/code/shop push --force origin rex/retry`, "ask:ship"],
+    ["git -c user.name=x push origin main", "ask:ship"],
+    ["git --git-dir=.git --no-pager push --force", "ask:ship"],
+    ["gh -R acme/shop pr merge 12", "ask:ship"],
+    ["gh --repo acme/shop pr create --fill", "ask:ship"],
+    ["npm --prefix packages/a publish", "ask:ship"],
+    ["pnpm --filter web publish", "ask:ship"],
+    ["kubectl -n prod delete deployment web", "ask:ship"],
+    ["helm --namespace prod upgrade web ./chart", "ask:ship"],
+    ["docker --context remote push acme/web", "ask:ship"],
+    ["terraform -chdir=infra apply", "ask:ship"],
+  ] as const)
+    assert.equal(kind(c), want, c);
+  for (const c of [`git -C ${home}/code/shop status`, "git -c color.ui=false log -3", "gh -R acme/shop pr view 12", "kubectl -n prod get pods", "git --no-pager diff"]) assert.equal(kind(c), "run", c);
+});
+
+test("a relative path is read from where the command runs, and a path that climbs is where it lands", () => {
+  for (const c of ["cd ~/.ssh && echo key >> authorized_keys", "cd ~ && echo key >> .ssh/authorized_keys", "cd ~/.aws; cp /tmp/x credentials", `echo key >> ../../.ssh/authorized_keys`, `echo key >> ${home}/code/../.ssh/authorized_keys`, "echo key >> ~/.SSH/authorized_keys", "cd ~ && cd .ssh && tee authorized_keys", "cd ~/.friday && echo x > connections.json"]) assert.equal(kind(c), "never", c);
+  for (const c of ["cd src && echo x > notes.txt", "echo x >> README.md", "cd /tmp && echo x > out.txt", `cd "$DIR" && echo x > out.txt`, "cp a.txt b.txt", "npm test > out.log 2>&1"]) assert.equal(kind(c), "run", c);
+});
+
+test("what only looks like a wrapped command still runs", () => {
+  for (const c of [
+    `bash -c "npm test && npm run build"`,
+    "bash scripts/build.sh",
+    "bash <<'EOF'\nnpm test\nEOF",
+    `python3 -c "print(1 + 1)"`,
+    `python3 -c "import json,sys; print(json.load(sys.stdin)['name'])"`,
+    `node -e "console.log(require('./package.json').version)"`,
+    `echo "today is $(date +%F)"`,
+    "cat > NOTES.md <<'EOF'\nRun `npm publish` when ready, then $(gh pr merge).\nEOF",
+    `git commit -m 'docs: say when to run \`gh pr merge\`'`,
+    "find . -name '*.log' -exec rm {} \;",
+    "FOO=bar npm test",
+    "env NODE_ENV=test npm test",
+    "timeout 60 npm test",
+    "xargs -n1 echo",
+  ])
+    assert.equal(kind(c), "run", c);
+});

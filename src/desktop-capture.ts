@@ -3,6 +3,7 @@
 // coding tool launched to look at its page put a second Chrome (Arun, 2026-10-19). Offscreen windows draw at 1x, so the picture is
 // the size asked for, not twice it on a Retina screen, which is all a model reads anyway.
 import { BrowserWindow, nativeImage, session, type NativeImage } from "electron";
+import { ownLocalApp } from "./browser-driver.js";
 import { encodeScript, GIF_MAX_BYTES, gifTries, walkPage, type ClipMark, type ClipTarget } from "./clip-walk.js";
 import { fastStartMp4 } from "./mp4-faststart.js";
 import { CLIP, webmWithDuration } from "./preview-check.js";
@@ -14,6 +15,8 @@ export interface CaptureAsk {
   fullPage: boolean;
   /** Also report the page's console errors (a preview check, src/preview-check.ts). */
   console?: boolean;
+  /** Friday's own address when it runs on this computer (runner/screenshot.ts): never captured, by name or by a redirect. */
+  own?: string;
 }
 
 /** `cut`: a whole page taller than MAX_PAGE, captured down to there. */
@@ -29,11 +32,16 @@ const clamp = (v: unknown, fallback: number, min: number, max: number) => (typeo
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Its own session, in memory: no cookies or storage shared with Friday's window, and nothing a page asks for is granted. */
-function shots() {
+function shots(own?: unknown) {
   const s = session.fromPartition("friday-screenshots");
   s.setPermissionRequestHandler((_wc, _p, grant) => grant(false));
+  // Friday's own page, loaded here, would be Friday's own origin drawn for an agent: its other sessions in the picture, and a
+  // clip's walk pressing what it finds there. Every request of these windows to it is refused, whatever led there (the address
+  // asked for, a redirect, a frame, a script), as the agents' browser is held off it (Security M3).
+  if (typeof own === "string" && own) s.webRequest.onBeforeRequest((d, cb) => cb({ cancel: ownLocalApp(d.url, own) }));
   return s;
 }
+const OWN_PAGE = "That is Friday's own page, which isn't captured or recorded.";
 
 export async function capturePreview(ask: CaptureAsk): Promise<CaptureResult> {
   let url: URL;
@@ -44,6 +52,7 @@ export async function capturePreview(ask: CaptureAsk): Promise<CaptureResult> {
   }
   // Only this computer's pages, whatever asked: the server checks too.
   if (!/^https?:$/.test(url.protocol) || !LOCAL.test(url.hostname)) return { error: "Only a page served on this machine (localhost) can be captured." };
+  if (typeof ask.own === "string" && ownLocalApp(url.toString(), ask.own)) return { error: OWN_PAGE };
   const width = clamp(ask.width, 1280, 320, 2560);
   const height = clamp(ask.height, 900, 240, 2000);
   const win = new BrowserWindow({
@@ -51,7 +60,7 @@ export async function capturePreview(ask: CaptureAsk): Promise<CaptureResult> {
     width,
     height,
     useContentSize: true,
-    webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, nodeIntegration: false, session: shots(), backgroundThrottling: false },
+    webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, nodeIntegration: false, session: shots(ask.own), backgroundThrottling: false },
   });
   const wc = win.webContents;
   wc.setAudioMuted(true);
@@ -121,6 +130,8 @@ export interface ClipAsk {
   url: string;
   width: number;
   height: number;
+  /** Friday's own address when it runs on this computer (runner/screenshot.ts): never recorded, by name or by a redirect. */
+  own?: string;
   /** The words the change added, to visit (the runner reads them from the diff). */
   targets?: ClipTarget[];
   /** Where to scroll to instead (the "before" clip, walked to where the "after" one stopped). */
@@ -147,6 +158,7 @@ export async function recordClip(ask: ClipAsk): Promise<ClipResult> {
   }
   // Only this computer's pages, whatever asked: the runner checks too.
   if (!/^https?:$/.test(url.protocol) || !LOCAL.test(url.hostname)) return { error: "Only a page served on this machine (localhost) can be recorded." };
+  if (typeof ask.own === "string" && ownLocalApp(url.toString(), ask.own)) return { error: OWN_PAGE };
   const width = clamp(ask.width, 1280, 320, 1920);
   const height = clamp(ask.height, 800, 240, 1200);
   const targets = (Array.isArray(ask.targets) ? ask.targets : []).filter((t) => t && typeof t.text === "string").slice(0, 3).map((t) => ({ text: t.text.slice(0, 80) }));
@@ -157,7 +169,7 @@ export async function recordClip(ask: ClipAsk): Promise<ClipResult> {
     width,
     height,
     useContentSize: true,
-    webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, nodeIntegration: false, session: shots(), backgroundThrottling: false },
+    webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, nodeIntegration: false, session: shots(ask.own), backgroundThrottling: false },
   });
   const wc = win.webContents;
   wc.setAudioMuted(true);

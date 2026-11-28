@@ -16,7 +16,7 @@ test("on this computer, automations are made, listed, changed and removed, and o
     await rm(home, { recursive: true, force: true });
   });
   const call = async <T,>(p: string, method = "GET", json?: unknown): Promise<T> => {
-    const r = await fetch(`${friday.url}${p}`, { method, headers: { "Content-Type": "application/json", "x-friday-local": "1" }, ...(json === undefined ? {} : { body: JSON.stringify(json) }) });
+    const r = await fetch(`${friday.url}${p}`, { method, headers: { "Content-Type": "application/json", "x-friday-local": "1", "x-friday-key": friday.key }, ...(json === undefined ? {} : { body: JSON.stringify(json) }) });
     const text = await r.text();
     assert.ok(r.ok, `${method} ${p}: ${r.status} ${text}`);
     return JSON.parse(text) as T;

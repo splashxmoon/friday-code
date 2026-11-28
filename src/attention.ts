@@ -1,6 +1,7 @@
 import { agentState, approvers, plainError, saysItAll, steersLane, type AgentPhase } from "./agent-state.js";
 import { faceIndex } from "./agent-face.js";
 import { carefulClass } from "./command-class.js";
+import { alwaysOffer } from "./command-allow.js";
 import { carriedOn, planLimitHit } from "./limit-reset.js";
 import { laneName } from "./session/core.js";
 import { driverOf, taskAllowApplies, questionsTo, requestsTo, roleOf, runOf, type SessionState } from "./session/projection.js";
@@ -46,6 +47,8 @@ export interface Attention {
   items?: string[];
   /** "Allow for this task" would apply for you here (projection.ts taskAllowApplies): else only Allow once is offered. */
   forTask?: true;
+  /** What a yes with "Always allow" ticked adds to the session's allow list (command-allow.ts alwaysOffer): only on its owner's commands. */
+  always?: string[];
 }
 
 /**
@@ -93,7 +96,8 @@ export function attentionIn(state: SessionState, meId: string): Attention[] {
       const more = ask.items.length > 1 ? ` and ${ask.items.length - 1} more` : "";
       const text = ask.scope === "commands" && first ? `${agentName(state, lane)} wants to run ${first}${more}` : `${agentName(state, lane)} is asking before it goes on`;
       // The commands themselves, for a page that says them in plain words (the Agents page, plain-risk.ts).
-      out.push({ ...of("approval", text, ask.seq, lane), approval: ask.id, ...(ask.scope === "commands" ? { command: true, items: ask.items.slice(0, 5), ...(taskAllowApplies(state, lane, meId) ? { forTask: true as const } : {}), ...(carefulClass(ask.items) ? { careful: true as const } : {}) } : {}) });
+      const always = alwaysOffer(state, meId, lane);
+      out.push({ ...of("approval", text, ask.seq, lane), approval: ask.id, ...(ask.scope === "commands" ? { command: true, items: ask.items.slice(0, 5), ...(taskAllowApplies(state, lane, meId) ? { forTask: true as const } : {}), ...(carefulClass(ask.items) ? { careful: true as const } : {}), ...(always ? { always } : {}) } : {}) });
       continue;
     }
     const run = runOf(state, lane);

@@ -3,8 +3,8 @@
  * finished run that changed files and ran no test is also its one action. Check it asks Friday to test the lane's finished work
  * (proof-clips.ts testWork: the tests the run ran, else the project's own, and a clip when it changed a page), the same as Test it
  * under a reply, which this replaces for such a run. While that runs the badge turns and reads "Checking…"; once the tests are in
- * it reads "Checked · 12 tests pass" in green, or "Check failed" in red with Fix it, which asks the same agent to fix the first
- * failure. Everything it says after a reload is read from the session's own events, so it stands as it did.
+ * its own card says how they went (TestProofCard.tsx), with Fix it on a failure, which asks the same agent to fix the first
+ * failure; the badge steps aside so it isn't said twice. Everything it says after a reload is read from the session's own events, so it stands as it did.
  */
 import { useMemo, useState } from "react";
 import type { SessionEvent } from "../types.js";
@@ -14,9 +14,9 @@ import { StateRing } from "./presence.js";
 import { testWork } from "./proof-clips.js";
 
 export { checkStateOf, fixFirstText, type CheckState } from "../check-state.js";
-import { checkStateOf, checkWords, fixFirstText } from "../check-state.js";
+import { checkStateOf } from "../check-state.js";
 
-export function CheckBadge({ verdict, title, sid, invite, lane, endSeq, events, canCheck, onFix, notify }: {
+export function CheckBadge({ verdict, title, sid, invite, lane, endSeq, events, canCheck, notify }: {
   verdict: { text: string; tone: "pass" | "fail" | "none" };
   /** The test command the run ran, for the badge's tip. */
   title?: string | undefined;
@@ -28,8 +28,6 @@ export function CheckBadge({ verdict, title, sid, invite, lane, endSeq, events, 
   events: readonly SessionEvent[];
   /** Whether Check it is offered: the lane's latest run, someone who can ask, in the edition that runs it. */
   canCheck: boolean;
-  /** Ask the same agent to fix the first failure; none when this person can't, or a later run has moved on. */
-  onFix?: ((text: string) => void) | undefined;
   notify: (text: string) => void;
 }) {
   const [asked, setAsked] = useState(false);
@@ -53,29 +51,9 @@ export function CheckBadge({ verdict, title, sid, invite, lane, endSeq, events, 
       </span>
     );
   }
-  if (st.phase === "passed")
-    return (
-      <span className="rsp-check" role="status">
-        <span className="rsp-verdict pass" title={st.command}>
-          <Icon name="check" size={12} /> {checkWords(st)!.text}
-        </span>
-      </span>
-    );
-  if (st.phase === "failed")
-    return (
-      <span className="rsp-check" role="status">
-        <span className="rsp-verdict fail" title={st.command}>
-          <Icon name="x" size={12} /> {checkWords(st)!.text}
-        </span>
-        {onFix && (
-          <button type="button" className="test-it danger" title="Ask the agent to fix the first failure and run the check again" onClick={() => onFix(fixFirstText(st))}>
-            <Icon name="wrench" size={13} />
-            Fix it
-          </button>
-        )}
-        {st.first && <span className="rsp-check-note" title={st.first}>{st.first.length > 48 ? `${st.first.slice(0, 47)}…` : st.first}</span>}
-      </span>
-    );
+  // How the check went is said once, by its own card in the chat (TestProofCard.tsx: a pass one quiet line, a failure open with its
+  // tests and Fix it), not again here above the answer as a tag and a pill (the redesign of 2026-11-27).
+  if (st.phase === "passed" || st.phase === "failed") return null;
   if (st.phase === "couldnt")
     return (
       <span className="rsp-check">

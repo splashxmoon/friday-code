@@ -57,7 +57,7 @@ html.desktop:not(.desktop-mac) .win-code-views { right: var(--band-right, 146px)
 .ia-head { display: flex; align-items: center; flex: none; gap: 8px; height: 40px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--border); min-width: 0; }
 .ia-mark { display: grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 6px; color: var(--ink-2); }
 .ia-name { flex: none; font: 600 13px/1 var(--font); color: var(--ink); white-space: nowrap; }
-.ia-chip { flex: none; padding: 3px 7px; border-radius: 999px; background: var(--hover); color: var(--ink-2); font: 500 11px/1 var(--font); white-space: nowrap; }
+.ia-chip { flex: none; padding: 3px 7px; border-radius: var(--r-sm, 6px); background: var(--hover); color: var(--ink-2); font: 500 11px/1 var(--font); white-space: nowrap; }
 .ia-live { flex: none; display: inline-flex; align-items: center; gap: 6px; color: var(--live); font: 500 11.5px/1 var(--font); white-space: nowrap; }
 .ia-live::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
 .ia-sp { flex: 1 1 0; }
@@ -96,7 +96,7 @@ html.desktop:not(.desktop-mac) .win-code-views { right: var(--band-right, 146px)
 .ia-hero { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--ink-2); box-shadow: var(--shadow-xs, 0 1px 2px rgb(0 0 0 / .06)); }
 .ia-start .ia-empty-title { font: 600 15px/1.3 var(--font); letter-spacing: -.01em; }
 .ia-start > p { max-width: 260px; text-wrap: pretty; }
-.ia-folder { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 3px 9px; border-radius: 999px; background: var(--hover); color: var(--ink-2); font: 500 12px/1.4 var(--font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ia-folder { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 3px 9px; border-radius: var(--r-sm, 6px); background: var(--hover); color: var(--ink-2); font: 500 12px/1.4 var(--font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ia-folder svg { flex: none; color: var(--text-muted); }
 .ia-suggest { display: flex; flex-direction: column; gap: 4px; width: 100%; max-width: 300px; margin-top: 10px; }
 .ia-suggest-row { display: flex; align-items: center; gap: 10px; width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--card); color: var(--ink-2); font: 500 12.5px/1 var(--font); text-align: left; cursor: pointer; transition: background-color var(--t-hover, 120ms) ease, border-color var(--t-hover, 120ms) ease, color var(--t-hover, 120ms) ease; }
@@ -329,7 +329,7 @@ html.dark .ia-foot-line { color: #929292; }
 
 /* An Agents session shown in Code (code-chats.ts linked): a small word on its tab, and a bar under the tabs with what can be done
    with it. Flush, in the column's own colours. */
-.ia-tab-from { flex: none; padding: 2px 5px; border-radius: 999px; background: var(--hover); color: var(--text-muted); font: 500 10px/1 var(--font); letter-spacing: .01em; }
+.ia-tab-from { flex: none; padding: 2px 5px; border-radius: var(--r-sm, 6px); background: var(--hover); color: var(--text-muted); font: 500 10px/1 var(--font); letter-spacing: .01em; }
 .ia-tab.on .ia-tab-from { background: var(--hover-strong); color: var(--ink-2); }
 .ia-from { display: flex; flex: none; align-items: center; gap: 4px; min-width: 0; height: 30px; padding: 0 8px 0 8px; border-bottom: 1px solid var(--border); background: var(--bg); }
 .ia-from-text { flex: 1 1 auto; min-width: 0; padding-left: 6px; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); font: 500 11.5px/1 var(--font); white-space: nowrap; }
@@ -368,3 +368,56 @@ html.dark .ia-foot-line { color: #929292; }
 /* Under 300px there isn't room for all of them: the voice button goes (holding the voice key still talks), unless it is listening. */
 .ia-new { container: ianew / inline-size; }
 @container ianew (max-width: 300px) { .ide-agent .composer-bar .voice-right:not(:has(.voice-stop)) { display: none; } }
+
+/* ── Code's chrome measured to the shared kit (affect-pro SPEC.md §1, 2026-11-27) ───────────────────────────────────────────────
+   Icon buttons 28 at radius 6 with 16px icons; tabs 12.5/500/20 in the 35px bar VS Code's own sets (kept, Arun 2026-11-19); the empty
+   column as the kit's EmptyState (a 42px tile at radius 11, its title 13/500/20, a 13/400/20 line); starting points as 36px rows at
+   radius 8 drawn by a ring; chips 20 tall at radius 5; small bars 32 tall with 24px ghost actions at 12/500; buttons 28 at radius 6;
+   kbd 16 at radius 4, 10.5/500; hovers .14s, entrances on the EXPO curve. Friday's colours and Geist stay. */
+:root { --ia-ring: 0 0 0 .5px var(--border-strong), 0 1px 1px -1px rgb(0 0 0 / .1), 0 1px 2px rgb(0 0 0 / .05); --ia-expo: cubic-bezier(.22, 1, .36, 1); }
+html.dark { --ia-ring: 0 0 0 .5px rgb(255 255 255 / .1), 0 1px 2px rgb(0 0 0 / .4); }
+.ide-agent { font-variant-numeric: tabular-nums; }
+.ia-icon, .ide-agent .ia-icon { width: 28px; height: 28px; border-radius: 6px; transition: background-color .14s ease, color .14s ease; }
+.ia-icon svg { width: 16px; height: 16px; }
+.ia-icon:hover, .ia-icon.on { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.ia-tab { font: 500 12.5px/20px var(--font); transition: background-color .14s ease, color .14s ease; }
+.ia-tab-x { width: 20px; height: 20px; border-radius: 5px; }
+.ia-tab-from { height: 16px; padding: 0 5px; border-radius: 4px; font: 500 10.5px/16px var(--font); letter-spacing: 0; }
+/* The empty column: the kit's EmptyState. */
+.ia-start { gap: 0; }
+.ia-hero, .ia-empty-mark { width: 42px; height: 42px; margin: 0; border: 0; border-radius: 11px; background: color-mix(in srgb, var(--ink) 5%, transparent); box-shadow: none; color: var(--text-muted); }
+.ia-hero svg, .ia-empty-mark svg { width: 18px; height: 18px; }
+.ia-empty-title, .ia-start .ia-empty-title { margin-top: 16px; font: 500 13px/20px var(--font); letter-spacing: 0; }
+.ia-empty p, .ia-start > p { margin-top: 4px; font: 400 13px/20px var(--font); text-wrap: balance; }
+.ia-folder { height: 20px; margin-top: 8px; gap: 4px; padding: 0 6px 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 6%, transparent); font: 500 12px/20px var(--font); }
+.ia-folder svg { width: 12px; height: 12px; }
+.ia-suggest { gap: 6px; margin-top: 18px; }
+.ia-suggest-row { height: 36px; gap: 8px; padding: 0 10px 0 12px; border: 0; border-radius: 8px; background: var(--card); box-shadow: var(--ia-ring); color: var(--ink); font: 500 13px/20px var(--font); transition: background-color .14s ease, box-shadow .2s ease, transform .14s var(--ia-expo); }
+.ia-suggest-row svg { width: 16px; height: 16px; }
+.ia-suggest-row:hover { border: 0; background: var(--hover); }
+.ia-suggest-row:active { transform: scale(.99); }
+.ia-tip { margin-top: 18px !important; font-size: 12px; line-height: 16px; }
+.ia-tip kbd, .cc-btn.cc-code kbd { display: inline-grid; place-items: center; min-width: 16px; height: 16px; box-sizing: border-box; padding: 0 4px; border-radius: 4px; background: transparent; box-shadow: inset 0 0 0 .5px var(--border-strong); color: var(--text-muted); font: 500 10.5px/16px var(--font); }
+@keyframes ia-rise { from { opacity: 0; transform: translateY(4px); filter: blur(1.5px); } to { opacity: 1; transform: none; filter: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  .ia-start > * { animation: ia-rise .4s var(--ia-expo) both; }
+  .ia-suggest > :nth-child(2) { animation: ia-rise .4s var(--ia-expo) 40ms both; }
+  .ia-suggest > :nth-child(3) { animation: ia-rise .4s var(--ia-expo) 80ms both; }
+  .ia-suggest > :nth-child(4) { animation: ia-rise .4s var(--ia-expo) 120ms both; }
+  .ia-suggest > :nth-child(n+5) { animation: ia-rise .4s var(--ia-expo) 160ms both; }
+}
+/* Buttons: 28 at radius 6, 13/500, the secondary white on a ring. */
+.ia-btn { height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: var(--card); box-shadow: var(--ia-ring); font: 500 13px/20px var(--font); transition: background-color .14s ease; }
+/* The bars under the tabs (from Agents, after a rewind): 32 tall, their words 12/500/16, their actions 24px ghost buttons at 12/500. */
+.ia-from, .ia-rewound { height: 32px; }
+.ia-from-text, .ia-rewound-text, .ia-rewound-done { font: 500 12px/16px var(--font); }
+.ia-from-btn { height: 24px; padding: 0 8px; border-radius: 6px; font: 500 12px/20px var(--font); }
+.ia-review-note { padding: 8px 12px; font-size: 12px; line-height: 16px; }
+.ia-tab-open { height: 20px; padding: 0 4px; border-radius: 5px; font: 500 12px/20px var(--font); }
+/* A block of code in the column: the kit's CodeBlock, radius 10 on a ring, a 36px head with its file in 12/500, 24px actions, 12/20 mono. */
+.ia-chat .rsp .ans-col { border: 0 !important; border-radius: 10px !important; box-shadow: var(--ia-ring); }
+.ia-chat .ans-col .ans-code-head { height: 36px; padding: 0 6px 0 14px; }
+.ia-chat .ans-col .ans-code-file { font: 500 12px/16px var(--mono); }
+.ia-chat .ans-col .ans-code-act { height: 24px; padding: 0 8px; border-radius: 6px; font: 500 12px/20px var(--font); transition: background-color .14s ease, color .14s ease; }
+.ia-chat .ans-col .ans-code-body { padding: 10px 14px !important; font: 12px/20px var(--mono); }
+.ia-chat .ans-col .ans-code-more { height: 32px; padding: 0 14px; font: 500 12px/20px var(--font); }

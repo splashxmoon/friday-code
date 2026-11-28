@@ -198,7 +198,8 @@ export interface SessionState {
   lanePending: Record<string, number[]>;
   /** What each lane has asked permission for and not yet been answered: an instruction in that lane, with or without an answer, ends the wait. */
   /** What each lane's agent is asking permission for. `live`: asked mid-turn, the tool waiting on the answer there and then. */
-  approvals: Record<string, { id: string; seq: number; tool?: EngineTool; scope: "commands" | "turn"; items: string[]; live?: boolean; hostsOwn?: boolean }>;
+  /** `guard`: a teammate's go-ahead (guardrails.ts), asked whatever the allow list says, so Always allow isn't offered on it. */
+  approvals: Record<string, { id: string; seq: number; tool?: EngineTool; scope: "commands" | "turn"; items: string[]; live?: boolean; hostsOwn?: boolean; guard?: string }>;
   /**
    * Commands let through for the rest of a lane's run ("Allow for this task" on a teammate's permission card), as they were asked:
    * each stands for what Always allow would add for it (command-allow.ts entryFor), so the hub answers a request matching one by
@@ -943,7 +944,7 @@ export function apply(s: SessionState, ev: SessionEvent): SessionState {
       s.links[b.role] = { enabled: b.enabled, version: b.version };
       break;
     case "engine.approval":
-      s.approvals[lane] = { id: b.id, seq: ev.seq, ...(b.tool ? { tool: b.tool } : {}), scope: b.scope, items: b.items, ...(b.live ? { live: true } : {}), ...(b.hostsOwn ? { hostsOwn: true } : {}) };
+      s.approvals[lane] = { id: b.id, seq: ev.seq, ...(b.tool ? { tool: b.tool } : {}), scope: b.scope, items: b.items, ...(b.live ? { live: true } : {}), ...(b.hostsOwn ? { hostsOwn: true } : {}), ...(b.guard ? { guard: b.guard } : {}) };
       break;
     case "instruction": {
       // A live ask (the tool waiting mid-turn) stays until it is answered or the turn is interrupted. A message written

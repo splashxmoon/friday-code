@@ -19,8 +19,9 @@ import { execCli } from "./spawn-cli.js";
  * Kiro, Devin, Cline and Kilo were checked against real accounts (October 2026). The rest are read as the three open-source apps
  * that show these limits read them (T3 Code, Orca and Synara, November 2026): Gemini CLI, Grok Build, Factory Droid, OpenCode Go
  * and Devin as they do, Amp as the open-source usage trackers do. Antigravity is asked of Google directly with agy's own sign-in
- * (T3 Code, Synara), and agy itself only when that can't be read (Orca). JetBrains Junie keeps its sign-in in the keychain under
- * names nobody has documented, and OpenCode's free models report nothing: both say so instead.
+ * (T3 Code, Synara), and agy itself only when that can't be read (Orca). Muse Code is asked with its own `muse usage --json`, which
+ * spends no model turn. JetBrains Junie keeps its sign-in in the keychain under names nobody has documented, and OpenCode's free
+ * models report nothing: both say so instead, as do the tools on the person's own key (SAID_LIMITS).
  *
  * A reading that fails is asked again after a minute, and the last good one shows meanwhile; a window whose reset has passed shows
  * empty rather than as full as it last was.
@@ -907,6 +908,69 @@ async function readAntigravity(): Promise<ToolAllowance | null> {
   return runAgyUsage(bin);
 }
 
+// ── Muse Code ───────────────────────────────────────────────────────
+
+/** A plan id ("everyday_usage") as words ("Everyday usage"). */
+const words = (id: string) => (id ? `${id[0]!.toUpperCase()}${id.slice(1)}`.replace(/[_-]+/g, " ") : "");
+
+/**
+ * Muse Code's allowance, from `muse usage --json`: its five-hour window and its weekly one, each how much is used and when it
+ * resets, and its plan (Muse's docs: "Your plan has a five-hour allowance and a weekly allowance"). Read in either spelling it is
+ * kept in: the MSP wire's SubscriptionUsage (`window.usedPercent`, `windowDurationMins`, `resetsAtMs`, `weekly`, `tier`, also
+ * inside `usage` as `usage/read` answers) or its snapshot's snake_case (`used_percent`, `window_duration_mins`, `resets_at`), both
+ * from Muse 1.4.25. Null when it holds neither window.
+ */
+export function museFrom(j: Record<string, any> | null): ToolAllowance | null {
+  const u = j && typeof j.usage === "object" && j.usage ? j.usage : j;
+  if (!u || typeof u !== "object") return null;
+  const used = (o: any) => num(o?.usedPercent ?? o?.used_percent);
+  const reset = (o: any) => {
+    const ms = num(o?.resetsAtMs);
+    return ms !== null ? Math.round(ms / 1000) : secs(o?.resets_at ?? o?.resetsAt);
+  };
+  const windows: LimitWindow[] = [];
+  if (used(u.window) !== null) {
+    const mins = num(u.window.windowDurationMins ?? u.window.window_duration_mins);
+    windows.push(window("session", mins && mins % 60 === 0 ? `${mins / 60}h` : "Window", Math.max(0, Math.min(100, used(u.window)!)), reset(u.window), mins));
+  }
+  if (used(u.weekly) !== null) windows.push(window("weekly", "Weekly", Math.max(0, Math.min(100, used(u.weekly)!)), reset(u.weekly), 10080));
+  if (!windows.length) return null;
+  return { plan: typeof u.tier === "string" && u.tier ? words(u.tier) : null, windows, at: Date.now() };
+}
+
+/** `muse usage --json`, which reads the allowance without a model turn (its own help: "Show your subscription allowance (no model turn)"). */
+async function readMuse(): Promise<ToolAllowance | null> {
+  if (win) return null;
+  const bin = await findBin("muse");
+  if (!bin) return null;
+  const how = await launcher(bin).catch(() => null);
+  if (!how) return kept("muse", "Muse Code's usage didn't answer just now.");
+  const r = await execCli(how.command, [...how.prefix, "usage", "--json"], { env: { ...childEnv(), ...how.env, MUSE_NO_AUTO_UPDATE: "1" }, timeoutMs: 15_000 });
+  if (/not logged in|muse login/i.test(`${r.stdout}\n${r.stderr}`)) return kept("muse", "Sign in to Muse Code (muse login) to see this here.");
+  const a = jsonOut(r.stdout, museFrom);
+  return a ? remember("muse", a) : kept("muse", "Muse Code's usage didn't answer just now.");
+}
+
+// ── tools that run on your own key, or don't say ────────────────────
+
+/**
+ * The tools with no allowance Friday can read, each said plainly rather than left as "Not shared on this computer" (Arun,
+ * 2026-11-27: "fix uneven across tools"). Most run on the person's own provider key, which has no plan limit to show: what bounds
+ * them is that provider's rate limits and bill, and a 429 or a quota error from it still hands the work on (limit-reset.ts LIMIT).
+ * The rest have a plan but no way of reading it from outside: no command, endpoint or file says what is left (checked November
+ * 2026). Only for a tool that is on this computer.
+ */
+export const SAID_LIMITS: Partial<Record<EngineTool, { plan: string | null; why: string }>> = {
+  aider: { plan: "Your API key", why: "Aider runs on your own provider key: no plan limit. Your provider's rate limits and billing apply." },
+  goose: { plan: "Your API key", why: "Goose runs on the provider you set up in goose configure: no plan limit here. That provider's rate limits and billing apply." },
+  crush: { plan: null, why: "Crush runs on the providers set up in it (your keys, or a sign-in like Copilot's): each keeps its own limits, and Crush doesn't report them." },
+  pi: { plan: null, why: "Pi runs on the plan or key you signed in with inside it: a Claude or ChatGPT plan's limits show under Claude Code or Codex." },
+  qwen: { plan: null, why: "Qwen Code runs on your Qwen subscription or a provider's key, and doesn't report what's left: see chat.qwen.ai or your provider." },
+  auggie: { plan: null, why: "Auggie runs on your Augment account's credits, and has no command that reports them: see your Augment account." },
+  junie: { plan: null, why: "Junie keeps its sign-in in the keychain, where its quota can't be read: see it on your JetBrains account." },
+};
+const saidLimits = (tool: EngineTool) => async (): Promise<ToolAllowance | null> => ((await findBin(tool)) ? { ...SAID_LIMITS[tool]!, windows: [], at: Date.now() } : null);
+
 // ── all of them ─────────────────────────────────────────────────────
 
 const READERS: Partial<Record<EngineTool, () => Promise<ToolAllowance | null>>> = {
@@ -920,10 +984,12 @@ const READERS: Partial<Record<EngineTool, () => Promise<ToolAllowance | null>>> 
   droid: readDroid,
   amp: readAmp,
   antigravity: readAntigravity,
+  muse: readMuse,
+  ...(Object.fromEntries(Object.keys(SAID_LIMITS).map((t) => [t, saidLimits(t as EngineTool)])) as Partial<Record<EngineTool, () => Promise<ToolAllowance | null>>>),
 };
 
 /** The tools asked by starting them: never started for a lane that is starting a tool itself (limits.ts `askClaude: false`). */
-const STARTED: ReadonlySet<EngineTool> = new Set<EngineTool>(["antigravity"]);
+const STARTED: ReadonlySet<EngineTool> = new Set<EngineTool>(["antigravity", "muse"]);
 
 /**
  * Each tool asked at most every five minutes when it answered (the numbers only move while it runs, and nobody's server needs

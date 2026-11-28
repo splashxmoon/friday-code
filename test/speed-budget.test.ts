@@ -77,12 +77,12 @@ if (process.env.FRIDAY_SPEED_CHILD && step) {
     const home = path.join(base, "big");
     const { sid } = await seedBigSession(home, { events: 20_000 });
     const { f } = await start(home);
-    const mine = (await (await fetch(`${f.url}/api/sessions/mine`, { headers: { "x-friday-local": "1" } })).json()) as { sessions: { sid: string; invite: string }[] };
+    const mine = (await (await fetch(`${f.url}/api/sessions/mine`, { headers: { "x-friday-local": "1", "x-friday-key": f.key } })).json()) as { sessions: { sid: string; invite: string }[] };
     const invite = mine.sessions.find((s) => s.sid === sid)?.invite;
     if (!invite) throw new Error(`the made-up session isn't in the list: ${JSON.stringify(mine).slice(0, 300)}`);
     // As the page asks for it on opening (useSession.ts socketUrl): the newest 200 events, the rest once those are drawn.
     const text = await new Promise<string>((resolve, reject) => {
-      const ws = new WebSocket(`${f.url.replace(/^http/, "ws")}/ws?session=${encodeURIComponent(sid)}&invite=${encodeURIComponent(invite)}&tail=200`);
+      const ws = new WebSocket(`${f.url.replace(/^http/, "ws")}/ws?session=${encodeURIComponent(sid)}&invite=${encodeURIComponent(invite)}&tail=200`, { headers: { "x-friday-key": f.key } });
       const timer = setTimeout(() => (ws.terminate(), reject(new Error("no hello in 30 s"))), 30_000);
       ws.on("message", (m) => {
         const s = String(m);

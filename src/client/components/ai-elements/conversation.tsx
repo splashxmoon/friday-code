@@ -215,8 +215,10 @@ export type ConversationContentProps = ComponentProps<"div"> & { scrollClassName
 export const ConversationContent = ({ className, scrollClassName, ...props }: ConversationContentProps) => {
   const { scrollRef, contentRef } = useStick();
   return (
-    <div ref={scrollRef} className={scrollClassName} data-scroll-root="" style={{ height: "100%", width: "100%", overflow: "auto", scrollbarGutter: "stable both-edges" }}>
-      <div ref={contentRef} className={cn("flex flex-col gap-8 p-4", className)} {...props} />
+    // Up and down only: a chat never scrolls sideways (Arun, 2026-11-28: "horizontal scroll bar shouldnt be there"). This inline
+    // `overflow: auto` beat the stylesheet's clip, so a long path in a reply put a bar under it; wide code scrolls in its own box.
+    <div ref={scrollRef} className={scrollClassName} data-scroll-root="" style={{ height: "100%", width: "100%", overflowX: "hidden", overflowY: "auto", scrollbarGutter: "stable both-edges" }}>
+      <div ref={contentRef} className={cn("flex min-w-0 flex-col gap-8 p-4", className)} {...props} />
     </div>
   );
 };
@@ -268,7 +270,7 @@ export const ConversationScrollButton = ({
     !isAtBottom && (
       <Button
         className={cn(
-          "absolute bottom-4 left-[50%] translate-x-[-50%] rounded-full",
+          "absolute bottom-4 left-[50%] translate-x-[-50%] rounded-[8px]",
           className
         )}
         onClick={scrollToBottom}

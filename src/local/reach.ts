@@ -30,6 +30,9 @@ export interface ReachState {
 
 const KEY = (p: string) => `friday:reach:${p}`;
 
+/** The local ports of the connections relay streams made to the phone listener here, so it can tell them from this computer's own (phone.ts). */
+export const relayedPorts = new Set<number>();
+
 /** Friday's relay, unless FRIDAY_RELAY names another (wss://…/api/relay) or says "off". */
 export const DEFAULT_RELAY = "wss://www.app.tryfridaywork.com/api/relay";
 export const relayBase = (env: NodeJS.ProcessEnv): string | null => {
@@ -140,10 +143,14 @@ export class ReachHome {
     const sock = net.connect(port, "127.0.0.1");
     const pair = { ws, sock };
     this.streams.add(pair);
+    // So the listener can tell this connection from one made on this computer (phone.ts relayedPorts).
+    let local = 0;
+    sock.on("connect", () => relayedPorts.add((local = sock.localPort ?? 0)));
     const held: Buffer[] = [];
     let open = false;
     const end = () => {
       this.streams.delete(pair);
+      relayedPorts.delete(local);
       sock.destroy();
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.terminate();
     };

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckIcon, CopyIcon, LogOutIcon, SearchIcon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { StorageSection } from "./SettingsStorage.js";
-import { Callout, Choice, dangerOutline, Note, PageHeader, SettingsGroup, SettingsRow, StateBadge, surface } from "@/components/dass";
+import "./settings-polish.css";
+import { Callout, dangerOutline, Note, PageHeader, SettingsGroup, SettingsRow, surface } from "@/components/dass";
+import { Button, Input, Choice, StateBadge } from "./settings-kit.js";
 import { useIntent } from "./intent.js";
 import { ENGINE_MODELS, ENGINE_NAMES, ENGINE_TOOLS } from "../types.js";
 import { FIRST_TOOLS } from "./engines.js";

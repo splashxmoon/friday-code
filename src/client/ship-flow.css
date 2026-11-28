@@ -1,0 +1,53 @@
+/* From the changes to a pull request, at the foot of the Changes panel (ShipFlow.tsx), measured to the shared kit (affect-pro SPEC.md
+   §1, 2026-11-27): the folded commit line a 32px field at radius 8 on a ring, the message box at radius 8 on a ring with the kit's
+   focus, the main button 28 tall at radius 6 and 13/500 with its key in a 16px kbd, small actions 24 at 12/500, notes 12/400/16, the
+   done line's title 13/500/20. Nothing heavier than 500. app.css comes before style.css, so each rule is one class stronger than the
+   one it measures. No Checks block here in the open-source edition (Arun, 2026-11-16: "get rid of the checks thing too"). */
+.ship-dock {
+  --sd-ring: 0 0 0 .5px var(--border-strong), 0 1px 1px -1px rgb(0 0 0 / .1), 0 1px 2px rgb(0 0 0 / .05);
+  font-variant-numeric: tabular-nums;
+}
+html.dark .ship-dock { --sd-ring: 0 0 0 .5px rgb(255 255 255 / .1), 0 1px 2px rgb(0 0 0 / .4); }
+.ship-dock .sd-fold { height: 32px; padding: 0 10px 0 8px; border: 0; border-radius: 8px; background: var(--card); box-shadow: var(--sd-ring); font-size: 13px; line-height: 20px; transition: background-color .14s ease, color .14s ease; }
+.ship-dock .sd-fold b { font-weight: 500; }
+.ship-dock .sd-commit.open .sd-fold { height: 24px; padding: 0 2px; background: none; box-shadow: none; }
+.ship-dock .sd-msg { padding: 8px 10px; border: 0; border-radius: 8px; background: var(--card); box-shadow: var(--sd-ring); font-size: 13px; line-height: 20px; transition: box-shadow .14s ease; }
+.ship-dock .sd-msg:focus { box-shadow: 0 0 0 .5px var(--border-strong), 0 0 0 3px color-mix(in srgb, var(--ink) 10%, transparent); }
+.ship-dock .sd-where { font-size: 12px; line-height: 16px; }
+.ship-dock .sd-go { height: 28px; gap: 6px; padding: 0 8px 0 10px; border-radius: 6px; background: var(--accent); color: var(--on-accent); box-shadow: 0 1px 2px rgb(0 0 0 / .16); font-size: 13px; font-weight: 500; line-height: 20px; transition: background-color .14s ease, transform .14s cubic-bezier(.22, 1, .36, 1); }
+.ship-dock .sd-go:hover:not(:disabled) { background: var(--accent-hover); }
+.ship-dock .sd-go:active:not(:disabled) { transform: scale(.98); }
+.ship-dock .sd-go kbd { display: inline-grid; place-items: center; min-width: 16px; height: 16px; box-sizing: border-box; padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--on-accent) 16%, transparent); color: color-mix(in srgb, var(--on-accent) 72%, transparent); font: 500 10px/16px var(--font); opacity: 1; }
+.ship-dock a.sd-go { padding-right: 10px; }
+.ship-dock .sd-act { height: 24px; padding: 0 8px; border-radius: 6px; background: color-mix(in srgb, var(--ink) 6%, transparent); font-size: 12px; font-weight: 500; line-height: 20px; transition: background-color .14s ease; }
+.ship-dock .sd-note { font-size: 12px; line-height: 16px; }
+.ship-dock .sd-done-text b { font-size: 13px; font-weight: 500; line-height: 20px; }
+.ship-dock .sd-done-text em { font-size: 12px; line-height: 16px; }
+
+/* The commit dialog (Ship.tsx), the same measurements: the title 15/500/24, the branch an 18px chip at radius 5 (never a pill), field
+   labels 13/500/20 with a 12/400/16 count, the files a list at radius 8 on a ring with 32px rows (the name 500), the message and branch
+   fields at radius 8 on a ring with the kit's focus, notes 12/400/16, the warning a well at radius 8 with a red ring. */
+.ship-modal.ship-modal { --sd-ring: 0 0 0 .5px var(--border-strong), 0 1px 1px -1px rgb(0 0 0 / .1), 0 1px 2px rgb(0 0 0 / .05); font-variant-numeric: tabular-nums; }
+html.dark .ship-modal.ship-modal { --sd-ring: 0 0 0 .5px rgb(255 255 255 / .1), 0 1px 2px rgb(0 0 0 / .4); }
+.ship-modal.ship-modal .pop-head h2 { font-size: 15px; font-weight: 500; line-height: 24px; }
+.ship-modal.ship-modal .ship-where { font-size: 12px; line-height: 16px; }
+.ship-modal.ship-modal .ship-branch { height: 18px; padding: 0 6px 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 6%, transparent); font: 11px/18px var(--mono); }
+.ship-modal.ship-modal .ship-label { font-size: 13px; font-weight: 500; line-height: 20px; color: var(--ink); }
+.ship-modal.ship-modal .ship-label b, .ship-modal.ship-modal .ship-count, .ship-modal.ship-modal .ship-sum { font-size: 12px; line-height: 16px; }
+.ship-modal.ship-modal .ship-files { padding: 4px; border: 0; border-radius: 8px; background: var(--card); box-shadow: var(--sd-ring); }
+.ship-modal.ship-modal .ship-file { min-height: 32px; padding: 4px 8px; border-radius: 6px; transition: background-color .14s ease; }
+.ship-modal.ship-modal .ship-file-name { font-weight: 500; }
+.ship-modal.ship-modal textarea { border: 0; border-radius: 8px; background: var(--card); box-shadow: var(--sd-ring); font: 13px/20px var(--font); }
+.ship-modal.ship-modal textarea:focus { box-shadow: 0 0 0 .5px var(--border-strong), 0 0 0 3px color-mix(in srgb, var(--ink) 10%, transparent); }
+.ship-modal.ship-modal .ship-input { height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--card); box-shadow: var(--sd-ring); }
+.ship-modal.ship-modal .ship-input:focus-within { box-shadow: 0 0 0 .5px var(--border-strong), 0 0 0 3px color-mix(in srgb, var(--ink) 10%, transparent); }
+.ship-modal.ship-modal .ship-note { font-size: 12px; line-height: 16px; }
+.ship-modal.ship-modal .ship-warn { border: 0; border-radius: 8px; background: color-mix(in srgb, var(--red) 5%, var(--card)); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--red) 45%, transparent); }
+.ship-modal.ship-modal .ship-warn-text { font-size: 13px; line-height: 20px; }
+.ship-modal.ship-modal .modal-actions .btn { height: 28px; padding: 0 10px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+
+/* The Checks block where the edition has it (hosted; the open-source edition leaves it out): a card at radius 10 on a ring, its 36px
+   head 13/500/20, 40px rows between hairlines. */
+.ship-dock .sd-checks { border: 0; border-radius: 10px; background: var(--card); box-shadow: var(--sd-ring); }
+.ship-dock .sd-checks-head { font-size: 12px; line-height: 16px; }
+.ship-dock .sd-checks-head b { font-size: 13px; font-weight: 500; line-height: 20px; }

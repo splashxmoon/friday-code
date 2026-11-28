@@ -1,0 +1,131 @@
+/* The Agent Board's Timeline (BoardTimeline.tsx), as the approved mock's section B measured affectUI's Agent Lanes: a card of
+   radius 12 on the ring, split into who (250px) and the track; a 30px axis of 11px labels centred on hairline gridlines with a
+   "now" chip at its right end; 26px project headings; 46px rows with a 28px block of radius 6 (grey done, blue running with its
+   right edge capped, amber waiting, red failed, green handed over); an 18px flag over a waiting block; dashed hand-off lines; and
+   under it one row about what is selected. It lays itself out by its own width, not the window's. Colours are the app's tokens. */
+.btl {
+  --btl-ring: 0 0 0 .5px var(--border-strong), 0 1px 2px rgb(0 0 0 / .05);
+  --btl-ring-up: 0 0 0 .5px var(--border-strong), 0 2px 6px -2px rgb(0 0 0 / .12);
+  --btl-who: 250px;
+  container: btl / inline-size;
+  display: grid; gap: 14px; min-width: 0; color: var(--ink); font: 400 13px/20px var(--font, inherit);
+}
+.dark .btl { --btl-ring: 0 0 0 .5px rgb(255 255 255 / .1), 0 1px 2px rgb(0 0 0 / .4); --btl-ring-up: 0 0 0 .5px rgb(255 255 255 / .16), 0 2px 8px -2px rgb(0 0 0 / .6); }
+@container btl (max-width: 760px) { .btl-card, .btl-peek { --btl-who: 188px; } }
+@container btl (max-width: 560px) { .btl-card, .btl-peek { --btl-who: 148px; } }
+
+.btl-card { min-width: 0; border-radius: 12px; background: var(--card); box-shadow: var(--btl-ring); overflow: hidden; }
+html.glass .btl-card, html.glass .btl-peek { background: var(--glass-float, var(--card)); }
+/* The list scrolls here, under the axis, as tall as the window leaves it: the page's top above it (measured), and under it the
+   selected row, the gaps and the board's foot. Never shorter than four agents. */
+.btl-scroll { position: relative; max-height: max(214px, calc(100dvh - var(--btl-top, 220px) - 142px)); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+
+.btl-axis, .btl-row, .btl-grp { display: grid; grid-template-columns: var(--btl-who) minmax(0, 1fr); }
+.btl-axis { position: sticky; top: 0; z-index: 4; height: 30px; background: var(--card); border-bottom: 1px solid var(--border); }
+html.glass .btl-axis { background: var(--glass-float, var(--card)); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); }
+/* The line between who and the track is drawn on the track's side, over the axis and the rows alike, so it is one line from top to
+   foot and the track's width is the width the blocks and the gridlines are placed on, to the pixel. */
+.btl-corner { display: flex; align-items: center; min-width: 0; padding: 0 8px; box-shadow: 1px 0 0 var(--border); }
+.btl-ticks { position: relative; min-width: 0; font-size: 11px; line-height: 14px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.btl-ticks > span { position: absolute; top: 8px; transform: translateX(-50%); white-space: nowrap; }
+.btl-ticks > .btl-now { right: 6px; top: 7px; transform: none; height: 16px; padding: 0 5px; border-radius: 4px; background: color-mix(in srgb, var(--live) 14%, transparent); color: var(--live); font-size: 11px; font-weight: 500; line-height: 16px; }
+
+.btl-body { position: relative; }
+/* The gridlines and the hand-offs lie over the track's column, on the rows' own time base. */
+.btl-layer, .btl-hands { position: absolute; top: 0; bottom: 0; left: var(--btl-who); pointer-events: none; }
+.btl-layer { right: 0; box-shadow: inset 1px 0 0 var(--border); }
+.btl-layer i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); }
+/* Under the tracks: a hand-off runs behind the blocks it passes (their grounds are solid), so it never crosses a block's words. */
+.btl-hands { z-index: 0; overflow: visible; }
+.btl-hands path { fill: none; stroke: color-mix(in srgb, var(--live) 55%, transparent); stroke-width: 1.5; stroke-dasharray: 4 3; stroke-linecap: round; }
+.btl-hands path.is-live { animation: btl-flow 1.2s linear infinite; }
+@keyframes btl-flow { to { stroke-dashoffset: -14; } }
+
+/* A project's heading is one band across: solid, over the gridlines and the line between who and the track. */
+.btl-grp { position: relative; z-index: 2; height: 26px; background: color-mix(in srgb, var(--ink) 2.5%, var(--card)); border-bottom: 1px solid var(--border); }
+.btl-grp > span { grid-column: 1 / -1; display: block; min-width: 0; padding: 0 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 500; line-height: 26px; letter-spacing: .6px; text-transform: uppercase; color: var(--faint); }
+[role="group"] + [role="group"] > .btl-grp { border-top: 1px solid var(--border); }
+
+.btl-row { position: relative; height: 46px; scroll-margin-top: 30px; }
+.btl-who { display: flex; align-items: center; gap: 10px; min-width: 0; height: 46px; padding: 0 14px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: opacity .24s ease, background-color .16s ease; }
+.btl-who:hover, .btl-row.is-on .btl-who { background: var(--hover); }
+.btl-who:focus-visible { outline: 2px solid var(--border-focus, var(--ink-2)); outline-offset: -2px; border-radius: 8px; }
+.btl-row.is-dim .btl-who { opacity: .55; }
+.btl-row.is-dim .btl-who:hover, .btl-row.is-dim.is-on .btl-who, .btl-row.is-dim .btl-who:focus-visible { opacity: 1; }
+.btl-who .board-mark { flex: none; margin: 0; }
+.btl-n { display: grid; min-width: 0; }
+.btl-n b { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 500; line-height: 18px; white-space: nowrap; }
+.btl-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.btl-n b .ui-bdgc { flex: none; }
+.btl-n > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 14px; color: var(--faint); }
+
+.btl-track { position: relative; z-index: 1; min-width: 0; height: 46px; }
+.btl-blk {
+  position: absolute; top: 9px; display: flex; align-items: center; box-sizing: border-box; min-width: 6px; max-width: 100%; height: 28px; padding: 0 8px; border: 0; border-radius: 6px;
+  background: color-mix(in srgb, var(--ink) 8%, var(--card)); color: var(--text-muted); font: 500 12px/16px var(--font, inherit); white-space: nowrap; text-align: left; overflow: hidden; cursor: pointer;
+  transition: background-color .3s ease, color .3s ease;
+}
+.btl-lbl { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btl-blk.is-tiny { padding: 0; }
+.btl-blk:hover { color: var(--ink); }
+/* Every block's ground is solid (its colour mixed into the card's), so gridlines and hand-offs pass behind it, not through its words. */
+.btl-blk.is-live.k-run { background: color-mix(in srgb, var(--live) 16%, var(--card)); color: var(--live); box-shadow: inset -2px 0 0 color-mix(in srgb, var(--live) 60%, transparent); border-radius: 6px 3px 3px 6px; }
+/* The app's shine: the words a little back, the light over them in full (and in full where motion is reduced). */
+.btl-blk.is-live.k-run .btl-lbl { --shine-base: color-mix(in srgb, var(--live) 68%, transparent); --shine-ink: var(--live); }
+.btl-blk.k-wait { background: color-mix(in srgb, var(--amber) 16%, var(--card)); color: var(--amber); }
+.btl-blk.k-wait:not(.is-live) { background: color-mix(in srgb, var(--amber) 9%, var(--card)); }
+.btl-blk.k-fail { background: color-mix(in srgb, var(--red) 14%, var(--card)); color: var(--red); }
+.btl-blk.k-done { background: color-mix(in srgb, var(--green) 12%, var(--card)); color: var(--green); }
+.btl-blk.is-point { z-index: 1; }
+/* Began before the window: its left end is the window's, squared off and fading out. */
+.btl-blk.is-cut { padding-left: 18px; border-top-left-radius: 0; border-bottom-left-radius: 0; -webkit-mask-image: linear-gradient(to right, transparent, #000 18px); mask-image: linear-gradient(to right, transparent, #000 18px); }
+.btl-blk.is-sel { outline: 1.5px solid var(--border-hover); outline-offset: 1px; z-index: 2; }
+.btl-blk:focus-visible { outline: 2px solid var(--border-focus, var(--ink-2)); outline-offset: 1px; z-index: 2; }
+
+.btl-flag { position: absolute; top: -1px; right: 8px; z-index: 3; display: inline-flex; align-items: center; gap: 4px; max-width: calc(100% - 16px); height: 18px; padding: 0 6px; border: 0; border-radius: 4px; background: var(--card); box-shadow: var(--btl-ring-up); color: var(--amber); font: 500 11px/18px var(--font, inherit); white-space: nowrap; cursor: pointer; animation: btl-pulse 1.6s ease-in-out infinite; }
+.btl-flag svg { flex: none; width: 9px; height: 9px; }
+.btl-flag span { min-width: 0; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.btl-flag:hover, .btl-flag:focus-visible { animation: none; }
+.btl-flag:focus-visible { outline: 2px solid var(--border-focus, var(--ink-2)); outline-offset: 1px; }
+@keyframes btl-pulse { 50% { opacity: .58; } }
+
+.btl-empty { margin: 0; padding: 26px 16px; text-align: center; font-size: 12px; line-height: 16px; color: var(--faint); }
+/* Agents listed and nothing in the window: said on the track, between the rows' lines. */
+/* Its words on the card's own ground, so no gridline runs through them. */
+.btl-empty.is-over span { padding: 2px 8px; border-radius: 4px; background: var(--card); }
+.btl-empty.is-over { position: absolute; z-index: 2; top: 50%; left: var(--btl-who); right: 0; padding: 0 16px; transform: translateY(-50%); pointer-events: none; }
+
+.btl-peek { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 52px; padding: 10px 12px; border-radius: 10px; background: var(--card); box-shadow: var(--btl-ring); }
+.btl-peek .board-mark { flex: none; margin: 0; }
+.btl-peek-n { display: grid; flex: 1 1 0; min-width: 0; }
+.btl-peek-n b { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 500; }
+.btl-peek-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btl-peek-said { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+.btl-peek-said.is-bad { color: var(--red); }
+.btl-clock { display: inline-flex; flex: none; align-items: center; gap: 5px; height: 18px; padding: 0 6px; border-radius: 5px; background: var(--hover-strong, var(--hover)); color: var(--text-muted); font-size: 11px; font-weight: 500; line-height: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.btl-clock.is-run { background: color-mix(in srgb, var(--live) 14%, transparent); color: var(--live); }
+.btl-clock.is-wait { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+.btl-spin { flex: none; width: 11px; height: 11px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--live) 28%, transparent); border-top-color: var(--live); animation: btl-spin .9s linear infinite; }
+@keyframes btl-spin { to { transform: rotate(360deg); } }
+.btl-acts { display: flex; flex: none; align-items: center; gap: 6px; }
+.btl-acts kbd { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 4px; background: color-mix(in srgb, var(--on-accent) 18%, transparent); color: var(--on-accent); font: 500 10px var(--font, inherit); }
+.btl-steer { display: flex; flex: 1 1 260px; align-items: center; gap: 6px; min-width: 0; max-width: 460px; }
+.btl-steer input { flex: 1; min-width: 0; }
+/* Narrow: the actions go under the words, so neither is squeezed or cut, and the list leaves room for that taller row; a name keeps
+   its room over its badge, whose state the mark's ring already shows. */
+@container btl (max-width: 560px) {
+  .btl-scroll { max-height: max(214px, calc(100dvh - var(--btl-top, 220px) - 182px)); }
+  .btl-n b .ui-bdgc { display: none; }
+  .btl-peek { flex-wrap: wrap; }
+  .btl-peek-n { flex-basis: calc(100% - 46px); }
+  .btl-acts, .btl-steer { flex: 1 1 100%; max-width: none; justify-content: flex-end; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btl-flag, .btl-spin, .btl-hands path.is-live { animation: none; }
+  .btl-blk, .btl-who { transition: none; }
+}
+html.reduce-motion .btl-flag, html.reduce-motion .btl-spin, html.reduce-motion .btl-hands path.is-live { animation: none; }
+html.reduce-motion .btl-blk, html.reduce-motion .btl-who { transition: none; }
+/* The idle agents left out of the window, counted. */
+.btl-quiet { margin: 0; padding: 8px 16px 10px; border-top: 1px solid var(--border); font-size: 12px; line-height: 16px; color: var(--faint); }

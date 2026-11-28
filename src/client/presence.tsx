@@ -220,9 +220,24 @@ export function useFlip<T extends HTMLElement>(): RefObject<T | null> {
   const was = useRef(new Map<string, number>());
   /** The rows' keys in order as last measured. */
   const order = useRef<string | null>(null);
+  /** The list it listens on for a fold that has settled. */
+  const heard = useRef<T | null>(null);
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
+    // A fold that opens or shuts (sidebar-fold.tsx) moves every row under it without a draw of the list, so where the rows stood went
+    // stale: the next re-sort slid them back from where they were before the fold, a card's height off their own card (Arun,
+    // 2026-11-27: "iron out any laggy/buggy closing and opening of the project cards"). Measured again once it has settled.
+    if (heard.current !== el) {
+      heard.current = el;
+      el.addEventListener("transitionend", (e) => {
+        if (e.propertyName !== "grid-template-rows") return;
+        const top = el.getBoundingClientRect().top;
+        const now = new Map<string, number>();
+        for (const r of el.querySelectorAll<HTMLElement>("[data-flip]")) now.set(r.dataset.flip!, r.getBoundingClientRect().top - top);
+        was.current = now;
+      });
+    }
     const rows = [...el.querySelectorAll<HTMLElement>("[data-flip]")];
     // Measured only when the rows changed: reading where they are lays the page out there and then, and the sidebar draws on every
     // event, so every draw was a layout of its own (spec 13: about 8 a second on a quiet Home). Its first measure, where nothing can
@@ -235,7 +250,8 @@ export function useFlip<T extends HTMLElement>(): RefObject<T | null> {
       const top = el.getBoundingClientRect().top;
       const now = new Map<string, number>();
       for (const r of rows) now.set(r.dataset.flip!, r.getBoundingClientRect().top - top);
-      if (!reducedMotion())
+      // Rows a fold is moving are where it has them mid-way: they follow the fold, and slide for nothing else.
+      if (!reducedMotion() && !el.querySelector("[data-fold-moving]"))
         for (const r of rows) {
           const before = was.current.get(r.dataset.flip!);
           const dy = before === undefined ? 0 : before - now.get(r.dataset.flip!)!;

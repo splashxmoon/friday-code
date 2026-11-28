@@ -14,11 +14,9 @@ import { hostApi } from "./local.js";
 import { WorkspaceCard } from "./Workspace.js";
 import type { Identity } from "./storage.js";
 import { ConfirmDialog, isTyping, relTime, type Confirmation } from "./ui.js";
-import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Button, DropdownMenu, EmptyState, IconButton } from "@/components/affect";
 import { ChevronDownIcon, CircleAlertIcon } from "lucide-react";
 import { PageHeader } from "@/components/dass";
-import { EmptyState } from "@/components/dass/EmptyState";
 import "./deep-dive.css";
 import type { CodeGraph } from "../code-graph.js";
 
@@ -204,44 +202,35 @@ function Repos({ identity, dives, error, onRetry, onOpen, onStarted }: { identit
       <div className="dd-home-head">
         <p className="dd-home-title">{dives?.length ? `${plural(dives.length, "repo")} explained` : "Deep Dive"}</p>
         {usable.length > 1 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button type="button" className="dd-tool" aria-label={`Written by ${chosen ? writerOf(chosen, SMALL[chosen]) : ""}. Change`}>
+          <DropdownMenu
+            align="end"
+            title="Written by"
+            width={240}
+            items={usable.map((t) => ({ label: writerOf(t.tool, SMALL[t.tool]), logo: <EngineMark tool={t.tool} size={14} />, checked: t.tool === chosen, onSelect: () => pick(t.tool) }))}
+            trigger={({ triggerProps, open }) => (
+              <button type="button" className="dd-tool" data-state={open ? "open" : undefined} {...triggerProps} aria-label={`Written by ${chosen ? writerOf(chosen, SMALL[chosen]) : ""}. Change`}>
                 <span className="dd-tool-label">Written by</span>
                 {chosen && <EngineMark tool={chosen} size={13} />}
                 <span>{chosen ? writerOf(chosen, SMALL[chosen]) : ""}</span>
                 <ChevronDownIcon aria-hidden="true" className="dd-tool-chev" />
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[240px]">
-              <DropdownMenuLabel className="text-[12px] font-medium text-[var(--text-muted)]">Written by</DropdownMenuLabel>
-              <DropdownMenuRadioGroup value={chosen} onValueChange={(v) => pick(v as EngineTool)}>
-                {usable.map((t) => (
-                  <DropdownMenuRadioItem key={t.tool} value={t.tool}>
-                    <EngineMark tool={t.tool} size={14} /> {writerOf(t.tool, SMALL[t.tool])}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            )}
+          />
         )}
       </div>
       {error && dives === null ? (
         // Never read: why, and Try again, in the shelf's place.
         <EmptyState
-          small
           className="dd-failed"
-          tone="bad"
           icon={<CircleAlertIcon />}
           title="Couldn't read your Deep Dives"
+          text={<span role="alert">{error}</span>}
           action={
-            <Button variant="outline" size="sm" disabled={retrying} onClick={() => (setRetrying(true), void onRetry().finally(() => setRetrying(false)))}>
+            <Button variant="secondary" disabled={retrying} onClick={() => (setRetrying(true), void onRetry().finally(() => setRetrying(false)))}>
               {retrying ? "Trying…" : "Try again"}
             </Button>
           }
-        >
-          <span role="alert">{error}</span>
-        </EmptyState>
+        />
       ) : error ? (
         <p className="dd-error" role="alert">
           {error}{" "}
@@ -280,9 +269,7 @@ function Repos({ identity, dives, error, onRetry, onOpen, onStarted }: { identit
         {folders === null || tools === null ? (
           <SkeletonLines n={4} className="dd-skel-picks" />
         ) : !usable.length ? (
-          <EmptyState small icon={<Icon name="terminal" />} title="No coding tool to write it">
-            Deep Dive is written by a coding tool on this computer, like Claude Code or Codex. Install one and sign in, then come back.
-          </EmptyState>
+          <EmptyState icon={<Icon name="terminal" />} title="No coding tool to write it" text="Deep Dive is written by a coding tool on this computer, like Claude Code or Codex. Install one and sign in, then come back." />
         ) : (
           <>
             <button ref={finder} type="button" className="dd-find" aria-haspopup="dialog" aria-expanded={finding} disabled={!!starting} onClick={() => setFinding((v) => !v)}>
@@ -452,22 +439,20 @@ function Repo({ identity, repo, onBack }: { identity: Identity; repo: string; on
         </header>
         <EmptyState
           className="dd-failed"
-          tone="bad"
           icon={<CircleAlertIcon />}
           title="Couldn't open this Deep Dive"
+          text={<span role="alert">{error}</span>}
           action={
             <>
-              <Button variant="outline" size="sm" disabled={retrying} onClick={retry}>
-                {retrying ? "Trying…" : "Try again"}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onBack}>
+              <Button variant="ghost" onClick={onBack}>
                 All repos
+              </Button>
+              <Button variant="secondary" disabled={retrying} onClick={retry}>
+                {retrying ? "Trying…" : "Try again"}
               </Button>
             </>
           }
-        >
-          <span role="alert">{error}</span>
-        </EmptyState>
+        />
       </div>
     );
   if (!detail)
@@ -574,27 +559,20 @@ function Repo({ identity, repo, onBack }: { identity: Identity; repo: string; on
           <span className="dd-top-state bad">{statusLine(dive)}</span>
         ) : null}
         {dive.status !== "building" && (
-          <Button size="sm" variant="outline" onClick={rebuild}>
-            <Icon name="refresh" size={14} /> Write again
+          <Button variant="secondary" icon={<Icon name="refresh" size={16} />} onClick={rebuild}>
+            Write again
           </Button>
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className="icon-btn dd-more-btn" aria-label="More" title="More">
-              <Icon name="more" size={16} />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[220px]">
-            {asks.length > 0 && (
-              <DropdownMenuItem onSelect={dropAsks}>
-                <Icon name="x" size={14} /> Delete all questions
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem variant="destructive" onSelect={dropDive}>
-              <Icon name="trash" size={14} /> Delete this Deep Dive
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <DropdownMenu
+          align="end"
+          width={220}
+          aria-label="More"
+          items={[
+            ...(asks.length > 0 ? [{ label: "Delete all questions", icon: <Icon name="x" size={16} />, onSelect: dropAsks }] : []),
+            { label: "Delete this Deep Dive", icon: <Icon name="trash" size={16} />, danger: true, onSelect: dropDive },
+          ]}
+          trigger={({ triggerProps }) => <IconButton className="dd-more-btn" label="More" icon={<Icon name="more" size={16} />} {...triggerProps} />}
+        />
       </header>
       {dive.status === "building" && (
         <span className="dd-bar dd-top-bar" role="progressbar" aria-label="Written so far" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress(dive) * 100)}>
@@ -1097,37 +1075,28 @@ function AskBar({ name, tool, writer, onAsk }: { name: string; tool: EngineTool;
       />
       <div className="dd-askbar-foot">
         {models.length > 1 ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button type="button" className="dd-askbar-model" aria-label={`Answered by ${writerOf(tool, modelName(tool, model) ?? writer)}. Change the model`}>
+          <DropdownMenu
+            align="start"
+            side="top"
+            title="Answer with"
+            width={290}
+            items={models.map((m) => ({
+              label: m.id === SMALL_ID[tool] ? `${m.label} (default)` : m.label,
+              description: m.blurb,
+              checked: m.id === model,
+              onSelect: () => {
+                setModel(m.id);
+                keepAskModel(tool, m.id);
+              },
+            }))}
+            trigger={({ triggerProps, open }) => (
+              <button type="button" className="dd-askbar-model" data-state={open ? "open" : undefined} {...triggerProps} aria-label={`Answered by ${writerOf(tool, modelName(tool, model) ?? writer)}. Change the model`}>
                 <EngineMark tool={tool} size={12} />
                 <span>{writerOf(tool, modelName(tool, model) ?? writer)}</span>
                 <ChevronDownIcon aria-hidden="true" className="dd-tool-chev" />
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top" className="w-[290px]">
-              <DropdownMenuLabel className="text-[12px] font-medium text-[var(--text-muted)]">Answer with</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={model}
-                onValueChange={(v) => {
-                  setModel(v);
-                  keepAskModel(tool, v);
-                }}
-              >
-                {models.map((m) => (
-                  <DropdownMenuRadioItem key={m.id} value={m.id} className="items-start">
-                    <span className="dd-model-opt">
-                      <span>
-                        {m.label}
-                        {m.id === SMALL_ID[tool] && <span className="dd-model-tag">Default</span>}
-                      </span>
-                      <span className="dd-model-blurb">{m.blurb}</span>
-                    </span>
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            )}
+          />
         ) : (
           <span className="dd-askbar-tool">
             <EngineMark tool={tool} size={12} /> {writerOf(tool, writer)} reads the code to answer

@@ -134,14 +134,15 @@ export const SECTIONS: SectionDef[] = [
   // The Friday iPhone app (PhoneSettings.tsx): a section of its own since 2026-11-24 (Arun: "create a new section in the settings page
   // specifically for phone"), was a group in This computer. The open-source edition's: the phone connects to this computer's Friday.
   // Arun's own build only for now (2026-11-25: "leave all of the phone stuff out for now… there is more work we need to do").
-  // Your other computers, linked to this one's Friday (Computers.tsx): only on this computer's Friday.
+  // Your other computers (ComputersSettings.tsx): ones that help this one (linked, Computers.tsx) and ones that run on their own
+  // (hosts, local/hosts.ts, spec 15), one page since 2026-11-26. Only on this computer's Friday.
   {
     id: "other-computers",
     label: "Other computers",
     group: "Computers",
     icon: "columns",
-    blurb: "Run agents on another computer of yours, or use this one from another Friday.",
-    keywords: "other computers machine remote ssh tailscale wi-fi link pair add computer hub runs on server",
+    blurb: "Run agents on your other machines, or keep a Friday running on one while this computer sleeps.",
+    keywords: "other computers machine remote ssh tailscale wi-fi link pair add computer hub runs on server hosts host vm cloud box hetzner digitalocean aws linux mac mini always on keep running laptop closed sleep tunnel",
   },
 
   // ── Connections: the services Friday works with ──
@@ -233,6 +234,8 @@ export function settingsSection(id: string | null | undefined): string {
     people: "members",
     machine: "computer",
     computers: "other-computers",
+    // Hosts are machines that run on their own, in Other computers (2026-11-26).
+    hosts: "other-computers",
     tools: "coding-tools",
     about: "updates",
     feedback: "help",

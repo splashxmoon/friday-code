@@ -13,6 +13,8 @@ import type { AppendGuard, AppendResult, SessionStore } from "../session/store.j
 import { liveMachine, MAIN_LANE, mayBorrow, SESSION_LANES, type ActorRef, type AgentSnapshot, type SkillBrief, type Lane, type LaneTrigger, type Attachment, type DiffFile, type EngineMode, type EventBody, type RepoCall, type SessionEvent, type ToolCall } from "../types.js";
 import { startCheckpoint } from "../rewind.js";
 import { buildContext } from "./context.js";
+import { fixedChars, messageChars, overflowOf, REPLY_ROOM, roomError, WindowBook } from "./window.js";
+import { activeCompaction, COMPACT_AT, cutFor, SUMMARY_SYSTEM } from "./compact.js";
 import { ProviderError, type Completion, type LLM } from "./llm.js";
 import { systemPrompt } from "./prompt.js";
 import { CURSOR_RULES_DIR, CURSOR_RULES_FILE, cursorRuleFiles, cursorRuleText, isMissing, RULE_FILES, rulesBlock } from "../project-rules.js";
@@ -200,6 +202,8 @@ const TRIGGER_COOLDOWN_MS = 5_000;
 export class AgentRuntime {
   readonly nodeId = randomUUID();
   private active = new Map<string, Slot>();
+  /** Each own model's window and token ratio (window.ts): what a step on one may send. */
+  private windows = new WindowBook((m) => this.llm.contextWindow?.(m) ?? Promise.resolve(null));
   private idleWaiters: (() => void)[] = [];
   private closed = false;
   private maxSteps: number;
@@ -647,6 +651,8 @@ export class AgentRuntime {
     let learned: Learned = {};
     let failing = 0;
     let routed = "";
+    /** This step already overflowed an own model's window once and was sent again fitted tighter (window.ts). */
+    let overflowed = false;
     // A lane on a model of its own rather than the session's, read once a run: undefined until it is asked, and never in an
     // edition with nothing to ask.
     let laneRun: { model: string; note: string; tools?: AgentTool[] } | null | undefined;
@@ -711,7 +717,7 @@ export class AgentRuntime {
       const hasRepo = !!this.opts.readRepo && (!!liveMachine(state, lane) || !!state.upload);
       const toolMap = new Map(tools.map((t) => [t.name, t]));
       if (pending.length) await this.runApproved(sid, lane, pending, toolMap, guard, (call, tool) => this.runTool(sid, lane, call, tool, controller.signal, slot, [...toolMap.keys()], broken, seen));
-      const events = await this.store.events(sid);
+      let events = await this.store.events(sid);
       const files = await this.filesFor(sid, events);
       // The lane's own model, when it has one (laneRun), else the session's: the one asked whether it sees pictures, and run.
       const chosen = laneRun?.model ?? state.options.model;
@@ -755,6 +761,11 @@ export class AgentRuntime {
       }
 
       let completion: Completion;
+      // An own model's window, and what was sent it: the history fitted to it, and the step sent again once if it still didn't fit.
+      let window: number | null = null;
+      let sentChars = 0;
+      let fixedNow = 0;
+      let replyRoom = REPLY_ROOM;
       try {
         // Told about the repo only when one is genuinely reachable, so it
         // never offers to read code that isn't there.
@@ -774,19 +785,36 @@ export class AgentRuntime {
         // coding tool started as a process, could still go ahead. The next turn of the loop sees why it stopped. Asked of the log
         // as well as the controller: the bus that aborts it can arrive a moment after the pause is written.
         if (controller.signal.aborted || runOf(await this.store.state(sid), lane).status !== "running") continue;
+        const schemas = toolSchemas(tools);
+        const fixed = fixedChars(system, schemas);
+        window = own ? await this.windows.window(model) : null;
+        // Past 75% of its window: the older turns compacted into a summary first, by the same model (compact.ts), rather than
+        // forgotten. If that fails, the oldest turns are dropped as before, so the step still goes.
+        const prefs = own ? await this.windows.prefs(model) : null;
+        if (own && window && prefs?.whenFull === "compact") {
+          const now = buildContext(events, { lane, memory: state.memory, compacted: compactedFor(events, lane) });
+          if (this.windows.tokens(model, fixed + messageChars(now)) > COMPACT_AT * window && (await this.compact(sid, lane, model, window, state.memory, controller.signal, prefs.summarizer).catch(() => false)))
+            events = await this.store.events(sid);
+        }
+        const messages = buildContext(events, {
+          ...(own ? { compacted: compactedFor(events, lane) } : {}),
+          files,
+          images,
+          lane,
+          inherits: upstreamOf(state, lane),
+          memory: state.memory,
+          contended: [...collisionsFor(state, lane).map((c) => collisionLine(state, c, lane)), ...plannedOverlapsFor(state, lane).map(plannedOverlapLine)],
+          ...(own ? { budget: this.windows.budget(model, window, fixed, prefs?.reply ?? REPLY_ROOM, overflowed ? 0.85 : 1) ?? undefined } : {}),
+        });
+        sentChars = fixed + messageChars(messages);
+        fixedNow = fixed;
+        replyRoom = prefs?.reply ?? REPLY_ROOM;
         completion = await this.llm.complete({
           // The workspace is who is asking, so a shared key can be paced fairly between workspaces.
           caller: state.workspaceId || sid,
           system,
-          messages: buildContext(events, {
-            files,
-            images,
-            lane,
-            inherits: upstreamOf(state, lane),
-            memory: state.memory,
-            contended: [...collisionsFor(state, lane).map((c) => collisionLine(state, c, lane)), ...plannedOverlapsFor(state, lane).map(plannedOverlapLine)],
-          }),
-          tools: toolSchemas(tools),
+          messages,
+          tools: schemas,
           // "" means the workspace default, which is what the provider fills in.
           ...(model ? { model } : {}),
           reasoningEffort: effort,
@@ -804,17 +832,28 @@ export class AgentRuntime {
           if (partial.trim()) await this.append(sid, lane, { type: "agent.message", text: partial, toolCalls: [], interrupted: true });
           continue;
         }
-        const r = await this.append(sid, lane, { type: "run.ended", outcome: "error", error: describe(err) }, guard);
+        // Too big for an own model's window: what the error says of it is learned, the history fitted tighter, and the step sent
+        // again, once and on its own. Never the same request again (Arun's 32k thread, 2026-11-28: Try again resent the same 36k).
+        const over = own ? overflowOf(err instanceof Error ? err.message : String(err)) : null;
+        if (over && !overflowed) {
+          this.windows.overflowed(model, over, sentChars);
+          overflowed = true;
+          continue;
+        }
+        const r = await this.append(sid, lane, { type: "run.ended", outcome: "error", error: over ? roomError(over, window, this.windows.tokens(model, sentChars)) : describe(err) }, guard);
         if (r.ok) return;
         continue;
       }
       deltas.flush();
       thoughts.flush();
+      overflowed = false;
+      // What the server counted the request as: how many characters make one of this model's tokens, from now on.
+      if (own) this.windows.counted(model, sentChars, completion.usage?.prompt);
 
       const committed = await this.append(
         sid,
         lane,
-        { type: "agent.message", text: completion.text, toolCalls: completion.toolCalls, reasoning: completion.reasoning, ...(completion.usage ? { tokens: completion.usage.total } : {}) },
+        { type: "agent.message", text: completion.text, toolCalls: completion.toolCalls, reasoning: completion.reasoning, ...(completion.usage ? { tokens: completion.usage.total } : {}), ...(own && window ? { context: completion.usage?.prompt || this.windows.tokens(model, sentChars), window, instr: this.windows.tokens(model, fixedNow), reply: replyRoom } : {}) },
         guard,
       );
       if (!committed.ok) {
@@ -996,6 +1035,71 @@ export class AgentRuntime {
    * handing work to it. What stops a loop is the same as any instruction — the receiving agent
    * has to decide to hand it back, and every hop is in the log with its reason.
    */
+  /**
+   * An own model's older turns compacted into a summary its model writes (compact.ts; the mock's 1A): before a turn that would pass
+   * 75% of its window, from Compact now, or /compact. The summary is written in pieces when the history is too big for one request,
+   * each carrying the summary so far. False when there was too little to compact.
+   */
+  async compact(sid: string, lane: string, model: string, window: number | null, memory?: { key: string; text: string }[], signal?: AbortSignal, summarizer = ""): Promise<boolean> {
+    const events = await this.store.events(sid);
+    const cut = cutFor(events, lane);
+    if (!cut) return false;
+    const before = this.windows.tokens(model, messageChars(buildContext(events, { lane, memory, compacted: compactedFor(events, lane) })));
+    const older = buildContext(events.filter((e) => e.seq <= cut.upTo), { lane, memory, compacted: compactedFor(events, lane) });
+    // As plain text: the model reads a transcript, not a conversation it has to answer, and a cut can't split a call from its result.
+    const transcript = older
+      .map((m) => {
+        const body = typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? "");
+        const calls = m.role === "assistant" && m.tool_calls?.length ? `\n(called ${m.tool_calls.map((c) => `${c.function.name} ${c.function.arguments.slice(0, 200)}`).join("; ")})` : "";
+        return `${m.role === "tool" ? "Result" : m.role === "assistant" ? "Agent" : "Session"}: ${body}${calls}`;
+      })
+      .join("\n\n");
+    const writer = summarizer || model;
+    const piece = Math.max(4_000, this.windows.budget(writer, window ?? (await this.windows.window(writer)) ?? 32_768, SUMMARY_SYSTEM.length + 4_000, 2_048) ?? 60_000);
+    let summary = "";
+    for (let at = 0; at < transcript.length; at += piece) {
+      const part = transcript.slice(at, at + piece);
+      const done = await this.llm.complete({
+        system: SUMMARY_SYSTEM,
+        messages: [{ role: "user", content: `${summary ? `The summary so far:\n\n${summary}\n\nThe conversation goes on:\n\n` : "The conversation:\n\n"}${part}\n\nWrite the whole summary now, the earlier part included.` }],
+        tools: [],
+        model: writer,
+        signal: signal ?? new AbortController().signal,
+      });
+      if (done.text.trim()) summary = done.text.trim();
+    }
+    if (!summary) return false;
+    const next = [...events, { seq: Number.MAX_SAFE_INTEGER, ts: Date.now(), sid, lane, actor: { kind: "agent", id: AGENT, name: "Friday" }, body: { type: "context.compacted", before, summary, upTo: cut.upTo, turns: cut.turns } } as unknown as SessionEvent];
+    const after = this.windows.tokens(model, messageChars(buildContext(next, { lane, memory, compacted: compactedFor(next, lane) })));
+    const r = await this.append(sid, lane, { type: "context.compacted", before, after, ...(window ? { window } : {}), turns: cut.turns, summary, upTo: cut.upTo, model: writer });
+    return r.ok;
+  }
+
+  /**
+   * Compact now (the ring's popover, /compact): the lane's own model, as its step would pick it, compacts its older turns. Null when
+   * the lane isn't on an own model, false when there was too little to compact.
+   */
+  async compactNow(sid: string, lane: string): Promise<boolean | null> {
+    const state = await this.store.state(sid);
+    let laneRun = lane !== MAIN_LANE ? ((this.laneOwn ? await this.laneOwn(sid, lane).catch(() => null) : null) ?? ownLaneRun(state, lane)) : null;
+    if (laneRun && !(isOwnModel(laneRun.model) && ownModelParts(laneRun.model)?.owner === state.ownerId)) laneRun = null;
+    const model = laneRun?.model ?? state.options.model;
+    if (!isOwnModel(model)) return null;
+    const window = await this.windows.window(model);
+    const prefs = await this.windows.prefs(model);
+    return this.compact(sid, lane, model, window, state.memory, undefined, prefs.summarizer);
+  }
+
+  /** Settings › Your models changed a model's window or choices: asked again before the next step. */
+  forgetWindows(): void {
+    this.windows.forget();
+  }
+
+  /** Undo a compaction: the full history is sent again from the next turn (compact.ts). */
+  async uncompact(sid: string, lane: string, of: number): Promise<boolean> {
+    return (await this.append(sid, lane, { type: "context.restored", of })).ok;
+  }
+
   async handOff(sid: string, from: string, req: { to: string; reason: string; carried: string[]; task: string }) {
     return handOff(this.store, this.bus, sid, from, req);
   }
@@ -1289,4 +1393,12 @@ export function repoWhere(state: SessionState, lane?: string): { cwd: string; br
   if (e) return { cwd: e.cwd, ...(e.branch ? { branch: e.branch } : {}), host: e.hostName, hostId: e.hostId, ...(at ? { lane: at } : {}), mode: e.mode, ...(e.shell ? { shell: e.shell } : {}), ...(online ? {} : { offline: true }) };
   // An upload's shell is the deployment's to switch on, not a host's.
   return state.upload ? { cwd: state.upload.name, host: "this session", mode: uploadsMayRun() ? "full" : "edits", uploaded: true } : undefined;
+}
+
+/** The compaction in force on a lane, as buildContext takes it (compact.ts). */
+function compactedFor(events: SessionEvent[], lane: string): { upTo: number; summary: string; turns: number } | undefined {
+  const c = activeCompaction(events, lane);
+  if (!c) return undefined;
+  const e = events.find((x) => x.seq === c.seq);
+  return { upTo: c.upTo, summary: c.summary, turns: e?.body.type === "context.compacted" ? (e.body.turns ?? 0) : 0 };
 }

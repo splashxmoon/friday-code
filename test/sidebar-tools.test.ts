@@ -27,13 +27,14 @@ test("several agents done: a mark each at the line's end, what was last asked on
   assert.doesNotMatch(html, /sb-crew-words/, "no words");
 });
 
-test("several agents ready the same, and more than five end in +N", () => {
+test("several agents ready the same, and more than four end in +N", () => {
   assert.match(line(three("idle")), /aria-label="3 agents, ready: Claude Code, Claude Code 2, Codex"/);
   assert.match(line(three("idle", "done")), /aria-label="3 agents, done: /, "one done of three still says done, as the words did");
   const seven = Array.from({ length: 7 }, (_, i) => agent(`l${i}`, `Codex ${i}`, "codex", "done"));
   const html = line(seven);
-  assert.equal(html.match(/<span title="/g)?.length, 5);
-  assert.match(html, /class="sb-crew-more">\+2</);
+  // Up to four tiles, then how many more (e3bf324e; Arun: "show like 3-4 coding tool icons ... at all side bar sizes").
+  assert.equal(html.match(/<span title="/g)?.length, 4);
+  assert.match(html, /class="sb-crew-more">\+3</);
   assert.match(line([agent("main", "Friday Code", undefined, "done"), agent("c", "Codex", "codex", "done")]), /class="mascot still agent-face"/, "Friday's own agent wears its face");
 });
 

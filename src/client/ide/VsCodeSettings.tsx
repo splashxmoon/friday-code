@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Choice, dangerOutline, Note, SettingsGroup, SettingsRow } from "@/components/dass";
+import { dangerOutline, Note, SettingsGroup, SettingsRow } from "@/components/dass";
+import { Button, Input, Choice } from "../settings-kit.js";
 import { hostApi } from "../local.js";
 import type { Identity } from "../storage.js";
 import { openInCode } from "./mode.js";

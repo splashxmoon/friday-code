@@ -42,9 +42,16 @@ const friday = await startLocal({
 });
 console.log(friday.already ? `Friday is already running at ${friday.url}` : `Friday is running at ${friday.url}`);
 if (!friday.already) console.log(`Kept in ${friday.home}. Stop with Ctrl+C.`);
+// Friday answers only what carries this install's key (local-key.ts), so a browser is let in by a link that works once, for a
+// few minutes: opened below, and said here for a browser this computer can't open (another one's, through a tunnel). Only to
+// a terminal: a service's output is kept in a log, where a link has no business.
+const { enterLink } = await import("./local-key.js");
+const opens = !join && !process.argv.includes("--no-open") && process.env.FRIDAY_NO_OPEN !== "1";
+if (friday.key && !join && !opens && process.stdout.isTTY) console.log(`Open it with this link (it works once, for ten minutes; run this again for another):\n  ${enterLink(friday.url, friday.key, 10 * 60_000)}`);
 
-if (!join && !process.argv.includes("--no-open") && process.env.FRIDAY_NO_OPEN !== "1") {
-  const open = process.platform === "darwin" ? ["open", [friday.url]] : process.platform === "win32" ? ["cmd", ["/c", "start", "", friday.url]] : ["xdg-open", [friday.url]];
+if (opens) {
+  const to = friday.key ? enterLink(friday.url, friday.key, 2 * 60_000) : friday.url;
+  const open = process.platform === "darwin" ? ["open", [to]] : process.platform === "win32" ? ["cmd", ["/c", "start", "", to]] : ["xdg-open", [to]];
   try {
     spawn(open[0] as string, open[1] as string[], { stdio: "ignore", detached: true }).unref();
   } catch {

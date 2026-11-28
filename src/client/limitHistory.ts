@@ -56,6 +56,30 @@ export function windowsOf(limits: Limits | null | "none", now = Date.now()): Win
 export const isFiveHour = (w: Win) => w.minutes === 300 || w.label === "5h";
 export const isWeekly = (w: Win) => w.minutes === 10_080 || w.label.startsWith("Weekly");
 
+/**
+ * What a window counts, when its tool has more than one of a length: "Opus" in "Weekly · Opus", "Gemini" in "5h · Gemini"; "" for
+ * the tool's own. A five-hour or weekly window labelled only by what it counts ("Gemini models", as Antigravity readings kept from
+ * before issue #30 say it, or Cursor's "Cursor models" week) is that group too: read only after a "·", Antigravity's two five-hour
+ * windows both came out "5-hour" on its card.
+ */
+export function groupOf(w: Win): string {
+  const label = w.label.trim();
+  const of = label.includes("·")
+    ? label.slice(label.indexOf("·") + 1).trim()
+    : (isFiveHour(w) || isWeekly(w)) && !/^(\d+\s*[hm]|weekly)$/i.test(label)
+      ? label.replace(/\s+models?$/i, "")
+      : "";
+  return of ? `${of[0]!.toUpperCase()}${of.slice(1)}` : "";
+}
+/** A window's name in a few words: "5-hour", "Week", "Opus week", "Gemini 5-hour", "Month"; no two of a tool's alike. */
+export function shortName(w: Win): string {
+  const of = groupOf(w);
+  if (isFiveHour(w)) return of ? `${of} 5-hour` : "5-hour";
+  if (isWeekly(w)) return of ? `${of} week` : "Week";
+  if (w.minutes && w.minutes >= 40_000) return "Month";
+  return w.label;
+}
+
 // ── the readings kept ───────────────────────────────────────────────────
 
 /** One reading of one window: when, how much was used, and which cycle of the window it was in (its reset). */
@@ -268,6 +292,27 @@ export function crossedEighty(before: History, wins: Win[]): Win[] {
     const prev = before[idOf(w)]?.filter((s) => s.resetsAt === w.resetsAt) ?? [];
     return prev.length > 0 && prev.every((s) => s.used < 80);
   });
+}
+
+/**
+ * A window's highest reading on each of the last `days` days, oldest first and today last (local days, as people think of
+ * them), null for a day with no reading: the usage card's strip of days, for 7 or 30 of them. Only what the history keeps shows.
+ */
+export function dailyPeaks(samples: Sample[], days: number, now = Date.now()): { label: string; peak: number | null }[] {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const out = Array.from({ length: days }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (days - 1 - i));
+    const end = new Date(d);
+    end.setDate(end.getDate() + 1);
+    return { start: d.getTime(), end: end.getTime(), label: i === days - 1 ? "Today" : d.toLocaleDateString([], days > 7 ? { month: "short", day: "numeric" } : { weekday: "short" }), peak: null as number | null };
+  });
+  for (const s of samples) {
+    const d = out.find((x) => s.at >= x.start && s.at < x.end);
+    if (d) d.peak = Math.max(d.peak ?? 0, Math.round(s.used));
+  }
+  return out.map(({ label, peak }) => ({ label, peak }));
 }
 
 /**

@@ -7,6 +7,7 @@ import { clockUntil } from "../limit-reset.js";
 import type { AccountUsage, Limits } from "../runner/limits.js";
 import { EngineMark } from "./BrandMarks.js";
 import { Icon } from "./icons.js";
+import { openSettings } from "./openSettings.js";
 import { hostApi } from "./local.js";
 import type { Identity } from "./storage.js";
 import { ContextMenu, Skeleton } from "./ui.js";
@@ -423,7 +424,7 @@ export function useRailLimits(identity: Identity, off = false): { tool: EngineTo
   }, []);
   return ENGINE_TOOLS.filter((t) => LIMITED.includes(t) || read[t]).flatMap((tool) => {
     const many = limits && limits !== "none" && (tool === "claude" || tool === "codex") ? (limits.accounts?.[tool] ?? []) : [];
-    const account = many.length > 1 ? inUseAccount(tool, many.map((a) => a.id)) : undefined;
+    const account = many.length > 1 ? inUseAccount(tool, many.map((a) => a.id), many.find((a) => a.preferred)?.id) : undefined;
     const five = fiveHourOf(tool, limits, account);
     const week = weekOf(tool, limits, account);
     const first = five ? null : rowsFor(tool, limits, account).find((r) => r.used !== null && r.win !== "week");
@@ -453,7 +454,14 @@ export function useRailLimits(identity: Identity, off = false): { tool: EngineTo
 }
 
 /** The account new sessions use, by id, as Accounts.tsx keeps it ("mpa.account.default.<tool>"); the tool's own sign-in until picked. */
-export function inUseAccount(tool: EngineTool, ids: string[]): string {
+/** Picked for new sessions in this window a moment ago, before the computer's next reading says so (Accounts.tsx setPreferred). */
+export const pickedNow = new Map<EngineTool, string>();
+
+/** The account new sessions use: picked here just now, else the one the computer keeps (`kept`), else this browser's old pick. */
+export function inUseAccount(tool: EngineTool, ids: string[], kept?: string): string {
+  const now = pickedNow.get(tool);
+  if (now && ids.includes(now)) return now;
+  if (kept && ids.includes(kept)) return kept;
   let id = "";
   try {
     id = localStorage.getItem(`mpa.account.default.${tool}`) ?? "";
@@ -498,7 +506,7 @@ export function RailRing({ tool, outer, inner }: { tool: EngineTool; outer: numb
   );
 }
 
-export function ContextGauge({ events, model = "", identity, tool, lane, solo = false, account }: { events: SessionEvent[]; friday: boolean; model?: string; identity: Identity; tool?: EngineTool; /** The agent the message box is aimed at: the ring is its context, not the whole session's. */ lane?: string; /** Solo: the coding tools' glance, and no Friday tab. */ solo?: boolean; /** Which of the tool's accounts on the computer the lane runs on, when it has more than one. */ account?: string }) {
+export function ContextGauge({ events, model = "", identity, tool, lane, solo = false, account, sid, invite }: { events: SessionEvent[]; friday: boolean; model?: string; identity: Identity; tool?: EngineTool; /** The session and its invite, for Compact now on an own model. */ sid?: string; invite?: string; /** The agent the message box is aimed at: the ring is its context, not the whole session's. */ lane?: string; /** Solo: the coding tools' glance, and no Friday tab. */ solo?: boolean; /** Which of the tool's accounts on the computer the lane runs on, when it has more than one. */ account?: string }) {
   const WINDOW = windowFor(tool, model);
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   // undefined while it is being read, null when it couldn't be.
@@ -518,8 +526,10 @@ export function ContextGauge({ events, model = "", identity, tool, lane, solo = 
   const week = weekOf(tool, limits, account);
   // A coding tool's context is what it said of it (agent.usage), not Friday's own count; until it has said, there is no figure
   // to show, and "0%" with "context 0 of 200k" beside a card saying "Not reported yet" disagreed with itself (2026-10-27 audit).
-  const ctxUsed = tool ? (live?.used ?? 0) : tokens;
-  const ctxWindow = tool ? (live?.window ?? WINDOW) : WINDOW;
+  // Friday's agent on an own model: the step's request as its server counted it, against the window its server said (agent/window.ts).
+  const ownCtx = !tool && used && used.type === "agent.message" && used.context && used.window ? { used: used.context, window: used.window, instr: used.instr ?? 0, reply: used.reply ?? 4096 } : null;
+  const ctxUsed = tool ? (live?.used ?? 0) : (ownCtx?.used ?? tokens);
+  const ctxWindow = tool ? (live?.window ?? WINDOW) : (ownCtx?.window ?? WINDOW);
   const reported = !!five || (tool ? !!live : tokens > 0);
   const pct = five ? five.used / 100 : Math.min(1, ctxUsed / ctxWindow);
   // A thin ring and how full it is beside it, in figures (2026-10-27 design review: a bare ring was a shape to decode); the tooltip
@@ -567,11 +577,73 @@ export function ContextGauge({ events, model = "", identity, tool, lane, solo = 
           width={POP_W}
           onClose={() => setAt(null)}
           items={() => [
-            { node: <PopBody identity={identity} first={tool ?? (solo ? "claude" : "friday")} ws={ws} ctx={{ model, tokens, window: WINDOW }} solo={solo} {...(tool && lane ? { lane, live } : {})} />, height: tool === "claude" ? POP_H + 300 : tool ? POP_H + 70 : POP_H },
+            ownCtx
+              ? { node: <OwnContextPop sid={sid} invite={invite} lane={lane} who={who} ctx={ownCtx} onDone={() => setAt(null)} />, height: 300 }
+              : { node: <PopBody identity={identity} first={tool ?? (solo ? "claude" : "friday")} ws={ws} ctx={{ model, tokens: ctxUsed, window: ctxWindow }} solo={solo} {...(tool && lane ? { lane, live } : {})} />, height: tool === "claude" ? POP_H + 300 : tool ? POP_H + 70 : POP_H },
           ]}
         />
       )}
     </>
+  );
+}
+
+/**
+ * An own model's context, opened from the ring (the mock's 1D): how full, what fills it (instructions and tools, the conversation,
+ * the room kept for the reply), Compact now and its settings. Amber past 75%, where it compacts by itself (agent/compact.ts).
+ */
+function OwnContextPop({ sid, invite, lane, who, ctx, onDone }: { sid?: string; invite?: string; lane?: string; who: string; ctx: { used: number; window: number; instr: number; reply: number }; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState("");
+  const conv = Math.max(0, ctx.used - ctx.instr);
+  const pct = (n: number) => `${Math.min(100, (n / ctx.window) * 100)}%`;
+  const compactNow = async () => {
+    if (!sid) return;
+    setBusy(true);
+    setSaid("");
+    const r = await fetch(`/api/sessions/${encodeURIComponent(sid)}/compact?invite=${encodeURIComponent(invite ?? "")}`, { method: "POST", headers: { "content-type": "application/json", "x-friday-local": "1" }, body: JSON.stringify({ lane: lane ?? "main" }) })
+      .then((x) => x.json() as Promise<{ ok?: boolean; why?: string; error?: string }>)
+      .catch((e: Error): { ok?: boolean; why?: string; error?: string } => ({ error: e.message }));
+    setBusy(false);
+    if (r.ok) onDone();
+    else setSaid(r.why ?? r.error ?? "It couldn't compact just now.");
+  };
+  return (
+    <div className="own-ctx" aria-label={`${who} context`}>
+      <div className="own-ctx-head">
+        <b>Context</b>
+        <span>
+          {compact(ctx.used)} of {compact(ctx.window)}
+        </span>
+      </div>
+      <div className={`own-ctx-bar${ctx.used / ctx.window >= 0.75 ? " warm" : ""}`} aria-hidden>
+        <i className="instr" style={{ width: pct(ctx.instr) }} />
+        <i className="conv" style={{ width: pct(conv) }} />
+        <i className="reply" style={{ width: pct(ctx.reply) }} />
+      </div>
+      <ul className="own-ctx-rows">
+        <li>
+          <i className="instr" />
+          Instructions and tools<span>{compact(ctx.instr)}</span>
+        </li>
+        <li>
+          <i className="conv" />
+          Conversation<span>{compact(conv)}</span>
+        </li>
+        <li>
+          <i className="reply" />
+          Kept free for its reply<span>{compact(ctx.reply)}</span>
+        </li>
+      </ul>
+      {said && <p className="own-ctx-said">{said}</p>}
+      <div className="own-ctx-acts">
+        <button type="button" className="btn small primary" disabled={busy || !sid} onClick={() => void compactNow()}>
+          {busy ? "Compacting…" : "Compact now"}
+        </button>
+        <button type="button" className="btn small" onClick={() => (onDone(), openSettings("own-models"))}>
+          Settings
+        </button>
+      </div>
+    </div>
   );
 }
 

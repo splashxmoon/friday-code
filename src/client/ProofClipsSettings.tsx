@@ -3,8 +3,8 @@
  * toggled on or off"): the switch, and when it is on, the two things that make a clip take longer, each said plainly.
  */
 import { useState } from "react";
-import { Switch } from "@/components/ui/switch";
-import { Choice, SettingsGroup, SettingsRow as Row } from "@/components/dass";
+import { SettingsGroup, SettingsRow as Row } from "@/components/dass";
+import { Switch, Choice } from "./settings-kit.js";
 import { PROOF_CLIPS_DEFAULT, setProofClips, useProofClips, type ProofClips } from "./proof-clips.js";
 import type { Identity } from "./storage.js";
 

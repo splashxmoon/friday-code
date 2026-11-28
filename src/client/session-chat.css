@@ -69,6 +69,10 @@
    size rather than clipping on desktop and wrapping on a phone (B-42) ── */
 :is(.rsp-answer, .rsp-say) :is(p, li) a { overflow-wrap: anywhere; }
 :is(.rsp-answer, .rsp-say) pre { max-width: 100%; overflow-x: auto; white-space: pre; }
+/* Nothing in a reply makes a sideways scrollbar (Arun, 2026-11-28: "horizontal scroll bar shouldnt be there"): a long path or
+   command in a line wraps, and a code block wraps its long lines rather than scrolling under them. */
+:is(.rsp-answer, .rsp-say) :is(p, li, td) code { overflow-wrap: anywhere; word-break: break-word; }
+:is(.rsp-answer, .rsp-say) pre, :is(.rsp-answer, .rsp-say) pre code { white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: hidden; }
 :is(.rsp-answer, .rsp-say) pre code { white-space: pre; }
 
 /* A phone's header: one row of the title, the people and their pill, and the header's own buttons. No ⋯ folding them away (Arun,

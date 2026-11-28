@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { SearchHit } from "../session-search.js";
 import { Icon, type IconName } from "./icons.js";
 import { EngineMark } from "./BrandMarks.js";
@@ -166,12 +166,33 @@ export function SearchModal({ recents, onOpen, onClose }: { recents: RecentSessi
   // Tab kept inside, one dialog at a time, and the focus back where it was on close (2026-10-27 audit), as every other dialog.
   const box = useRef<HTMLDivElement>(null);
   useDismiss(box, onClose);
+  // As ⌘K draws it (Palette.tsx): one highlight that moves to the chosen row in a short step, and a list that glides to the height
+  // of what it holds as results come in, rather than jumping.
+  const inner = useRef<HTMLDivElement>(null);
+  const glow = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number>();
+  useLayoutEffect(() => {
+    const el = inner.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    const g = glow.current;
+    const row = chosen && list.current?.querySelector<HTMLElement>(`[data-key="${CSS.escape(chosen.key)}"]`);
+    if (!g) return;
+    if (!row) return void (g.style.opacity = "0");
+    g.style.transform = `translateY(${row.offsetTop}px)`;
+    g.style.height = `${row.offsetHeight}px`;
+    g.style.opacity = "1";
+  });
 
   return (
     <div className="quick-back" role="presentation" onMouseDown={onClose}>
       <div
         ref={box}
-        className="quick srch"
+        className="quick srch search"
         role="dialog"
         aria-modal="true"
         aria-label="Search sessions"
@@ -200,7 +221,7 @@ export function SearchModal({ recents, onOpen, onClose }: { recents: RecentSessi
             onChange={(e) => setQ(e.target.value)}
           />
           {busy && <span className="srch-spin" aria-label="Searching" />}
-          <kbd className="srch-esc">Esc</kbd>
+          <kbd className="srch-esc pal-kbd">Esc</kbd>
         </div>
 
         <div className="srch-filters" role="toolbar" aria-label="Filters">
@@ -257,7 +278,9 @@ export function SearchModal({ recents, onOpen, onClose }: { recents: RecentSessi
         <span className="sr-only" role="status">
           {query.length >= 3 && results !== null && !busy && found.length === 0 && nameRows.length === 0 ? error || `Nothing matches ${query}` : ""}
         </span>
-        <div className="srch-body" id="srch-results" ref={list}>
+        <div className="srch-body" id="srch-results" ref={list} style={height === undefined ? undefined : { height }}>
+          <div ref={glow} className="pal-glow" aria-hidden />
+          <div ref={inner} className="pal-inner">
           {nameRows.length > 0 && (
             <section className="srch-group" aria-label={query ? "Sessions by title" : "Recent sessions"}>
               <h3>{query ? "Titles" : "Recent"}</h3>
@@ -266,7 +289,7 @@ export function SearchModal({ recents, onOpen, onClose }: { recents: RecentSessi
                 const title = r.alias || r.title || "Untitled session";
                 return (
                   <button key={key} data-key={key} type="button" className={`srch-row${on(key)}`} title={title} onMouseEnter={hover(key)} onClick={() => open(r)}>
-                    <Icon name="chat" size={15} />
+                    <Icon name="chat" size={16} />
                     <span className="srch-title">
                       <Marked text={title} marks={query ? markTitle(title, query) : []} />
                     </span>
@@ -288,7 +311,7 @@ export function SearchModal({ recents, onOpen, onClose }: { recents: RecentSessi
                 return (
                   <div key={r.sid} className="srch-session">
                     <button data-key={key} type="button" className={`srch-row srch-head${on(key)}`} title={title} onMouseEnter={hover(key)} onClick={() => open(r)}>
-                      <Icon name="chat" size={15} />
+                      <Icon name="chat" size={16} />
                       <span className="srch-title">
                         <Marked text={title} marks={r.titleMatch ? markTitle(title, query) : []} />
                       </span>
@@ -300,7 +323,7 @@ export function SearchModal({ recents, onOpen, onClose }: { recents: RecentSessi
                         <button key={hk} data-key={hk} type="button" className={`srch-row srch-hit${on(hk)}`} onMouseEnter={hover(hk)} onClick={() => open(r, h.seq)}>
                           {/* An agent's own mark (Claude Code's, Codex's), not Friday's for every agent (Arun, 2026-10-28: "TEST EVERYTHING…
                               EVERY INTERACTION, EVERY VISUAL"). */}
-                          {h.tool ? <EngineMark tool={h.tool} size={13} /> : <Icon name={KIND_ICON[h.kind]} size={13} />}
+                          {h.tool ? <EngineMark tool={h.tool} size={14} /> : <Icon name={KIND_ICON[h.kind]} size={14} />}
                           <span className="srch-snip">
                             <span className="srch-who">{h.by === "me" ? "You" : h.by === "agents" ? h.who : h.who.split(/\s+/)[0]}</span> <Marked text={h.snippet} marks={h.marks} />
                           </span>
@@ -326,21 +349,35 @@ export function SearchModal({ recents, onOpen, onClose }: { recents: RecentSessi
               )}
             </div>
           )}
+          </div>
         </div>
 
         <div className="srch-foot" aria-hidden>
           <span>
-            <kbd>↑</kbd>
-            <kbd>↓</kbd> to move
+            <Keys keys={["↑", "↓"]} /> to move
           </span>
           <span>
-            <kbd>↵</kbd> to open
+            <Keys keys={['"']} /> quotes for an exact phrase
           </span>
-          <span>
-            <kbd>"</kbd>quotes<kbd>"</kbd> for an exact phrase
+          <span className="pal-foot-end">
+            <Keys keys={["↵"]} /> to open
           </span>
         </div>
       </div>
     </div>
+  );
+}
+
+/** Keys as ⌘K draws them (Palette.tsx Keys, palette.css): a small square each. Its own copy: importing ⌘K's from this lazy window
+ *  split the first screen's chunks and cost it a kilobyte (test/client-bundle.test.ts). */
+function Keys({ keys }: { keys: string[] }) {
+  return (
+    <span className="pal-keys">
+      {keys.map((k, i) => (
+        <kbd key={i} className="pal-kbd">
+          {k}
+        </kbd>
+      ))}
+    </span>
   );
 }

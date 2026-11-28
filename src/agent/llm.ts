@@ -71,6 +71,8 @@ export interface LLM {
   info?(): Promise<ModelInfo>;
   /** Whether the given (or default) model accepts image input. */
   supportsImages?(model?: string): Promise<boolean>;
+  /** How many tokens the given model takes in one request, when its server can say (own models, agent/window.ts). */
+  contextWindow?(model?: string): Promise<{ window: number | null; whenFull?: "compact" | "ask" | "drop"; reply?: number; summarizer?: string } | null>;
 }
 
 export class ProviderError extends Error {

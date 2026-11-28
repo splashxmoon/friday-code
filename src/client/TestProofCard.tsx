@@ -4,10 +4,14 @@
  * failing, the test command (only its test part: "cd app && npm test" reads "npm test"), its counts and how long it took, the output on
  * request. Several commands are a line each under it; the tests that failed are named under theirs. Who ran it is on the mark; Friday
  * checking a reply that only said so says it in the line. Can be put away, as a clip can.
+ *
+ * It is the one card for a check (the redesign of 2026-11-27): a pass stays this one quiet line; a failure opens to the failing
+ * tests, what the first expected and got when its runner printed that, and Fix it on the card, where the reply used to say it again
+ * above its answer with a "Check failed" tag and a Fix it pill.
  */
 import { useState } from "react";
 import type { SessionEvent } from "../types.js";
-import { countsLine, testPart } from "../test-proof.js";
+import { countsLine, expectedGot, testPart } from "../test-proof.js";
 import { Icon } from "./icons.js";
 import "./proof-clip-card.css";
 
@@ -30,7 +34,7 @@ const keep = (sid: string, seq: number, on: boolean) => {
 
 type Run = Extract<SessionEvent["body"], { type: "proof.tests" }>["runs"][number];
 
-export function TestProofCard({ ev, sid, by }: { ev: SessionEvent; sid: string; /** Whose agent ran them, for the mark's title. */ by?: string }) {
+export function TestProofCard({ ev, sid, by, onFix }: { ev: SessionEvent; sid: string; /** Whose agent ran them, for the mark's title. */ by?: string; /** Ask the same agent to fix the first failure: a check of the lane's latest run, for someone who can. */ onFix?: (() => void) | undefined }) {
   const b = ev.body;
   const [hidden, setHidden] = useState(() => hiddenOf(sid).has(ev.seq));
   const [open, setOpen] = useState(false);
@@ -68,16 +72,19 @@ export function TestProofCard({ ev, sid, by }: { ev: SessionEvent; sid: string; 
             <code className="tpc-cmd" title={one.command}>
               {testPart(one.command)}
             </code>
-            <span className="tpc-counts">{counts(one)}</span>
+            {/* A failure's title already counts it ("1 test failing"). */}
+            {ok && <span className="tpc-counts">{counts(one)}</span>}
           </>
         ) : (
           <span className="tpc-counts">{runs.length} commands</span>
         )}
         {b.by === "friday" && (
           <span className="tpc-tag" title={who}>
-            <span className="tpc-long">checked </span>by Friday
+            by Friday
           </span>
         )}
+        {/* When it passed, at the end of its quiet line (the polish mock's pass line). */}
+        {ok && <span className="tpc-time">{new Date(ev.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
         <span className="tpc-sp" />
         {tails.length > 0 && (
           <button type="button" className="tpc-tog" aria-label="Output" aria-expanded={open} onClick={() => setOpen(!open)}>
@@ -88,6 +95,12 @@ export function TestProofCard({ ev, sid, by }: { ev: SessionEvent; sid: string; 
         <button type="button" className="pcc-x tpc-x" aria-label="Hide this test proof" title="Hide" onClick={() => hide(true)}>
           <Icon name="x" size={12} />
         </button>
+        {!ok && onFix && (
+          <button type="button" className="btn small primary tpc-fix" title="Ask the agent to fix the first failure and run the check again" onClick={onFix}>
+            <Icon name="wrench" size={13} />
+            Fix it
+          </button>
+        )}
       </div>
       {(!one || !!one.failing?.length) && (
         <ul className="tpc-runs">
@@ -104,11 +117,19 @@ export function TestProofCard({ ev, sid, by }: { ev: SessionEvent; sid: string; 
               )}
               {!!r.failing?.length && (
                 <ul className="tpc-failing">
-                  {r.failing.map((f) => (
-                    <li key={f} title={f}>
-                      {f}
-                    </li>
-                  ))}
+                  {r.failing.map((f, j) => {
+                    // What the first failure expected and got, in mono under its name, where the runner printed it.
+                    const eg = j === 0 ? expectedGot(r.tail) : null;
+                    return (
+                      <li key={f}>
+                        <span className="tpc-fail-mark" aria-hidden="true" />
+                        <span className="tpc-fail-name" title={f}>
+                          {f}
+                        </span>
+                        {eg && <span className="tpc-why">expected {eg.expected}, got {eg.got}</span>}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </li>

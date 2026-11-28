@@ -76,6 +76,30 @@ await build({
   external: ["electron"],
   logLevel: "warning",
 });
+// A host's window's bridge (src/local/host-preload.ts, spec 15): only layout and the host switcher, nothing of this computer's.
+await build({
+  entryPoints: [path.join(root, "src/local/host-preload.ts")],
+  outfile: path.join(dist, "host-preload.cjs"),
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node22",
+  external: ["electron"],
+  logLevel: "warning",
+});
+// The same Friday as this app, packed for a host to install (local/hosts.ts hostPackage): the app carries it, so a host runs this
+// very version whatever the public package is (Resources/host-package/friday.tgz). Only when this is the open-source package.
+{
+  const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as { name?: string };
+  if (pkg.name === "friday-work") {
+    const out = path.join(root, "build", "host-package");
+    await rm(out, { recursive: true, force: true });
+    mkdirSync(out, { recursive: true });
+    const made = execFileSync(process.platform === "win32" ? "npm.cmd" : "npm", ["pack", "--silent", "--pack-destination", out], { cwd: root, encoding: "utf8", shell: process.platform === "win32" }).trim().split(/\r?\n/).pop()!;
+    copyFileSync(path.join(out, made), path.join(out, "friday.tgz"));
+    await rm(path.join(out, made), { force: true });
+  }
+}
 // Linux: npm leaves the terminal's binary in the module's prebuilds/, under Node's names, and Electron looks in build/Release, so
 // `npm run desktop` stopped before its window opened. Its own Linux binary (the same Node-API file under every name) is put
 // there, as packing does for a release (build/pty-arch.cjs).

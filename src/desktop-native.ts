@@ -11,6 +11,7 @@ import { execFile, spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { app, ipcMain, shell, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
+import { opensInItsApp } from "./open-kinds.js";
 
 export type OpenTarget = "vscode" | "cursor" | "windsurf" | "zed" | "files" | "terminal" | "iterm" | "ghostty" | "warp";
 
@@ -110,6 +111,9 @@ export function registerNative(fromApp: (e: IpcMainInvokeEvent | IpcMainEvent) =
   ipcMain.handle("friday:open-file", async (e, file: unknown) => {
     if (!fromApp(e)) return { ok: false, error: "Not from Friday." };
     if (typeof file !== "string" || !path.isAbsolute(file) || !existsSync(file) || statSync(file).isDirectory()) return { ok: false, error: "That file isn't on this computer." };
+    // A document, a picture, sound or video opens; anything else (a script, a program, a shortcut) is shown where it is,
+    // never run because a page said Open (open-kinds.ts).
+    if (!opensInItsApp(file)) return shell.showItemInFolder(file), { ok: true };
     const err = await shell.openPath(file);
     return err ? { ok: false, error: err } : { ok: true };
   });
